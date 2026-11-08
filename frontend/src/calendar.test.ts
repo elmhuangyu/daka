@@ -79,7 +79,7 @@ beforeEach(() => {
     if (url === '/api/settings/calendar')
       return jsonRes({ timezone: 'UTC', week_start: 1, external_calendars: [{ id: 'a', name: 'Work', url_hint: '' }, { id: 'b', name: 'Home', url_hint: '' }] })
     if (url.startsWith('/api/view/calendar')) {
-      if (viewStatus !== 200) return jsonRes({ error: 'boom' }, viewStatus)
+      if (viewStatus !== 200) return jsonRes({ error: 'internal error' }, viewStatus)
       const q = new URL(url, 'http://x').searchParams
       const days = []
       for (let d = q.get('start')!; d <= q.get('end')!; d = addDays(d, 1)) days.push(viewDays[d] ?? day(d))
@@ -217,7 +217,7 @@ describe('CalendarView', () => {
   it('shows an error with retry when the view fails', async () => {
     viewStatus = 500
     const { w } = await mountView()
-    expect(w.get('[data-testid=error]').text()).toContain('boom')
+    expect(w.get('[data-testid=error]').text()).toContain('went wrong')
     expect(w.find('[data-testid=retry]').exists()).toBe(true)
     w.unmount()
   })

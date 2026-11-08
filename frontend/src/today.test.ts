@@ -115,10 +115,10 @@ describe('Today page', () => {
 
   it('shows an error with retry', async () => {
     fetchMock.mockImplementation(async (url: string) =>
-      String(url) === '/api/auth/status' ? jsonRes({ login_required: false, authenticated: true }) : jsonRes({ error: 'boom' }, 500),
+      String(url) === '/api/auth/status' ? jsonRes({ login_required: false, authenticated: true }) : jsonRes({ error: 'internal error' }, 500),
     )
     const w = await mountApp()
-    expect(w.get('[data-testid=error]').text()).toContain('boom')
+    expect(w.get('[data-testid=error]').text()).toContain('went wrong')
     expect(w.find('[data-testid=retry]').exists()).toBe(true)
   })
 
@@ -151,10 +151,10 @@ describe('Today page', () => {
     await w.get('[data-testid=toggle]').trigger('click')
     expect(w.get('[data-testid=toggle]').attributes('disabled')).toBeDefined()
     await w.get('[data-testid=toggle]').trigger('click')
-    release(jsonRes({ error: 'boom' }, 400))
+    release(jsonRes({ error: 'invalid body' }, 400))
     await flushPromises()
     expect(writes()).toHaveLength(1)
-    expect(w.get('[data-testid=error]').text()).toContain('boom')
+    expect(w.get('[data-testid=error]').text()).toContain('not valid')
   })
 
   it('counter: + / - / set send delta values', async () => {

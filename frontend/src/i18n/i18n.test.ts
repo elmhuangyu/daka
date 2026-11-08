@@ -18,22 +18,22 @@ describe('i18n', () => {
     for (const [k, v] of Object.entries(en)) expect(v.trim(), k).not.toBe('')
   })
 
-  it('falls back to english for keys a locale lacks, and switches reactively', () => {
+  it('falls back to english for keys a locale lacks, and switches reactively', async () => {
     registerLocale('xx', { 'data.export.button': 'XX export' })
     const { t: tt } = useI18n()
-    setLocale('xx')
+    await setLocale('xx')
     try {
       expect(currentLocale()).toBe('xx')
       expect(tt('data.export.button')).toBe('XX export')
       expect(tt('data.import.button')).toBe(en['data.import.button'])
     } finally {
-      setLocale('en')
+      await setLocale('en')
     }
     expect(tt('data.export.button')).toBe(en['data.export.button'])
   })
 
-  it('ignores unknown locales', () => {
-    setLocale('nope')
+  it('ignores unknown locales', async () => {
+    await setLocale('nope')
     expect(currentLocale()).toBe('en')
   })
 })

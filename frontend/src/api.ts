@@ -1,3 +1,6 @@
+import { t } from './i18n'
+import { IMPORT_ERROR_PREFIX, NETWORK_ERROR_KEY, errorKeyForCode, errorKeyForStatus } from './i18n/errors'
+
 export interface TodayItem {
   id: number
   name: string
@@ -38,21 +41,19 @@ export class ApiError extends Error {
   }
 }
 
-const FRIENDLY: Record<string, string> = {
-  invalid_secret: 'Invalid secret',
-  too_many_attempts: 'Too many attempts, try again later',
-  unauthorized: 'You are signed out',
-  reauth_required: 'Confirm your identity to continue',
-  csrf: 'Session check failed, please retry',
-  cross_origin: 'Cross-origin request rejected',
-  login_failed: 'Login failed',
-}
-
-/** Human-readable English text for an error; unknown server messages pass through. */
+/**
+ * Localized, user-facing text for an error. API errors map through the error
+ * code table; an unknown code falls back to a generic message by status, so the
+ * server's raw text is never shown. Other errors keep their own message.
+ */
 export function describeError(e: unknown): string {
   if (e instanceof ApiError) {
-    if (e.status === 0) return 'Network error'
-    return FRIENDLY[e.code] ?? e.message
+    if (e.status === 0) return t(NETWORK_ERROR_KEY)
+    const key = errorKeyForCode(e.code)
+    if (key) return t(key)
+    // Import validation answers carry a language-independent location and code.
+    if (e.code.startsWith(IMPORT_ERROR_PREFIX)) return t('errors.importDetail', { detail: e.code.slice(IMPORT_ERROR_PREFIX.length) })
+    return t(errorKeyForStatus(e.status), { status: e.status })
   }
   return e instanceof Error ? e.message : String(e)
 }
