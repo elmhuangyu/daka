@@ -1,4 +1,4 @@
-import { currentLocale, t, tn, type PluralBase } from './i18n'
+import { currentLocale, t, tn, type MessageKey, type PluralBase } from './i18n'
 import { monthName, weekdayName } from './i18n/format'
 
 export const WEEKDAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const
@@ -252,7 +252,8 @@ export function describeRRule(rrule: string): string {
   if (!r) return t('rrule.custom')
   const days = list(r.byday.map((d) => weekdayName(WEEKDAY_INDEX[d])))
   const md = list(r.bymonthday.map((x) => (x === -1 ? t('rrule.lastDay') : nth(x))))
-  let s = tn(EVERY[r.freq], r.interval)
+  // Interval 1 uses the singular form explicitly: some languages (zh) have no plural category for it.
+  let s = r.interval === 1 ? t(`${EVERY[r.freq]}.one` as MessageKey) : t(`${EVERY[r.freq]}.other` as MessageKey, { count: r.interval })
   if (r.freq === 'WEEKLY') {
     if (r.byday.length) s = t('rrule.on', { head: s, what: days })
   } else if (r.freq === 'MONTHLY') {
