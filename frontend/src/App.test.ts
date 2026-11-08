@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import indexHtml from '../index.html?raw'
+import { createMemoryHistory } from 'vue-router'
+import { createPinia } from 'pinia'
 import App from './App.vue'
+import { makeRouter } from './router'
 
 function today(items: object[] = []) {
   return { date: '2026-11-07', weekday: 6, timezone: 'UTC', progress: { done: 1, total: 3 }, items }
@@ -11,6 +14,13 @@ const B = { id: 2, name: 'Water', category_id: null, tracker_type: 'boolean', is
 
 function jsonRes(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+}
+
+async function mountApp() {
+  const router = makeRouter(createMemoryHistory())
+  await router.push('/')
+  await router.isReady()
+  return mount(App, { global: { plugins: [createPinia(), router] } })
 }
 
 let fetchMock: ReturnType<typeof vi.fn>
@@ -31,7 +41,7 @@ const calls = (prefix: string) => fetchMock.mock.calls.filter((c) => String(c[0]
 
 describe('Today page', () => {
   it('renders due and done items and progress', async () => {
-    const w = mount(App)
+    const w = await mountApp()
     await flushPromises()
     expect(w.get('[data-testid=due-list]').text()).toContain('Read')
     expect(w.get('[data-testid=done-list]').text()).toContain('Water')
@@ -41,7 +51,7 @@ describe('Today page', () => {
   })
 
   it('clears plaintext immediately when redact turns on, even if refetch is slow or fails', async () => {
-    const w = mount(App)
+    const w = await mountApp()
     await flushPromises()
     expect(w.html()).toContain('Read')
     fetchMock.mockImplementation(async () => {
@@ -56,7 +66,7 @@ describe('Today page', () => {
 
   it('ignores out-of-order responses', async () => {
     let slow!: (r: Response) => void
-    const w = mount(App)
+    const w = await mountApp()
     await flushPromises()
     fetchMock.mockImplementationOnce(() => new Promise<Response>((r) => (slow = r)))
     await w.get('[data-testid=redact-toggle]').trigger('click') // slow, redact on
@@ -70,7 +80,7 @@ describe('Today page', () => {
   })
 
   it('disables the button while a check is in flight', async () => {
-    const w = mount(App)
+    const w = await mountApp()
     await flushPromises()
     let release!: (r: Response) => void
     fetchMock.mockImplementationOnce(() => new Promise<Response>((r) => (release = r)))
@@ -82,7 +92,7 @@ describe('Today page', () => {
   })
 
   it('check sends set with Idempotency-Key then refreshes', async () => {
-    const w = mount(App)
+    const w = await mountApp()
     await flushPromises()
     const before = calls('/api/view/today').length
     await w.get('[data-testid=due-list] button').trigger('click')
@@ -95,7 +105,7 @@ describe('Today page', () => {
   })
 
   it('uncheck sends unset', async () => {
-    const w = mount(App)
+    const w = await mountApp()
     await flushPromises()
     await w.get('[data-testid=done-list] button').trigger('click')
     await flushPromises()
@@ -104,7 +114,7 @@ describe('Today page', () => {
   })
 
   it('redact toggle adds ?redact=1 and persists', async () => {
-    const w = mount(App)
+    const w = await mountApp()
     await flushPromises()
     await w.get('[data-testid=redact-toggle]').trigger('click')
     await flushPromises()
@@ -113,13 +123,13 @@ describe('Today page', () => {
     w.unmount()
 
     fetchMock.mockClear()
-    mount(App)
+    await mountApp()
     await flushPromises()
     expect(calls('/api/view/today')[0][0]).toBe('/api/view/today?redact=1')
   })
 
   it('Ctrl+Shift+H toggles redact', async () => {
-    const w = mount(App)
+    const w = await mountApp()
     await flushPromises()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'H', ctrlKey: true, shiftKey: true }))
     await flushPromises()
@@ -131,7 +141,7 @@ describe('Today page', () => {
     fetchMock.mockImplementation(async (url: string) =>
       String(url).startsWith('/api/checkins') ? jsonRes({ error: 'boom' }, 400) : jsonRes(today([A])),
     )
-    const w = mount(App)
+    const w = await mountApp()
     await flushPromises()
     await w.get('[data-testid=due-list] button').trigger('click')
     await flushPromises()
@@ -139,7 +149,7 @@ describe('Today page', () => {
   })
 
   it('creates an item with the built rrule', async () => {
-    const w = mount(App)
+    const w = await mountApp()
     await flushPromises()
     await w.get('input[aria-label=Name]').setValue('Run')
     await w.get('input[aria-label="Interval in days"]').setValue(3)
@@ -156,7 +166,7 @@ describe('Today page', () => {
   })
 
   it('requires a weekday for weekly presets', async () => {
-    const w = mount(App)
+    const w = await mountApp()
     await flushPromises()
     await w.get('input[aria-label=Name]').setValue('Run')
     await w.get('select').setValue('weekly')

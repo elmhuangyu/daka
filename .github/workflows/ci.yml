@@ -18,3 +18,15 @@ jobs:
       # go vet + gofmt fallback.
       - run: just test
       - run: just lint
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.17.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: just fe-install
+      - run: just fe-lint
+      - run: just fe-test
+      - run: just fe-build

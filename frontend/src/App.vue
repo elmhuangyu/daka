@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import TodayView from './TodayView.vue'
 
 const STORAGE_KEY = 'daka.redact'
 
@@ -41,6 +40,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         Privacy: {{ redact ? 'on' : 'off' }}
       </button>
     </div>
-    <TodayView :redact="redact" />
+    <RouterView v-slot="{ Component }">
+      <component :is="Component" :redact="redact" />
+    </RouterView>
   </main>
 </template>
