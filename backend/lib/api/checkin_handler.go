@@ -80,6 +80,7 @@ func (s *server) postCheckin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err := s.execute(u.ID, key, req)
+	s.versions.Bump(req.ItemID) // after the commit; also on failure (cheap, safe)
 	if err != nil {
 		errResult(http.StatusInternalServerError, "internal error").write(w)
 		return
@@ -285,7 +286,11 @@ func (s *server) deleteCheckin(w http.ResponseWriter, r *http.Request) {
 		errResult(http.StatusBadRequest, "invalid id").write(w)
 		return
 	}
+	var itemID uint
+	_ = s.db.Write().Model(&dbmodels.CheckinLog{}).Where("id = ? AND user_id = ?", id, u.ID).
+		Select("item_id").Scan(&itemID).Error
 	tr := s.db.Write().Where("id = ? AND user_id = ?", id, u.ID).Delete(&dbmodels.CheckinLog{})
+	s.versions.Bump(itemID)
 	if tr.Error != nil {
 		errResult(http.StatusInternalServerError, "internal error").write(w)
 		return

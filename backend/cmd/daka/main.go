@@ -27,7 +27,9 @@ import (
 	"github.com/elmhuangyu/daka/backend/lib/config"
 	"github.com/elmhuangyu/daka/backend/lib/db"
 	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
+	"github.com/elmhuangyu/daka/backend/lib/holiday"
 	"github.com/elmhuangyu/daka/backend/lib/ratelimit"
+	"github.com/elmhuangyu/daka/backend/lib/schedule"
 	"github.com/elmhuangyu/daka/backend/lib/secret"
 )
 
@@ -107,7 +109,7 @@ func bootstrapDefaultUser(g *gorm.DB, timezone string) error {
 // sessions) when OIDC or auth.shared_secret is configured; otherwise every
 // request is default_user (loopback single-user mode). It returns the session
 // manager (nil without login) so the caller can purge expired sessions.
-func newHandler(cfg *config.Config, d *db.DB) (http.Handler, *auth.Manager, error) {
+func newHandler(cfg *config.Config, d *db.DB, hp *holiday.Provider) (http.Handler, *auth.Manager, error) {
 	proxies, err := config.ParseTrustedProxies(cfg.Server.TrustedProxies)
 	if err != nil {
 		return nil, nil, err
@@ -142,7 +144,8 @@ func newHandler(cfg *config.Config, d *db.DB) (http.Handler, *auth.Manager, erro
 		Timezone: cfg.Timezone, SecureCookie: cfg.Auth.SecureCookie,
 		Limiter: authFail, ClientIP: clientIP.ClientIP,
 	})
-	apiHandler := api.NewRouter(api.Deps{DB: d, Auth: auth.Middleware(verifier), Limiter: limiter, ClientIP: clientIP})
+	apiHandler := api.NewRouter(api.Deps{DB: d, Auth: auth.Middleware(verifier), Limiter: limiter, ClientIP: clientIP,
+		Calendar: holidayCalendars(hp)})
 	mux := http.NewServeMux()
 	// Public auth endpoints authenticate themselves; they share the global
 	// per-IP rate limit (this covers GET /api/auth/oidc/login too).
@@ -176,7 +179,11 @@ func serve(ctx context.Context, cfg *config.Config, ln net.Listener, logger zero
 		return fmt.Errorf("bootstrap default user: %w", err)
 	}
 
-	handler, sessions, err := newHandler(cfg, d)
+	hp, err := newHolidayProvider(cfg.Holiday)
+	if err != nil {
+		return fmt.Errorf("holiday data: %w", err)
+	}
+	handler, sessions, err := newHandler(cfg, d, hp)
 	if err != nil {
 		return fmt.Errorf("build handler: %w", err)
 	}
@@ -221,6 +228,13 @@ func serve(ctx context.Context, cfg *config.Config, ln net.Listener, logger zero
 		defer wg.Done()
 		purgeLoop(purgeCtx, d, sessions, logger)
 	}()
+	if hp != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			hp.RunDailyRefresh(purgeCtx) // embedded snapshot first, remote refresh in the background
+		}()
+	}
 	defer func() {
 		cancelPurge()
 		wg.Wait()
@@ -276,5 +290,33 @@ func purgeLoop(ctx context.Context, d *db.DB, sessions *auth.Manager, logger zer
 		case <-t.C:
 			purge()
 		}
+	}
+}
+
+// newHolidayProvider builds the holiday provider (embedded snapshot, no
+// network); nil when holiday support is disabled.
+func newHolidayProvider(c config.HolidayConfig) (*holiday.Provider, error) {
+	if c.Disabled {
+		return nil, nil
+	}
+	var opts []holiday.Option
+	if c.URLTemplate != "" {
+		opts = append(opts, holiday.WithURLTemplate(c.URLTemplate))
+	}
+	return holiday.NewProvider(opts...)
+}
+
+// holidayCalendars maps UserSettings.holiday_region to a calendar: CN has
+// data, every other region (and a disabled provider) has none.
+func holidayCalendars(hp *holiday.Provider) func(dbmodels.HolidayRegion) schedule.DayCalendar {
+	if hp == nil {
+		return nil
+	}
+	cn := holiday.NewCalendar(hp, holiday.RegionCN)
+	return func(r dbmodels.HolidayRegion) schedule.DayCalendar {
+		if string(r) == holiday.RegionCN {
+			return cn
+		}
+		return nil
 	}
 }

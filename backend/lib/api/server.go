@@ -6,7 +6,10 @@ import (
 	"time"
 
 	"github.com/elmhuangyu/daka/backend/lib/db"
+	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
 	"github.com/elmhuangyu/daka/backend/lib/ratelimit"
+	"github.com/elmhuangyu/daka/backend/lib/schedule"
+	"github.com/elmhuangyu/daka/backend/lib/stats"
 )
 
 // Deps are the dependencies of the HTTP API.
@@ -23,17 +26,34 @@ type Deps struct {
 	// ClientIP resolves the client IP for Limiter; the zero value uses only
 	// RemoteAddr (X-Forwarded-For needs configured trusted proxies).
 	ClientIP ratelimit.ClientIPResolver
+	// Calendar returns the holiday calendar for a UserSettings.holiday_region;
+	// nil, or a nil result, means no holiday awareness.
+	Calendar func(region dbmodels.HolidayRegion) schedule.DayCalendar
+	// Versions are the per-item write counters bumped by check-in writes (part
+	// of the stats cache key); nil creates a private set.
+	Versions *stats.Versions
+	// StatsCache caches GET /api/items/{id}/stats; nil creates a default one.
+	StatsCache *stats.Cache
 }
 
 type server struct {
-	db  *db.DB
-	now func() time.Time
+	db       *db.DB
+	now      func() time.Time
+	calendar func(region dbmodels.HolidayRegion) schedule.DayCalendar
+	versions *stats.Versions
+	cache    *stats.Cache
 }
 
 // NewRouter builds the API router. Only /api/ is rate limited (via Deps.Limiter);
 // static frontend files are served outside this router and are not limited.
 func NewRouter(d Deps) http.Handler {
-	s := &server{db: d.DB, now: d.Now}
+	s := &server{db: d.DB, now: d.Now, calendar: d.Calendar, versions: d.Versions, cache: d.StatsCache}
+	if s.versions == nil {
+		s.versions = stats.NewVersions()
+	}
+	if s.cache == nil {
+		s.cache = stats.NewCache(stats.DefaultCacheSize)
+	}
 	if s.now == nil {
 		s.now = time.Now
 	}
@@ -42,6 +62,10 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("DELETE /api/checkins/{id}", s.deleteCheckin)
 	mux.HandleFunc("POST /api/items", s.postItem)
 	mux.HandleFunc("GET /api/view/today", s.getToday)
+	mux.HandleFunc("GET /api/items/{id}/stats", s.getItemStats)
+	mux.HandleFunc("GET /api/freezes", s.listFreezes)
+	mux.HandleFunc("POST /api/freezes", s.postFreeze)
+	mux.HandleFunc("DELETE /api/freezes/{id}", s.deleteFreeze)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		errResult(http.StatusNotFound, "not found").write(w)
 	})

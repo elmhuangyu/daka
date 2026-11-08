@@ -65,10 +65,12 @@ func (s *server) getToday(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) today(db *gorm.DB, userID string, redact bool) (*todayResponse, error) {
-	tz, err := userTimezone(db, userID)
+	st, err := userSettings(db, userID)
 	if err != nil {
 		return nil, err
 	}
+	tz := st.Timezone
+	cal := s.calendarFor(st)
 	date, err := schedule.Today(s.now(), tz)
 	if err != nil {
 		return nil, err
@@ -107,8 +109,18 @@ func (s *server) today(db *gorm.DB, userID string, redact bool) (*todayResponse,
 		return nil, err
 	}
 	logIDs := map[uint][]uint{}
+	dayLogs := map[uint][]dbmodels.CheckinLog{}
 	for _, l := range logs {
 		logIDs[l.ItemID] = append(logIDs[l.ItemID], l.ID)
+		dayLogs[l.ItemID] = append(dayLogs[l.ItemID], l)
+	}
+	var options []dbmodels.ItemOption
+	if err := db.Where("item_id IN ?", ids).Find(&options).Error; err != nil {
+		return nil, err
+	}
+	optsByItem := map[uint][]dbmodels.ItemOption{}
+	for _, o := range options {
+		optsByItem[o.ItemID] = append(optsByItem[o.ItemID], o)
 	}
 
 	sensitiveCat := map[uint]bool{}
@@ -124,7 +136,7 @@ func (s *server) today(db *gorm.DB, userID string, redact bool) (*todayResponse,
 
 	for _, it := range items {
 		vs := byItem[it.ID]
-		due, err := schedule.IsDue(vs, date)
+		due, err := schedule.IsDueWith(vs, date, cal)
 		if errors.Is(err, schedule.ErrUnsupported) {
 			continue // rolling/quota items have their own sections (later phases)
 		}
@@ -145,6 +157,10 @@ func (s *server) today(db *gorm.DB, userID string, redact bool) (*todayResponse,
 			ti.LogIDs = []uint{}
 		}
 		ti.Done = len(ti.LogIDs) > 0
+		if cur := schedule.CurrentVersion(vs, date); cur != nil && ti.Done {
+			// DayCompletion (DESIGN 2/2.1): targets, options and completion_rule.
+			ti.Done = schedule.DayCompletion(it.TrackerType, *cur, optsByItem[it.ID], dayLogs[it.ID], it.Aggregate).Done
+		}
 		if redact && (it.IsSensitive || (it.CategoryID != nil && sensitiveCat[*it.CategoryID])) {
 			ti.Name = privateItemName
 		}

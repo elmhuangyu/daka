@@ -1,0 +1,132 @@
+package api
+
+import (
+	"errors"
+	"fmt"
+	"net/http"
+	"strconv"
+
+	"github.com/rs/zerolog/log"
+	"gorm.io/gorm"
+
+	"github.com/elmhuangyu/daka/backend/lib/auth"
+	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
+	"github.com/elmhuangyu/daka/backend/lib/schedule"
+	"github.com/elmhuangyu/daka/backend/lib/stats"
+)
+
+type statsResponse struct {
+	ItemID      uint   `json:"item_id"`
+	Name        string `json:"name"`
+	IsSensitive bool   `json:"is_sensitive"`
+	stats.Stats
+}
+
+// GET /api/items/{id}/stats?redact=1 (DESIGN 11.2).
+func (s *server) getItemStats(w http.ResponseWriter, r *http.Request) {
+	u, ok := auth.UserFrom(r.Context())
+	if !ok {
+		errResult(http.StatusUnauthorized, "unauthorized").write(w)
+		return
+	}
+	id, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
+	if err != nil {
+		errResult(http.StatusBadRequest, "invalid id").write(w)
+		return
+	}
+	redact := false
+	switch r.URL.Query().Get("redact") {
+	case "", "0", "false":
+	case "1", "true":
+		redact = true
+	default:
+		errResult(http.StatusBadRequest, "invalid redact").write(w)
+		return
+	}
+	res, err := s.itemStats(u.ID, uint(id), redact)
+	if err != nil {
+		log.Error().Err(err).Msg("item stats failed")
+		errResult(http.StatusInternalServerError, "internal error").write(w)
+		return
+	}
+	res.write(w)
+}
+
+func (s *server) itemStats(userID string, itemID uint, redact bool) (result, error) {
+	db := s.db.Read()
+	var item dbmodels.Item
+	err := db.Where("id = ? AND user_id = ?", itemID, userID).Take(&item).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return errResult(http.StatusNotFound, "item not found"), nil
+	}
+	if err != nil {
+		return result{}, err
+	}
+	st, err := userSettings(db, userID)
+	if err != nil {
+		return result{}, err
+	}
+	today, err := schedule.Today(s.now(), st.Timezone)
+	if err != nil {
+		return result{}, err
+	}
+	logSig, err := stats.LogSignature(db, s.versions, itemID)
+	if err != nil {
+		return result{}, err
+	}
+	ruleSig, err := stats.RuleSignature(db, itemID)
+	if err != nil {
+		return result{}, err
+	}
+	key := stats.Key{
+		UserID: userID, ItemID: itemID, LogSig: logSig, RuleSig: ruleSig, Today: today, StateVersion: st.StateVersion,
+		SettingsSig: fmt.Sprintf("%s/%d/%s/%t", st.Timezone, st.WeekStart, st.HolidayRegion, st.StreakHolidayFreeze),
+	}
+	val, hit := s.cache.Get(key)
+	if !hit {
+		in := stats.Input{
+			Item: item, Calendar: s.calendarFor(st), Today: today,
+			Settings: stats.Settings{Timezone: st.Timezone, WeekStart: st.WeekStart, StreakHolidayFreeze: st.StreakHolidayFreeze},
+		}
+		if err := db.Where("item_id = ?", itemID).Find(&in.Versions).Error; err != nil {
+			return result{}, err
+		}
+		if err := db.Where("item_id = ?", itemID).Order("sort_order, id").Find(&in.Options).Error; err != nil {
+			return result{}, err
+		}
+		if err := db.Where("item_id = ? AND user_id = ?", itemID, userID).Find(&in.Logs).Error; err != nil {
+			return result{}, err
+		}
+		if err := db.Where("user_id = ?", userID).Find(&in.Freezes).Error; err != nil {
+			return result{}, err
+		}
+		if val, err = stats.ComputeStats(in); err != nil {
+			return result{}, err
+		}
+		s.cache.Put(key, val)
+	}
+
+	sensitive := item.IsSensitive
+	if !sensitive && item.CategoryID != nil {
+		var n int64
+		if err := db.Model(&dbmodels.Category{}).Where("id = ? AND user_id = ? AND is_sensitive = ?",
+			*item.CategoryID, userID, true).Count(&n).Error; err != nil {
+			return result{}, err
+		}
+		sensitive = n > 0
+	}
+	resp := statsResponse{ItemID: item.ID, Name: item.Name, IsSensitive: item.IsSensitive, Stats: val}
+	if redact && sensitive {
+		resp.Name = privateItemName
+		// Option names can reveal the item too; the cached slice is not mutated.
+		opts := make([]stats.OptionSummary, len(val.Options))
+		for i, o := range val.Options {
+			if o.OptionID != nil {
+				o.Name = fmt.Sprintf("Option %d", i+1)
+			}
+			opts[i] = o
+		}
+		resp.Options = opts
+	}
+	return jsonResult(http.StatusOK, resp), nil
+}

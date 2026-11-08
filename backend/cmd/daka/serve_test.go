@@ -30,6 +30,7 @@ func startServer(t *testing.T, mut func(*config.Config)) *testServer {
 	cfg := config.Default()
 	cfg.DB.DSN = config.Secret(filepath.Join(t.TempDir(), "daka.db"))
 	cfg.Timezone = "Asia/Shanghai"
+	cfg.Holiday.Disabled = true // no background network refresh in tests
 	if mut != nil {
 		mut(&cfg)
 	}

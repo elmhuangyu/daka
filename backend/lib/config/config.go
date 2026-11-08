@@ -61,6 +61,7 @@ type Config struct {
 	Server   ServerConfig  `yaml:"server" json:"server"`
 	DB       DBConfig      `yaml:"db" json:"db"`
 	Auth     AuthConfig    `yaml:"auth" json:"auth"`
+	Holiday  HolidayConfig `yaml:"holiday" json:"holiday"`
 	Secrets  SecretsConfig `yaml:"-" json:"secrets"`
 }
 
@@ -124,6 +125,15 @@ type AuthConfig struct {
 	// SecureCookie sets the Secure flag on session cookies. Disable only for
 	// plain-HTTP local / LAN deployments.
 	SecureCookie bool `yaml:"secure_cookie" json:"secure_cookie"`
+}
+
+// HolidayConfig configures the statutory-holiday data (region CN).
+type HolidayConfig struct {
+	// Disabled turns off holiday awareness entirely (no calendar, no refresh).
+	Disabled bool `yaml:"disabled" json:"disabled"`
+	// URLTemplate overrides the remote data URL ({year} is replaced by the year); empty
+	// uses the built-in default. Only the embedded snapshot is used offline.
+	URLTemplate string `yaml:"url_template" json:"url_template"`
 }
 
 // SecretsConfig holds values that come ONLY from environment variables.
