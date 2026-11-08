@@ -227,12 +227,139 @@ export function getToday(redact: boolean): Promise<TodayView> {
   return request<TodayView>(`/api/view/today${redact ? '?redact=1' : ''}`)
 }
 
-// Note: the idempotency key is generated per call; it should become per logical user action when counter delta arrives.
+export interface OptionDetail {
+  id: number
+  name: string
+  unit: string
+  step: number
+  min_val: number | null
+  max_val: number | null
+  aggregate: string
+  sort_order: number
+  target_value: number | null
+}
+
+export interface RuleDetail {
+  schedule_type: 'fixed_rrule' | 'rolling' | 'quota' | 'none' | string
+  rolling_interval?: number
+  rolling_unit?: string
+  target_value?: number
+  completion_rule?: string
+  option_targets: Record<string, number>
+}
+
+export interface QuotaProgress {
+  comparator: string
+  window: string
+  period: string
+  used: number
+  limit: number
+  remaining: number
+  ratio: number
+  met: boolean
+  exceeded: boolean
+  traffic?: 'green' | 'yellow' | 'red' | ''
+}
+
+export interface MaintenanceInfo {
+  next_due: string
+  state: 'ok' | 'warning' | 'overdue' | string
+  days_until_due: number
+  overdue_days: number
+}
+
+export interface ItemStatsSummary {
+  last_at: string | null
+  days_since_last: number | null
+  quota: QuotaProgress | null
+  maintenance: MaintenanceInfo | null
+}
+
+/** One item of GET /api/items?include=stats (the fields the Today view uses). */
+export interface ItemDetail {
+  id: number
+  name: string
+  tracker_type: 'boolean' | 'counter' | 'maintenance' | 'metric' | string
+  kind: 'habit' | 'event' | string
+  polarity: 'positive' | 'negative' | string
+  category_id: number | null
+  effective_sensitive: boolean
+  unit?: string
+  step?: number
+  min_val?: number | null
+  max_val?: number | null
+  aggregate?: string
+  warning_days?: number
+  options: OptionDetail[]
+  current_rule: RuleDetail
+  stats?: ItemStatsSummary
+}
+
+export interface Category {
+  id: number
+  name: string
+  color: string
+  icon: string
+  is_sensitive: boolean
+  sort_order: number
+}
+
+export interface CheckinLog {
+  id: number
+  item_id: number
+  option_id: number | null
+  date: string
+  value: number
+  note: string
+}
+
+export interface CheckinInput {
+  item_id: number
+  mode: 'set' | 'unset' | 'delta' | 'append'
+  option_id?: number
+  value?: number
+  note?: string
+  /** One-off option (DESIGN 11.3): no option_id, the free-form name goes in note. */
+  adhoc?: boolean
+  date?: string
+}
+
+export function getItems(redact: boolean): Promise<{ items: ItemDetail[] }> {
+  return request(`/api/items?include=stats${redact ? '&redact=1' : ''}`)
+}
+
+export function getCategories(): Promise<{ categories: Category[] }> {
+  return request('/api/categories')
+}
+
+/** All check-in logs of one day (follows the cursor pagination). */
+export async function getCheckinsOn(date: string, redact: boolean): Promise<CheckinLog[]> {
+  const out: CheckinLog[] = []
+  let cursor = ''
+  for (let page = 0; page < 20; page++) {
+    const q = `from=${date}&to=${date}&limit=200${redact ? '&redact=1' : ''}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`
+    const res = await request<{ checkins?: CheckinLog[]; next_cursor?: string | null }>(`/api/checkins?${q}`)
+    out.push(...(res.checkins ?? []))
+    if (!res.next_cursor) break
+    cursor = res.next_cursor
+  }
+  return out
+}
+
+/**
+ * POST /api/checkins. A key identifies one logical user action; callers pass
+ * their own to make deliberate retries of that action idempotent.
+ */
+export function postCheckin(input: CheckinInput, key: string = newIdempotencyKey()): Promise<unknown> {
+  return request('/api/checkins', jsonInit('POST', input, { 'Idempotency-Key': key }))
+}
+
+export function deleteCheckin(id: number): Promise<unknown> {
+  return request(`/api/checkins/${id}`, { method: 'DELETE', headers: { 'Idempotency-Key': newIdempotencyKey() } })
+}
+
 export function setCheckin(itemId: number, done: boolean): Promise<unknown> {
-  return request(
-    '/api/checkins',
-    jsonInit('POST', { item_id: itemId, mode: done ? 'set' : 'unset' }, { 'Idempotency-Key': newIdempotencyKey() }),
-  )
+  return postCheckin({ item_id: itemId, mode: done ? 'set' : 'unset' })
 }
 
 export function createItem(item: NewItem): Promise<unknown> {

@@ -87,7 +87,9 @@ type itemStatsSummary struct {
 	DaysSinceLast *int                 `json:"days_since_last"`
 	Counts        stats.Counts         `json:"counts"`
 	Quota         *stats.QuotaProgress `json:"quota"`
-	Summary       string               `json:"summary"`
+	// Maintenance is set for rolling items (Today's overdue / warning cards).
+	Maintenance *stats.MaintenanceInfo `json:"maintenance"`
+	Summary     string                 `json:"summary"`
 }
 
 // currentOrLatest is the rule in effect on date, or the newest version when
@@ -313,7 +315,7 @@ func (s *server) listItems(w http.ResponseWriter, r *http.Request) {
 			}
 			resps[i].Stats = &itemStatsSummary{
 				LastAt: val.LastAt, DaysSinceLast: val.DaysSinceLast, Counts: val.Counts,
-				Quota: val.Quota, Summary: val.Summary,
+				Quota: val.Quota, Maintenance: val.Maintenance, Summary: val.Summary,
 			}
 		}
 		if redact && sens(items[i]) {

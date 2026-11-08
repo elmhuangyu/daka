@@ -71,7 +71,7 @@ describe('layout', () => {
     await flushPromises()
     expect(t.attributes('aria-pressed')).toBe('true')
     expect(localStorage.getItem('daka.redact')).toBe('1')
-    expect(fetchMock.mock.calls.at(-1)![0]).toBe('/api/view/today?redact=1')
+    expect(fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.startsWith('/api/view/today')).at(-1)).toBe('/api/view/today?redact=1')
     expect(w.get('[data-privacy]').attributes('data-privacy')).toBe('on')
     w.unmount()
   })
