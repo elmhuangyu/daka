@@ -88,6 +88,7 @@ func (s *server) authenticateFeed(w http.ResponseWriter, r *http.Request) (dbmod
 		return fail()
 	}
 	s.feedFail.Success(ip, prefix)
+	s.feedIPFail.Success(ip, "")
 	return t, true
 }
 
