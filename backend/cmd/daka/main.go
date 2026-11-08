@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -26,6 +27,8 @@ import (
 	"github.com/elmhuangyu/daka/backend/lib/config"
 	"github.com/elmhuangyu/daka/backend/lib/db"
 	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
+	"github.com/elmhuangyu/daka/backend/lib/ratelimit"
+	"github.com/elmhuangyu/daka/backend/lib/secret"
 )
 
 func main() {
@@ -69,6 +72,15 @@ func loadConfig(args []string, getenv func(string) string, stderr io.Writer) (*c
 	if cfg.Auth.Issuer != "" {
 		return nil, errors.New("auth.issuer (multi-user mode) is not supported yet; unset it for single-user mode")
 	}
+	if cfg.Secrets.SecretKey == "" && strings.TrimSpace(cfg.Secrets.SecretKeyOld.Reveal()) != "" {
+		return nil, errors.New("invalid secrets: DAKA_SECRET_KEY_OLD is set but DAKA_SECRET_KEY is not")
+	}
+	if cfg.Secrets.SecretKey != "" {
+		// Fail fast on a malformed key; the error never contains key material.
+		if _, err := secret.ParseKeyring(cfg.Secrets.SecretKey.Reveal(), cfg.Secrets.SecretKeyOld.Reveal()); err != nil {
+			return nil, fmt.Errorf("invalid secrets: %w", err)
+		}
+	}
 	return cfg, nil
 }
 
@@ -91,18 +103,31 @@ func bootstrapDefaultUser(g *gorm.DB, timezone string) error {
 	})
 }
 
-func newHandler(cfg *config.Config, d *db.DB) http.Handler {
+func newHandler(cfg *config.Config, d *db.DB) (http.Handler, error) {
+	proxies, err := config.ParseTrustedProxies(cfg.Server.TrustedProxies)
+	if err != nil {
+		return nil, err
+	}
+	var limiter *ratelimit.Limiter
+	if rl := cfg.Server.RateLimit; !rl.Disabled {
+		limiter = ratelimit.NewLimiter(ratelimit.LimiterConfig{RPS: rl.RPS, Burst: rl.Burst})
+	}
 	var verifier auth.SessionVerifier // nil: single-user without shared_secret
 	if cfg.Auth.SharedSecret != "" {
 		verifier = auth.NewSharedSecretVerifier(cfg.Auth.SharedSecret.Reveal())
 	}
-	apiHandler := api.NewRouter(api.Deps{DB: d, Auth: auth.Middleware(verifier)})
+	apiHandler := api.NewRouter(api.Deps{
+		DB:       d,
+		Auth:     auth.Middleware(verifier),
+		Limiter:  limiter,
+		ClientIP: ratelimit.ClientIPResolver{Trusted: proxies},
+	})
 	mux := http.NewServeMux()
 	mux.Handle("/api/", apiHandler)
 	if cfg.Server.StaticDir != "" {
 		mux.Handle("/", api.StaticHandler(cfg.Server.StaticDir))
 	}
-	return mux
+	return mux, nil
 }
 
 // serve runs the server on ln until ctx is cancelled, then shuts down gracefully.
@@ -120,8 +145,12 @@ func serve(ctx context.Context, cfg *config.Config, ln net.Listener, logger zero
 		return fmt.Errorf("bootstrap default user: %w", err)
 	}
 
+	handler, err := newHandler(cfg, d)
+	if err != nil {
+		return fmt.Errorf("build handler: %w", err)
+	}
 	srv := &http.Server{
-		Handler:           newHandler(cfg, d),
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -131,6 +160,13 @@ func serve(ctx context.Context, cfg *config.Config, ln net.Listener, logger zero
 
 	if loopback, err := config.IsLoopbackListen(ln.Addr().String()); err == nil && !loopback {
 		logger.Warn().Str("addr", ln.Addr().String()).Msg("listening on a non-loopback address; make sure it is protected")
+	}
+	if proxies, err := config.ParseTrustedProxies(cfg.Server.TrustedProxies); err == nil {
+		for _, p := range proxies {
+			if p.Bits() == 0 {
+				logger.Warn().Str("prefix", p.String()).Msg("server.trusted_proxies contains a wildcard prefix: any client can spoof X-Forwarded-For and evade rate limiting")
+			}
+		}
 	}
 	if cfg.Auth.SharedSecret == "" {
 		logger.Info().Msg("single-user mode: all requests use default_user")

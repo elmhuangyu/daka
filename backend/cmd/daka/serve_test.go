@@ -162,3 +162,13 @@ func TestLoadConfigRejectsIssuerAndBadTimezone(t *testing.T) {
 	_, err = loadConfig(nil, func(k string) string { return map[string]string{"DAKA_TIMEZONE": "Mars/Base"}[k] }, io.Discard)
 	require.ErrorContains(t, err, "invalid timezone")
 }
+
+func TestDefaultRateLimitWired(t *testing.T) {
+	ts := startServer(t, nil) // default config must enable the limiter
+	got429 := false
+	for i := 0; i < config.DefaultRateLimitBurst*3 && !got429; i++ {
+		code, _ := ts.do(t, "GET", "/api/view/today", nil, nil)
+		got429 = code == 429
+	}
+	require.True(t, got429, "default rate limit not applied")
+}

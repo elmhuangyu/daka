@@ -26,6 +26,8 @@ func TestRun(t *testing.T) {
 				"DAKA_LISTEN": "0.0.0.0:8080", "DAKA_AUTH_ALLOW_INSECURE_PUBLIC": "true", "DAKA_AUTH_SHARED_SECRET": "s",
 			},
 		},
+		{name: "old key without current fails", env: map[string]string{"DAKA_SECRET_KEY_OLD": "a-long-enough-passphrase"}, wantErr: "DAKA_SECRET_KEY_OLD"},
+		{name: "malformed old key fails", env: map[string]string{"DAKA_SECRET_KEY": "a-long-enough-passphrase", "DAKA_SECRET_KEY_OLD": "tiny"}, wantErr: "invalid master key"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

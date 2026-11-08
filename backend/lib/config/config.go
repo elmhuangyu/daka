@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/goccy/go-yaml"
 )
@@ -68,7 +70,28 @@ type ServerConfig struct {
 	// StaticDir, when set, is a directory with the built frontend served at
 	// "/" (SPA fallback to index.html).
 	StaticDir string `yaml:"static_dir" json:"static_dir"`
+	// TrustedProxies lists IPs / CIDRs of reverse proxies whose X-Forwarded-For
+	// header is honored. Empty (default): only the TCP peer address is used.
+	TrustedProxies []string `yaml:"trusted_proxies" json:"trusted_proxies"`
+	// RateLimit configures the global per-client token bucket.
+	RateLimit RateLimitConfig `yaml:"rate_limit" json:"rate_limit"`
 }
+
+// RateLimitConfig is the global request rate limit (per client IP).
+type RateLimitConfig struct {
+	// Disabled turns the global limiter off.
+	Disabled bool `yaml:"disabled" json:"disabled"`
+	// RPS is the sustained requests per second per client.
+	RPS float64 `yaml:"rps" json:"rps"`
+	// Burst is the bucket size (maximum burst).
+	Burst int `yaml:"burst" json:"burst"`
+}
+
+// Default global rate limit.
+const (
+	DefaultRateLimitRPS   = 20.0
+	DefaultRateLimitBurst = 60
+)
 
 // DefaultTimezone is the timezone given to the bootstrapped default user.
 const DefaultTimezone = "UTC"
@@ -94,7 +117,10 @@ type AuthConfig struct {
 // SecretsConfig holds values that come ONLY from environment variables.
 // It is never read from YAML.
 type SecretsConfig struct {
-	SecretKey        Secret `json:"secret_key"`
+	SecretKey Secret `json:"secret_key"`
+	// SecretKeyOld holds comma-separated retired master keys (DAKA_SECRET_KEY_OLD)
+	// that can still decrypt during key rotation.
+	SecretKeyOld     Secret `json:"secret_key_old"`
 	TelegramBotToken Secret `json:"telegram_bot_token"`
 }
 
@@ -102,18 +128,21 @@ type SecretsConfig struct {
 func Default() Config {
 	return Config{
 		Timezone: DefaultTimezone,
-		Server:   ServerConfig{Listen: DefaultListen},
-		DB:       DBConfig{Driver: DriverSQLite, DSN: "daka.db"},
-		Auth:     AuthConfig{SecureCookie: true},
+		Server: ServerConfig{
+			Listen:    DefaultListen,
+			RateLimit: RateLimitConfig{RPS: DefaultRateLimitRPS, Burst: DefaultRateLimitBurst},
+		},
+		DB:   DBConfig{Driver: DriverSQLite, DSN: "daka.db"},
+		Auth: AuthConfig{SecureCookie: true},
 	}
 }
 
 // String renders the config for logging; secrets are redacted.
 func (c Config) String() string {
 	return fmt.Sprintf(
-		"Config{server.listen=%q db.driver=%q db.dsn=%s auth.issuer=%q auth.allow_insecure_public=%t auth.shared_secret=%s auth.secure_cookie=%t secret_key=%s telegram_bot_token=%s}",
+		"Config{server.listen=%q db.driver=%q db.dsn=%s auth.issuer=%q auth.allow_insecure_public=%t auth.shared_secret=%s auth.secure_cookie=%t secret_key=%s secret_key_old=%s telegram_bot_token=%s}",
 		c.Server.Listen, c.DB.Driver, c.DB.DSN, c.Auth.Issuer, c.Auth.AllowInsecurePublic,
-		c.Auth.SharedSecret, c.Auth.SecureCookie, c.Secrets.SecretKey, c.Secrets.TelegramBotToken,
+		c.Auth.SharedSecret, c.Auth.SecureCookie, c.Secrets.SecretKey, c.Secrets.SecretKeyOld, c.Secrets.TelegramBotToken,
 	)
 }
 
@@ -140,7 +169,7 @@ func Load(path string, getenv func(string) string) (*Config, error) {
 		if err := dec.Decode(&c); err != nil && !errors.Is(err, io.EOF) {
 			return nil, fmt.Errorf("parse config %s: %w", path, err)
 		}
-		if c == (Config{}) { // empty / comment-only document decodes to the zero value
+		if reflect.DeepEqual(c, Config{}) { // empty / comment-only document decodes to the zero value
 			c = def
 		}
 	}
@@ -187,7 +216,33 @@ func applyEnv(c *Config, getenv func(string) string) error {
 	str("DAKA_AUTH_ISSUER", &c.Auth.Issuer)
 	secret("DAKA_AUTH_SHARED_SECRET", &c.Auth.SharedSecret)
 	secret("DAKA_SECRET_KEY", &c.Secrets.SecretKey)
+	secret("DAKA_SECRET_KEY_OLD", &c.Secrets.SecretKeyOld)
 	secret("DAKA_TELEGRAM_BOT_TOKEN", &c.Secrets.TelegramBotToken)
+	if v := getenv("DAKA_TRUSTED_PROXIES"); v != "" {
+		c.Server.TrustedProxies = nil
+		for _, e := range strings.Split(v, ",") {
+			if e = strings.TrimSpace(e); e != "" {
+				c.Server.TrustedProxies = append(c.Server.TrustedProxies, e)
+			}
+		}
+	}
+	if v := getenv("DAKA_RATE_LIMIT_RPS"); v != "" {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return fmt.Errorf("invalid DAKA_RATE_LIMIT_RPS: %q is not a number", v)
+		}
+		c.Server.RateLimit.RPS = f
+	}
+	if v := getenv("DAKA_RATE_LIMIT_BURST"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("invalid DAKA_RATE_LIMIT_BURST: %q is not an integer", v)
+		}
+		c.Server.RateLimit.Burst = n
+	}
+	if err := boolean("DAKA_RATE_LIMIT_DISABLED", &c.Server.RateLimit.Disabled); err != nil {
+		return err
+	}
 	if err := boolean("DAKA_AUTH_ALLOW_INSECURE_PUBLIC", &c.Auth.AllowInsecurePublic); err != nil {
 		return err
 	}

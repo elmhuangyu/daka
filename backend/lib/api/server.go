@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/elmhuangyu/daka/backend/lib/db"
+	"github.com/elmhuangyu/daka/backend/lib/ratelimit"
 )
 
 // Deps are the dependencies of the HTTP API.
@@ -16,6 +17,12 @@ type Deps struct {
 	Auth func(http.Handler) http.Handler
 	// Now returns the current time; nil means time.Now. Tests inject a fixed clock.
 	Now func() time.Time
+	// Limiter is the global per-client-IP rate limiter applied before
+	// authentication (so unauthenticated floods are limited too). Nil disables it.
+	Limiter *ratelimit.Limiter
+	// ClientIP resolves the client IP for Limiter; the zero value uses only
+	// RemoteAddr (X-Forwarded-For needs configured trusted proxies).
+	ClientIP ratelimit.ClientIPResolver
 }
 
 type server struct {
@@ -23,7 +30,8 @@ type server struct {
 	now func() time.Time
 }
 
-// NewRouter builds the API router.
+// NewRouter builds the API router. Only /api/ is rate limited (via Deps.Limiter);
+// static frontend files are served outside this router and are not limited.
 func NewRouter(d Deps) http.Handler {
 	s := &server{db: d.DB, now: d.Now}
 	if s.now == nil {
@@ -41,7 +49,7 @@ func NewRouter(d Deps) http.Handler {
 	if d.Auth != nil {
 		h = d.Auth(h)
 	}
-	return h
+	return ratelimit.Middleware(d.Limiter, d.ClientIP)(h)
 }
 
 // result is a fully rendered JSON response.

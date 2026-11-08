@@ -27,6 +27,26 @@ func IsLoopbackListen(listen string) (bool, error) {
 	return ip.IsLoopback(), nil
 }
 
+// ParseTrustedProxies parses server.trusted_proxies entries (IP addresses or
+// CIDR prefixes) into prefixes. A bare IP becomes a /32 or /128.
+func ParseTrustedProxies(entries []string) ([]netip.Prefix, error) {
+	out := make([]netip.Prefix, 0, len(entries))
+	for _, e := range entries {
+		e = strings.TrimSpace(e)
+		if p, err := netip.ParsePrefix(e); err == nil {
+			out = append(out, p.Masked())
+			continue
+		}
+		a, err := netip.ParseAddr(e)
+		if err != nil {
+			return nil, fmt.Errorf("invalid server.trusted_proxies entry %q (want an IP or CIDR)", e)
+		}
+		a = a.Unmap()
+		out = append(out, netip.PrefixFrom(a, a.BitLen()))
+	}
+	return out, nil
+}
+
 // Validate enforces the cross-field rules. In single-user mode (no
 // auth.issuer) a non-loopback listen address requires both
 // auth.allow_insecure_public and auth.shared_secret (DESIGN 8).
@@ -42,6 +62,12 @@ func (c *Config) Validate() error {
 		case strings.HasPrefix(dsn, "file:") || strings.Contains(dsn, "?"):
 			return errors.New(`db.dsn for sqlite must be a plain file path (no "file:" prefix or "?" query)`)
 		}
+	}
+	if _, err := ParseTrustedProxies(c.Server.TrustedProxies); err != nil {
+		return err
+	}
+	if rl := c.Server.RateLimit; !rl.Disabled && (!(rl.RPS > 0) || rl.Burst < 1) {
+		return errors.New("server.rate_limit requires rps > 0 and burst >= 1 (or disabled: true)")
 	}
 	loopback, err := IsLoopbackListen(c.Server.Listen)
 	if err != nil {
