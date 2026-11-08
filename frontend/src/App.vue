@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import ReauthModal from './components/ReauthModal.vue'
+import { useAuthStore } from './stores/auth'
 
 const STORAGE_KEY = 'daka.redact'
 
@@ -10,6 +13,16 @@ function loadRedact(): boolean {
     return false
   }
 }
+
+const auth = useAuthStore()
+const router = useRouter()
+// A 401 mid-session flips `authenticated`; send the user to the login page.
+watch(
+  () => auth.authenticated,
+  (ok) => {
+    if (!ok && auth.loginRequired) void router.replace({ name: 'login' })
+  },
+)
 
 const redact = ref(loadRedact())
 
@@ -44,4 +57,5 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <component :is="Component" :redact="redact" />
     </RouterView>
   </main>
+  <ReauthModal />
 </template>

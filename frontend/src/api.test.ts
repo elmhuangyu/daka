@@ -45,13 +45,21 @@ describe('CSRF header', () => {
     expect(writes()[1][1].headers['X-Daka-CSRF']).toBe('tok-2')
   })
 
-  it('is refreshed after the server rejects it', async () => {
+  it('is refreshed and the write retried once after the server rejects it', async () => {
     await setCheckin(1, true)
     fetchMock.mockImplementationOnce(async () => jsonRes({ error: 'csrf' }, 403))
-    await expect(setCheckin(1, true)).rejects.toThrow('csrf')
     me = () => jsonRes({ id: 'u', name: 'U', csrf_token: 'tok-new' })
     await setCheckin(1, true)
+    expect(writes()).toHaveLength(3)
     expect(writes().at(-1)![1].headers['X-Daka-CSRF']).toBe('tok-new')
+  })
+
+  it('gives up after one retry when csrf keeps failing', async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url === '/api/auth/me' ? me() : jsonRes({ error: 'csrf' }, 403),
+    )
+    await expect(setCheckin(1, true)).rejects.toThrow('csrf')
+    expect(writes()).toHaveLength(2)
   })
 
   it('getMe returns the profile', async () => {

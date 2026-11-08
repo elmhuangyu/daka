@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import indexHtml from '../index.html?raw'
 import { createMemoryHistory } from 'vue-router'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import App from './App.vue'
 import { makeRouter } from './router'
 
@@ -17,10 +17,12 @@ function jsonRes(body: unknown, status = 200) {
 }
 
 async function mountApp() {
+  const pinia = createPinia()
+  setActivePinia(pinia)
   const router = makeRouter(createMemoryHistory())
   await router.push('/')
   await router.isReady()
-  return mount(App, { global: { plugins: [createPinia(), router] } })
+  return mount(App, { global: { plugins: [pinia, router] } })
 }
 
 let fetchMock: ReturnType<typeof vi.fn>
@@ -29,7 +31,11 @@ beforeEach(() => {
   localStorage.clear()
   document.title = 'Daka' // mirrors index.html; the app must never change it
   fetchMock = vi.fn(async (url: string) =>
-    String(url).startsWith('/api/view/today') ? jsonRes(today([A, B])) : jsonRes({}),
+    String(url).startsWith('/api/view/today')
+      ? jsonRes(today([A, B]))
+      : url === '/api/auth/status'
+        ? jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
+        : jsonRes({}),
   )
   vi.stubGlobal('fetch', fetchMock)
 })
