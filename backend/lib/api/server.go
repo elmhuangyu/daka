@@ -51,16 +51,20 @@ type Deps struct {
 	FeedIPFailures *ratelimit.AuthFailureLimiter
 	// Telegram is the notify service; nil means Telegram is not configured.
 	Telegram TelegramBot
+	// SecureCookie must match auth.secure_cookie: DELETE /api/account clears
+	// the session cookie with the same attributes.
+	SecureCookie bool
 }
 
 type server struct {
-	db       *db.DB
-	now      func() time.Time
-	calendar func(region dbmodels.HolidayRegion) schedule.DayCalendar
-	versions *stats.Versions
-	cache    *stats.Cache
-	ext      *extcal.Service
-	telegram TelegramBot
+	secureCookie bool
+	db           *db.DB
+	now          func() time.Time
+	calendar     func(region dbmodels.HolidayRegion) schedule.DayCalendar
+	versions     *stats.Versions
+	cache        *stats.Cache
+	ext          *extcal.Service
+	telegram     TelegramBot
 
 	clientIP   ratelimit.ClientIPResolver
 	feedFail   *ratelimit.AuthFailureLimiter
@@ -71,7 +75,8 @@ type server struct {
 // static frontend files are served outside this router and are not limited.
 func NewRouter(d Deps) http.Handler {
 	s := &server{db: d.DB, now: d.Now, calendar: d.Calendar, versions: d.Versions, cache: d.StatsCache, ext: d.ExtCal,
-		clientIP: d.ClientIP, feedFail: d.FeedFailures, feedIPFail: d.FeedIPFailures, telegram: d.Telegram}
+		clientIP: d.ClientIP, feedFail: d.FeedFailures, feedIPFail: d.FeedIPFailures, telegram: d.Telegram,
+		secureCookie: d.SecureCookie}
 	if s.versions == nil {
 		s.versions = stats.NewVersions()
 	}
@@ -128,6 +133,9 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("POST /api/telegram/link-code", reauth(http.HandlerFunc(s.postTelegramLinkCode)))
 	mux.Handle("DELETE /api/telegram", reauth(http.HandlerFunc(s.deleteTelegram)))
 	mux.HandleFunc("PATCH /api/telegram/settings", s.patchTelegramSettings)
+	mux.Handle("GET /api/export", reauth(http.HandlerFunc(s.getExport)))
+	mux.Handle("POST /api/import", reauth(http.HandlerFunc(s.postImport)))
+	mux.Handle("DELETE /api/account", reauth(http.HandlerFunc(s.deleteAccount)))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		errResult(http.StatusNotFound, "not found").write(w)
 	})

@@ -46,6 +46,37 @@ func UserOwnedTables() []any {
 	}
 }
 
+// ItemOwnedTables lists the models that belong to a user through an item_id
+// (no UserID column). Account deletion removes them via the user's items.
+func ItemOwnedTables() []any {
+	return []any{
+		&ItemOption{},
+		&ItemRuleVersion{},
+	}
+}
+
+// DeleteUserData permanently removes the user row and every row it owns, in
+// the caller's transaction: item children first (through the user's items),
+// then every UserOwnedTables model, then the user. A reflection test fails
+// when a model of AllModels is covered by none of the three lists.
+func DeleteUserData(tx *gorm.DB, userID string) error {
+	if userID == "" {
+		return errors.New("user id is required")
+	}
+	items := tx.Model(&Item{}).Select("id").Where("user_id = ?", userID)
+	for _, m := range ItemOwnedTables() {
+		if err := tx.Where("item_id IN (?)", items).Delete(m).Error; err != nil {
+			return fmt.Errorf("delete %T: %w", m, err)
+		}
+	}
+	for _, m := range UserOwnedTables() {
+		if err := tx.Where("user_id = ?", userID).Delete(m).Error; err != nil {
+			return fmt.Errorf("delete %T: %w", m, err)
+		}
+	}
+	return tx.Where("id = ?", userID).Delete(&User{}).Error
+}
+
 // ClaimUser moves all data of user from to user to inside one transaction
 // (`daka user claim`). The target user must already exist (it has logged in
 // once) and must not own any data yet; its freshly created default settings and

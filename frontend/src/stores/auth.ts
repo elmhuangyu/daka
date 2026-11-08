@@ -107,6 +107,6 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     ready, initError, oidcEnabled, loginRequired, authenticated, user, reauthOpen,
-    init, refreshStatus, loginWithSecret, logout, requestReauth, settleReauth, reauthWithSecret, reauthWithOidc,
+    init, refreshStatus, markUnauthenticated, loginWithSecret, logout, requestReauth, settleReauth, reauthWithSecret, reauthWithOidc,
   }
 })

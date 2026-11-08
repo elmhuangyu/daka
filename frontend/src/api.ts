@@ -173,7 +173,9 @@ interface Retry {
   reauth: boolean
 }
 
-async function request<T>(path: string, init: RequestInit = {}, retry: Retry = { csrf: false, reauth: false }): Promise<T> {
+async function request<T>(
+  path: string, init: RequestInit = {}, retry: Retry = { csrf: false, reauth: false }, as: 'json' | 'text' = 'json',
+): Promise<T> {
   let res: Response
   const method = (init.method ?? 'GET').toUpperCase()
   // Started early for every request so writes do not wait for a cold start.
@@ -206,15 +208,16 @@ async function request<T>(path: string, init: RequestInit = {}, retry: Retry = {
     if (res.status === 401 || (res.status === 403 && code === 'csrf')) resetCsrf()
     if (res.status === 403 && code === 'csrf' && !retry.csrf && !noToken) {
       // The cached token went stale (new session); fetch a fresh one and retry once.
-      return request<T>(path, stripCsrf(init), { ...retry, csrf: true })
+      return request<T>(path, stripCsrf(init), { ...retry, csrf: true }, as)
     }
     if (res.status === 403 && code === 'reauth_required' && !retry.reauth && hooks.onReauthRequired) {
-      if (await hooks.onReauthRequired()) return request<T>(path, init, { ...retry, reauth: true })
+      if (await hooks.onReauthRequired()) return request<T>(path, init, { ...retry, reauth: true }, as)
     }
     if (res.status === 401 && code === 'unauthorized' && path !== '/api/auth/me') hooks.onUnauthorized?.()
     throw err
   }
   if (res.status === 204) return undefined as T
+  if (as === 'text') return (await res.text()) as T
   return (await res.json()) as T
 }
 
@@ -777,4 +780,38 @@ export function getItemCalendar(
 /** DELETE /api/items/{id}; the 403 reauth_required hook retries it after confirmation. */
 export function deleteItem(id: number): Promise<unknown> {
   return request(`/api/items/${id}`, { method: 'DELETE' })
+}
+
+// --- Data: export / import / delete account (all behind reauth) ---
+
+/** GET /api/export: the raw JSON document text (kept as text so it is saved byte for byte). */
+export function exportData(): Promise<string> {
+  return request<string>('/api/export', {}, { csrf: false, reauth: false }, 'text')
+}
+
+export interface ImportSummary {
+  dry_run: boolean
+  categories: number
+  items: number
+  options: number
+  rule_versions: number
+  checkins: number
+  freezes: number
+  settings_applied: boolean
+}
+
+/** POST /api/import with the text of an export file; dryRun only validates and counts. */
+export function importData(text: string, opts: { dryRun?: boolean; applySettings?: boolean } = {}): Promise<ImportSummary> {
+  const q = new URLSearchParams()
+  if (opts.dryRun) q.set('dry_run', '1')
+  if (opts.applySettings) q.set('apply_settings', '1')
+  const qs = q.toString()
+  return request<ImportSummary>(`/api/import${qs ? `?${qs}` : ''}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text,
+  })
+}
+
+/** DELETE /api/account: permanently deletes the signed-in user and all their data. */
+export function deleteAccount(): Promise<unknown> {
+  return request('/api/account', jsonInit('DELETE', { confirm: 'DELETE' }))
 }

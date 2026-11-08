@@ -4,6 +4,7 @@ import CategoriesSection from '../components/settings/CategoriesSection.vue'
 import TokensSection from '../components/settings/TokensSection.vue'
 import ExternalCalendarsSection from '../components/settings/ExternalCalendarsSection.vue'
 import TelegramSection from '../components/settings/TelegramSection.vue'
+import DataSection from '../components/settings/DataSection.vue'
 import PrivacyAccountSections from '../components/settings/PrivacyAccountSections.vue'
 </script>
 
@@ -16,5 +17,6 @@ import PrivacyAccountSections from '../components/settings/PrivacyAccountSection
     <ExternalCalendarsSection />
     <TelegramSection />
     <PrivacyAccountSections />
+    <DataSection />
   </div>
 </template>

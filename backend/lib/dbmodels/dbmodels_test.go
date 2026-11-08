@@ -194,6 +194,25 @@ func TestCurrentRuleVersionRejectsMalformedDate(t *testing.T) {
 	}
 }
 
+// Every table must have an account-deletion path: a UserID column
+// (UserOwnedTables), an item_id column (ItemOwnedTables) or be the User row.
+// Adding a model to AllModels without covering it fails here.
+func TestEveryModelHasAccountDeletionPath(t *testing.T) {
+	covered := map[reflect.Type]bool{reflect.TypeOf(&User{}): true}
+	for _, m := range UserOwnedTables() {
+		covered[reflect.TypeOf(m)] = true
+	}
+	for _, m := range ItemOwnedTables() {
+		typ := reflect.TypeOf(m)
+		_, has := typ.Elem().FieldByName("ItemID")
+		require.True(t, has, "%s in ItemOwnedTables needs an ItemID field", typ)
+		covered[typ] = true
+	}
+	for _, m := range AllModels() {
+		require.True(t, covered[reflect.TypeOf(m)], "%T has no account deletion path; add it to UserOwnedTables or ItemOwnedTables", m)
+	}
+}
+
 func TestUserOwnedTablesComplete(t *testing.T) {
 	owned := map[reflect.Type]bool{}
 	for _, m := range UserOwnedTables() {
