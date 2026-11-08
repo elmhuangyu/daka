@@ -93,6 +93,9 @@ type patchItemRequest struct {
 	WarningDays *int              `json:"warning_days"`
 
 	Rule *patchRule `json:"rule"`
+
+	// confirmExposure comes from ?confirm_exposure=1, never from the body.
+	confirmExposure bool
 }
 
 func str[T ~string](p *string, dst *T) {
@@ -269,6 +272,7 @@ func (s *server) patchItem(w http.ResponseWriter, r *http.Request) {
 	if !decodeStrict(w, r, &req) {
 		return
 	}
+	req.confirmExposure = r.URL.Query().Get("confirm_exposure") == "1"
 	res, err := s.txResult(func(tx *gorm.DB) (result, error) { return s.applyPatch(tx, userID, id, req) })
 	if err != nil {
 		internalError(w, err, "patch item failed")
@@ -336,6 +340,21 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 		}
 	}
 	if req.CategoryID.Set {
+		// DESIGN 4.1 rule 3: leaving a sensitive category freezes the item as
+		// sensitive unless the caller confirms the exposure. Moving into another
+		// sensitive category is covered by the rules below.
+		leaving := false
+		if item.CategoryID != nil && (req.CategoryID.Null || req.CategoryID.Val != *item.CategoryID) {
+			var n int64
+			if err := tx.Model(&dbmodels.Category{}).Where("id = ? AND user_id = ? AND is_sensitive = ?",
+				*item.CategoryID, userID, true).Count(&n).Error; err != nil {
+				return result{}, err
+			}
+			leaving = n > 0
+		}
+		if leaving && !req.confirmExposure {
+			item.IsSensitive = true
+		}
 		if req.CategoryID.Null {
 			item.CategoryID = nil
 		} else {

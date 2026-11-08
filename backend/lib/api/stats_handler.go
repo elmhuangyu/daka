@@ -34,13 +34,8 @@ func (s *server) getItemStats(w http.ResponseWriter, r *http.Request) {
 		errResult(http.StatusBadRequest, "invalid id").write(w)
 		return
 	}
-	redact := false
-	switch r.URL.Query().Get("redact") {
-	case "", "0", "false":
-	case "1", "true":
-		redact = true
-	default:
-		errResult(http.StatusBadRequest, "invalid redact").write(w)
+	redact, ok := parseRedact(w, r)
+	if !ok {
 		return
 	}
 	res, err := s.itemStats(u.ID, uint(id), redact)
@@ -67,16 +62,12 @@ func (s *server) itemStats(userID string, itemID uint, redact bool) (result, err
 		return result{}, err
 	}
 
-	sensitive := item.IsSensitive
-	if !sensitive && item.CategoryID != nil {
-		var n int64
-		if err := db.Model(&dbmodels.Category{}).Where("id = ? AND user_id = ? AND is_sensitive = ?",
-			*item.CategoryID, userID, true).Count(&n).Error; err != nil {
-			return result{}, err
-		}
-		sensitive = n > 0
+	sens, err := sensitiveFn(db, userID)
+	if err != nil {
+		return result{}, err
 	}
-	resp := statsResponse{ItemID: item.ID, Name: item.Name, IsSensitive: item.IsSensitive, Stats: val}
+	sensitive := sens(item)
+	resp := statsResponse{ItemID: item.ID, Name: item.Name, IsSensitive: sensitive, Stats: val}
 	if redact && sensitive {
 		resp.Name = privateItemName
 		// Option names can reveal the item too; the cached slice is not mutated.

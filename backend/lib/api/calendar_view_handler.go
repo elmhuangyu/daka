@@ -115,13 +115,8 @@ func (s *server) getCalendarView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	redact := false
-	switch q.Get("redact") {
-	case "", "0", "false":
-	case "1", "true":
-		redact = true
-	default:
-		errResult(http.StatusBadRequest, "invalid redact").write(w)
+	redact, ok := parseRedact(w, r)
+	if !ok {
 		return
 	}
 	start, ok1 := strictDate(q.Get("start"))
@@ -198,15 +193,9 @@ func (s *server) calendarView(db *gorm.DB, userID, start, end string, onlyItem u
 	if err != nil {
 		return nil, err
 	}
-	sensitiveCat := map[uint]bool{}
-	if redact {
-		var cats []dbmodels.Category
-		if err := db.Where("user_id = ? AND is_sensitive = ?", userID, true).Find(&cats).Error; err != nil {
-			return nil, err
-		}
-		for _, c := range cats {
-			sensitiveCat[c.ID] = true
-		}
+	sens, err := sensitiveFn(db, userID)
+	if err != nil {
+		return nil, err
 	}
 
 	// Day skeletons with holiday markers.
@@ -258,8 +247,8 @@ func (s *server) calendarView(db *gorm.DB, userID, start, end string, onlyItem u
 			e := entries[date]
 			if e == nil {
 				e = &calendarDayItem{ItemID: it.ID, Name: it.Name, CategoryID: it.CategoryID,
-					TrackerType: string(it.TrackerType), IsSensitive: it.IsSensitive}
-				if redact && (it.IsSensitive || (it.CategoryID != nil && sensitiveCat[*it.CategoryID])) {
+					TrackerType: string(it.TrackerType), IsSensitive: sens(it)}
+				if redact && e.IsSensitive {
 					e.Name = privateItemName
 				}
 				entries[date] = e

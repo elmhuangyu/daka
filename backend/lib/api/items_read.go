@@ -76,17 +76,6 @@ func pathID(w http.ResponseWriter, r *http.Request, name string) (uint, bool) {
 	return uint(id), true
 }
 
-func parseRedact(w http.ResponseWriter, r *http.Request) (redact, ok bool) {
-	switch r.URL.Query().Get("redact") {
-	case "", "0", "false":
-		return false, true
-	case "1", "true":
-		return true, true
-	}
-	errResult(http.StatusBadRequest, "invalid redact").write(w)
-	return false, false
-}
-
 func internalError(w http.ResponseWriter, err error, msg string) {
 	log.Error().Err(err).Msg(msg)
 	errResult(http.StatusInternalServerError, "internal error").write(w)
@@ -99,22 +88,6 @@ type itemStatsSummary struct {
 	Counts        stats.Counts         `json:"counts"`
 	Quota         *stats.QuotaProgress `json:"quota"`
 	Summary       string               `json:"summary"`
-}
-
-// sensitiveFn reports whether an item is sensitive, directly or through its
-// category.
-func sensitiveFn(db *gorm.DB, userID string) (func(dbmodels.Item) bool, error) {
-	var cats []dbmodels.Category
-	if err := db.Where("user_id = ? AND is_sensitive = ?", userID, true).Find(&cats).Error; err != nil {
-		return nil, err
-	}
-	set := map[uint]bool{}
-	for _, c := range cats {
-		set[c.ID] = true
-	}
-	return func(it dbmodels.Item) bool {
-		return it.IsSensitive || (it.CategoryID != nil && set[*it.CategoryID])
-	}, nil
 }
 
 // currentOrLatest is the rule in effect on date, or the newest version when
@@ -183,13 +156,17 @@ func buildItemResponses(db *gorm.DB, items []dbmodels.Item, today string) ([]ite
 	for _, o := range opts {
 		optBy[o.ItemID] = append(optBy[o.ItemID], o)
 	}
+	sens, err := sensitiveFn(db, items[0].UserID)
+	if err != nil {
+		return nil, err
+	}
 	for i, it := range items {
 		cur, _ := currentOrLatest(vsBy[it.ID], today)
 		targets := optionTargetsOf(cur)
 		resp := itemResponse{
 			ID: it.ID, Name: it.Name, Description: it.Description, TrackerType: string(it.TrackerType),
 			Kind: string(it.Kind), Polarity: string(it.Polarity), CategoryID: it.CategoryID,
-			IsSensitive: it.IsSensitive, Pinned: it.Pinned, SortOrder: it.SortOrder, Archived: it.Archived,
+			IsSensitive: it.IsSensitive, EffectiveSensitive: sens(it), Pinned: it.Pinned, SortOrder: it.SortOrder, Archived: it.Archived,
 			RemindTime: it.RemindTime, Unit: it.Unit, Step: it.Step, MinVal: it.MinVal, MaxVal: it.MaxVal,
 			Aggregate: string(it.Aggregate), WarningDays: it.WarningDays,
 			Options:     make([]optionResponse, len(optBy[it.ID])),

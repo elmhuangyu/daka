@@ -112,26 +112,28 @@ type ruleResponse struct {
 }
 
 type itemResponse struct {
-	ID          uint             `json:"id"`
-	Name        string           `json:"name"`
-	Description string           `json:"description"`
-	Pinned      bool             `json:"pinned"`
-	SortOrder   int              `json:"sort_order"`
-	Archived    bool             `json:"archived"`
-	RemindTime  *string          `json:"remind_time"`
-	TrackerType string           `json:"tracker_type"`
-	Kind        string           `json:"kind"`
-	Polarity    string           `json:"polarity"`
-	CategoryID  *uint            `json:"category_id"`
-	IsSensitive bool             `json:"is_sensitive"`
-	Unit        string           `json:"unit,omitempty"`
-	Step        float64          `json:"step,omitempty"`
-	MinVal      *float64         `json:"min_val,omitempty"`
-	MaxVal      *float64         `json:"max_val,omitempty"`
-	Aggregate   string           `json:"aggregate,omitempty"`
-	WarningDays int              `json:"warning_days,omitempty"`
-	Options     []optionResponse `json:"options"`
-	CurrentRule ruleResponse     `json:"current_rule"`
+	ID          uint    `json:"id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Pinned      bool    `json:"pinned"`
+	SortOrder   int     `json:"sort_order"`
+	Archived    bool    `json:"archived"`
+	RemindTime  *string `json:"remind_time"`
+	TrackerType string  `json:"tracker_type"`
+	Kind        string  `json:"kind"`
+	Polarity    string  `json:"polarity"`
+	CategoryID  *uint   `json:"category_id"`
+	IsSensitive bool    `json:"is_sensitive"`
+	// EffectiveSensitive is Item.is_sensitive OR the category's flag (DESIGN 4.1).
+	EffectiveSensitive bool             `json:"effective_sensitive"`
+	Unit               string           `json:"unit,omitempty"`
+	Step               float64          `json:"step,omitempty"`
+	MinVal             *float64         `json:"min_val,omitempty"`
+	MaxVal             *float64         `json:"max_val,omitempty"`
+	Aggregate          string           `json:"aggregate,omitempty"`
+	WarningDays        int              `json:"warning_days,omitempty"`
+	Options            []optionResponse `json:"options"`
+	CurrentRule        ruleResponse     `json:"current_rule"`
 	// Stats is only set by GET /api/items?include=stats.
 	Stats *itemStatsSummary `json:"stats,omitempty"`
 }
@@ -344,7 +346,7 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 		resp := itemResponse{
 			ID: item.ID, Name: item.Name, TrackerType: string(item.TrackerType),
 			Kind: string(item.Kind), Polarity: string(item.Polarity),
-			CategoryID: item.CategoryID, IsSensitive: item.IsSensitive,
+			CategoryID: item.CategoryID, IsSensitive: item.IsSensitive, EffectiveSensitive: item.IsSensitive,
 			Unit: item.Unit, Step: item.Step, MinVal: item.MinVal, MaxVal: item.MaxVal,
 			Aggregate: string(item.Aggregate), WarningDays: item.WarningDays,
 			Options:     make([]optionResponse, len(opts)),

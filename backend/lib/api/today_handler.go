@@ -46,13 +46,8 @@ func (s *server) getToday(w http.ResponseWriter, r *http.Request) {
 		errResult(http.StatusUnauthorized, "unauthorized").write(w)
 		return
 	}
-	redact := false
-	switch r.URL.Query().Get("redact") {
-	case "", "0", "false":
-	case "1", "true":
-		redact = true
-	default:
-		errResult(http.StatusBadRequest, "invalid redact").write(w)
+	redact, ok := parseRedact(w, r)
+	if !ok {
 		return
 	}
 	resp, err := s.today(s.db.Read(), u.ID, redact)
@@ -123,15 +118,9 @@ func (s *server) today(db *gorm.DB, userID string, redact bool) (*todayResponse,
 		optsByItem[o.ItemID] = append(optsByItem[o.ItemID], o)
 	}
 
-	sensitiveCat := map[uint]bool{}
-	if redact {
-		var cats []dbmodels.Category
-		if err := db.Where("user_id = ? AND is_sensitive = ?", userID, true).Find(&cats).Error; err != nil {
-			return nil, err
-		}
-		for _, c := range cats {
-			sensitiveCat[c.ID] = true
-		}
+	sens, err := sensitiveFn(db, userID)
+	if err != nil {
+		return nil, err
 	}
 
 	for _, it := range items {
@@ -150,7 +139,7 @@ func (s *server) today(db *gorm.DB, userID string, redact bool) (*todayResponse,
 		}
 		ti := todayItem{
 			ID: it.ID, Name: it.Name, CategoryID: it.CategoryID,
-			TrackerType: string(it.TrackerType), IsSensitive: it.IsSensitive,
+			TrackerType: string(it.TrackerType), IsSensitive: sens(it),
 			Due: true, LogIDs: logIDs[it.ID],
 		}
 		if ti.LogIDs == nil {
@@ -161,7 +150,7 @@ func (s *server) today(db *gorm.DB, userID string, redact bool) (*todayResponse,
 			// DayCompletion (DESIGN 2/2.1): targets, options and completion_rule.
 			ti.Done = schedule.DayCompletion(it.TrackerType, *cur, optsByItem[it.ID], dayLogs[it.ID], it.Aggregate).Done
 		}
-		if redact && (it.IsSensitive || (it.CategoryID != nil && sensitiveCat[*it.CategoryID])) {
+		if redact && ti.IsSensitive {
 			ti.Name = privateItemName
 		}
 		resp.Items = append(resp.Items, ti)
