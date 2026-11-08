@@ -10,8 +10,10 @@ import CategoryFilter from '../components/today/CategoryFilter.vue'
 import ItemCard from '../components/today/ItemCard.vue'
 import QuickAddForm from '../components/today/QuickAddForm.vue'
 import type { CheckinInput } from '../api'
+import { useI18n } from '../i18n'
+import { weekdayName } from '../i18n/format'
 
-const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const { t } = useI18n()
 
 const privacy = usePrivacyStore()
 const store = useTodayStore()
@@ -19,9 +21,9 @@ const offline = useOfflineStore()
 
 const sections = computed(() =>
   [
-    { id: 'todo', title: 'To do', variant: 'todo', cards: store.todoCards },
-    { id: 'maintenance', title: 'Maintenance due', variant: 'maintenance', cards: store.maintenanceCards },
-    { id: 'quota', title: 'Quota', variant: 'quota', cards: store.quotaCards },
+    { id: 'todo', title: t('today.section.todo'), variant: 'todo', cards: store.todoCards },
+    { id: 'maintenance', title: t('today.section.maintenance'), variant: 'maintenance', cards: store.maintenanceCards },
+    { id: 'quota', title: t('today.section.quota'), variant: 'quota', cards: store.quotaCards },
   ] as const,
 )
 const visibleCount = computed(
@@ -44,17 +46,17 @@ watch(() => offline.syncedTick, () => store.refresh())
   <section class="mx-auto max-w-2xl space-y-4 p-4">
     <header v-if="store.view" class="flex flex-wrap items-baseline justify-between gap-2">
       <h1 class="text-2xl font-bold">
-        Today {{ store.view.date }} <small class="text-base font-normal">{{ WEEKDAY_NAMES[store.view.weekday] ?? '' }}</small>
+        {{ t('today.heading') }} {{ store.view.date }} <small class="text-base font-normal">{{ weekdayName(store.view.weekday) }}</small>
       </h1>
     </header>
 
     <p v-if="store.loading && !store.view" role="status" class="py-8 text-center opacity-70" data-testid="loading">
-      <span class="loading loading-spinner loading-sm" aria-hidden="true"></span> Loading...
+      <span class="loading loading-spinner loading-sm" aria-hidden="true"></span> {{ t('common.loading') }}
     </p>
 
     <div v-if="store.error" class="alert alert-error" role="alert" data-testid="error">
       <span>{{ store.error }}</span>
-      <button type="button" class="btn btn-sm" data-testid="retry" @click="store.refresh()">Retry</button>
+      <button type="button" class="btn btn-sm" data-testid="retry" @click="store.refresh()">{{ t('common.retry') }}</button>
     </div>
 
     <template v-if="store.view">
@@ -66,16 +68,16 @@ watch(() => offline.syncedTick, () => store.refresh())
       />
 
       <p v-if="store.categoryCounts.total === 0" class="py-6 text-center opacity-70" data-testid="empty">
-        Nothing is scheduled for today.
-        <RouterLink to="/items" class="link">Manage items</RouterLink>
+        {{ t('today.empty') }}
+        <RouterLink to="/items" class="link">{{ t('today.manage') }}</RouterLink>
       </p>
       <p v-else-if="visibleCount === 0" class="py-6 text-center opacity-70" data-testid="empty-filter">
-        No items in this category today.
+        {{ t('today.emptyFilter') }}
       </p>
 
       <template v-for="s in sections" :key="s.id">
         <section v-if="s.cards.length" :aria-labelledby="`h-${s.id}`" :data-testid="`section-${s.id}`">
-          <h2 :id="`h-${s.id}`" class="mb-2 text-lg font-semibold">{{ s.title }} ({{ s.cards.length }})</h2>
+          <h2 :id="`h-${s.id}`" class="mb-2 text-lg font-semibold">{{ t('common.countSuffix', { title: s.title, count: s.cards.length }) }}</h2>
           <ul class="space-y-2" :data-testid="`${s.id}-list`">
             <li v-for="c in s.cards" :key="c.detail.id">
               <ItemCard
@@ -88,7 +90,7 @@ watch(() => offline.syncedTick, () => store.refresh())
       </template>
 
       <details v-if="store.doneCards.length" data-testid="section-done">
-        <summary class="mb-2 cursor-pointer text-lg font-semibold">Done ({{ store.doneCards.length }})</summary>
+        <summary class="mb-2 cursor-pointer text-lg font-semibold">{{ t('common.countSuffix', { title: t('today.section.done'), count: store.doneCards.length }) }}</summary>
         <ul class="space-y-2" data-testid="done-list">
           <li v-for="c in store.doneCards" :key="c.detail.id">
             <ItemCard

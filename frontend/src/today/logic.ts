@@ -1,3 +1,4 @@
+import { t, tn } from '../i18n'
 import type { Category, CheckinLog, ItemDetail, OptionDetail, TodayItem } from '../api'
 
 /** A card in the Today view: item definition, today's server flags and today's logs. */
@@ -117,27 +118,30 @@ export function needsAttention(d: ItemDetail): boolean {
   return d.current_rule.schedule_type === 'rolling' && !!m && (m.state === 'overdue' || m.state === 'warning')
 }
 
-const days = (n: number) => `${n} day${n === 1 ? '' : 's'}`
+const days = (n: number) => tn('common.days', n)
 
 export function maintenanceText(d: ItemDetail): string {
   const m = d.stats?.maintenance
   if (!m) return ''
   const last = d.stats?.days_since_last
-  const lastText = last == null ? 'Never done' : last === 0 ? 'Last: today' : `Last: ${days(last)} ago`
+  const lastText =
+    last == null ? t('today.maint.never') : last === 0 ? t('today.maint.lastToday') : t('today.maint.lastAgo', { days: days(last) })
   const state =
     m.state === 'overdue'
-      ? `overdue by ${days(m.overdue_days)}`
+      ? t('today.maint.overdue', { days: days(m.overdue_days) })
       : m.days_until_due === 0
-        ? 'due today'
-        : `due in ${days(m.days_until_due)}`
-  return `${lastText}, ${state}`
+        ? t('today.maint.dueToday')
+        : t('today.maint.dueIn', { days: days(m.days_until_due) })
+  return t('today.maint.line', { last: lastText, state })
 }
 
 export function quotaText(d: ItemDetail): string {
   const q = d.stats?.quota
   if (!q) return ''
-  const cmp = q.comparator === 'at_most' ? 'at most' : 'at least'
-  return `${fmt(q.used)} / ${fmt(q.limit)} (${cmp} per ${q.period || q.window})`
+  const cmp = q.comparator === 'at_most' ? t('today.quota.atMost') : t('today.quota.atLeast')
+  const period = q.period || q.window
+  const periodText = period === 'week' || period === 'month' || period === 'year' ? t(`today.quota.${period}`) : period
+  return t('today.quota.text', { used: fmt(q.used), limit: fmt(q.limit), cmp, period: periodText })
 }
 
 export function findCategory(cats: Category[], id: number | null): Category | null {

@@ -1,4 +1,5 @@
-import { ApiError, type CheckinInput } from '../api'
+import { ApiError, describeError, type CheckinInput } from '../api'
+import { t } from '../i18n'
 
 /**
  * Offline check-in queue (DESIGN 7.3). An entry holds only what the POST
@@ -136,7 +137,7 @@ export class OfflineQueue {
   }
 
   async enqueue(input: CheckinInput, key: string): Promise<void> {
-    if (input.adhoc) throw new Error('One-off options need a connection')
+    if (input.adhoc) throw new Error(t('offline.adhocNeedsConnection'))
     const e: Omit<QueuedCheckin, 'seq'> = { key, input: pickInput(input), createdAt: Date.now(), attempts: 0 }
     const seq = await this.store.add(e)
     this.pending = [...this.pending, { ...e, seq }]
@@ -209,7 +210,7 @@ export class OfflineQueue {
         } else if (err instanceof ApiError && isDefinitive(status)) {
           await this.store.remove(e.seq!)
           this.pending = this.pending.filter((p) => p.seq !== e.seq)
-          this.failures = [...this.failures, { key: e.key, item_id: e.input.item_id, message: err.message }]
+          this.failures = [...this.failures, { key: e.key, item_id: e.input.item_id, message: describeError(err) }]
           continue
         } else {
           // Offline or transient: keep order, back off and try again.

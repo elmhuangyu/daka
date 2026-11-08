@@ -2,6 +2,9 @@
 import { nextTick, ref, watch } from 'vue'
 import { describeError } from '../api'
 import { useAuthStore } from '../stores/auth'
+import { useI18n } from '../i18n'
+
+const { t } = useI18n()
 
 const auth = useAuthStore()
 const secret = ref('')
@@ -48,10 +51,10 @@ async function submit() {
     @keydown.esc="auth.settleReauth(false)"
   >
     <form class="modal-box" @submit.prevent="submit">
-      <h2 id="reauth-title" class="text-lg font-bold">Confirm it's you</h2>
-      <p class="py-2 text-sm">This action needs a recent sign-in.</p>
+      <h2 id="reauth-title" class="text-lg font-bold">{{ t('reauth.title') }}</h2>
+      <p class="py-2 text-sm">{{ t('reauth.body') }}</p>
       <label v-if="!auth.oidcEnabled" class="form-control w-full">
-        <span class="label-text">Secret</span>
+        <span class="label-text">{{ t('reauth.secret') }}</span>
         <input
           ref="input"
           v-model="secret"
@@ -61,12 +64,12 @@ async function submit() {
           required
         />
       </label>
-      <p v-else class="text-sm">You will be redirected to your identity provider.</p>
+      <p v-else class="text-sm">{{ t('reauth.redirect') }}</p>
       <p v-if="error" class="error mt-2" role="alert" data-testid="reauth-error">{{ error }}</p>
       <div class="modal-action">
-        <button type="button" class="btn" @click="auth.settleReauth(false)">Cancel</button>
+        <button type="button" class="btn" @click="auth.settleReauth(false)">{{ t('common.cancel') }}</button>
         <button type="submit" class="btn btn-primary" :disabled="busy">
-          {{ auth.oidcEnabled ? 'Continue' : 'Confirm' }}
+          {{ auth.oidcEnabled ? t('reauth.continue') : t('reauth.confirm') }}
         </button>
       </div>
     </form>

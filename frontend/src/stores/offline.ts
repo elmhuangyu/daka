@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import * as api from '../api'
+import { t } from '../i18n'
 import type { CheckinInput } from '../api'
 import { useAuthStore } from './auth'
 import { useCalendarStore } from './calendar'
@@ -89,7 +90,7 @@ export const useOfflineStore = defineStore('offline', () => {
     } catch (e) {
       if (e instanceof api.ApiError && e.status === 0) {
         if (input.adhoc || (input.note && isPrivateOrUnknown(input.item_id))) {
-          throw new Error('This check-in needs a connection (notes on private or one-off entries are not saved offline)')
+          throw new Error(t('offline.needsConnection'))
         }
         // Stamp the day now: a replay after midnight must not land on the wrong day.
         const tz = useTodayStore().view?.timezone

@@ -5,7 +5,9 @@ import { usePrivacyStore } from '../stores/privacy'
 import OfflineBanner from './OfflineBanner.vue'
 import AvatarMenu from './AvatarMenu.vue'
 import PrivacyToggle from './PrivacyToggle.vue'
+import { useI18n } from '../i18n'
 
+const { t } = useI18n()
 const privacy = usePrivacyStore()
 </script>
 
@@ -15,11 +17,11 @@ const privacy = usePrivacyStore()
     <aside class="hidden w-56 shrink-0 border-r border-base-300 bg-base-200 md:block">
       <div class="sticky top-0 p-3">
         <p class="px-3 py-2 text-xl font-bold">Daka</p>
-        <nav aria-label="Main">
+        <nav :aria-label="t('nav.main')">
           <ul class="menu w-full gap-1">
             <li v-for="n in NAV_ITEMS" :key="n.name">
               <RouterLink :to="n.path" :data-testid="`nav-side-${n.name}`">
-                <Icon :icon="n.icon" aria-hidden="true" /> {{ n.label }}
+                <Icon :icon="n.icon" aria-hidden="true" /> {{ t(n.labelKey) }}
               </RouterLink>
             </li>
           </ul>
@@ -42,10 +44,10 @@ const privacy = usePrivacyStore()
     </div>
 
     <!-- Mobile bottom bar -->
-    <nav class="dock md:hidden" aria-label="Main">
+    <nav class="dock md:hidden" :aria-label="t('nav.main')">
       <RouterLink v-for="n in NAV_ITEMS" :key="n.name" :to="n.path" :data-testid="`nav-bottom-${n.name}`">
         <Icon :icon="n.icon" aria-hidden="true" class="size-[1.2em]" />
-        <span class="dock-label">{{ n.label }}</span>
+        <span class="dock-label">{{ t(n.labelKey) }}</span>
       </RouterLink>
     </nav>
   </div>

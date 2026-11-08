@@ -3,6 +3,9 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { describeError, OIDC_LOGIN_URL } from '../api'
 import { useAuthStore } from '../stores/auth'
+import { useI18n } from '../i18n'
+
+const { t } = useI18n()
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -28,13 +31,13 @@ async function submit() {
 
 <template>
   <main class="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-4">
-    <h1 class="text-2xl font-bold">Sign in to Daka</h1>
+    <h1 class="text-2xl font-bold">{{ t('login.title') }}</h1>
     <a v-if="auth.oidcEnabled" :href="OIDC_LOGIN_URL" class="btn btn-primary" data-testid="oidc-login">
-      Sign in with your identity provider
+      {{ t('login.oidc') }}
     </a>
     <form v-else class="flex flex-col gap-3" @submit.prevent="submit">
       <label class="form-control w-full">
-        <span class="label-text">Secret</span>
+        <span class="label-text">{{ t('login.secret') }}</span>
         <input
           v-model="secret"
           type="password"
@@ -44,7 +47,7 @@ async function submit() {
         />
       </label>
       <p v-if="error" class="error" role="alert" data-testid="login-error">{{ error }}</p>
-      <button type="submit" class="btn btn-primary" :disabled="busy">Sign in</button>
+      <button type="submit" class="btn btn-primary" :disabled="busy">{{ t('login.submit') }}</button>
     </form>
     <p v-if="auth.initError" class="error" role="alert">{{ auth.initError }}</p>
   </main>

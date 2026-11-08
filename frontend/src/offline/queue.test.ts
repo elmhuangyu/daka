@@ -60,14 +60,14 @@ describe('OfflineQueue', () => {
     const keys: string[] = []
     const { q } = make(async (_i, k) => {
       keys.push(k)
-      if (k === 'bad') throw new ApiError('invalid', 400, 'invalid')
+      if (k === 'bad') throw new ApiError('invalid body', 400, 'invalid body')
     })
     await q.enqueue({ item_id: 1, mode: 'set' }, 'bad')
     await q.enqueue({ item_id: 2, mode: 'set' }, 'ok')
     await q.replay()
     expect(keys).toEqual(['bad', 'ok'])
     expect(q.pending).toHaveLength(0)
-    expect(q.failures).toEqual([{ key: 'bad', item_id: 1, message: 'invalid' }])
+    expect(q.failures).toEqual([{ key: 'bad', item_id: 1, message: 'The request was not valid' }])
     q.dismissFailure('bad')
     expect(q.failures).toEqual([])
   })

@@ -2,6 +2,9 @@
 import { Icon } from '@iconify/vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
+import { useI18n } from '../i18n'
+
+const { t } = useI18n()
 
 const auth = useAuthStore()
 const open = ref(false)
@@ -60,7 +63,7 @@ async function signOut() {
       class="btn btn-circle btn-sm btn-primary overflow-hidden p-0"
       aria-haspopup="menu"
       :aria-expanded="open"
-      aria-label="Account menu"
+      :aria-label="t('layout.accountMenu')"
       data-testid="avatar-button"
       @click="open = !open"
     >
@@ -96,9 +99,9 @@ async function signOut() {
         </div>
       </div>
       <button v-if="auth.loginRequired" type="button" role="menuitem" class="btn btn-ghost btn-sm justify-start" data-testid="logout" @click="signOut">
-        <Icon icon="lucide:log-out" aria-hidden="true" /> Sign out
+        <Icon icon="lucide:log-out" aria-hidden="true" /> {{ t('layout.signOut') }}
       </button>
-      <p v-else class="px-3 py-1 text-xs opacity-70">Single-user mode: no sign-in</p>
+      <p v-else class="px-3 py-1 text-xs opacity-70">{{ t('layout.singleUser') }}</p>
     </div>
   </div>
 </template>
