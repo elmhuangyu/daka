@@ -7,6 +7,7 @@ Guidance for AI coding agents working on Daka, a habit tracker (Go backend, Vue 
 - English only: code, comments, docs, UI strings, commit messages.
 - `tmp/` is gitignored scratch space for planning notes. Never `git add -f` it.
 - Do not push, open PRs, or use real Telegram/OIDC credentials without the user's consent.
+- Linear history only: no merge commits. Rebase the task branch onto `main`, then `git merge --ff-only` (the repo sets `merge.ff=only` and `pull.rebase=true`). Remove task worktrees and branches once merged.
 - Keep dependencies light. Do not add heavy libraries without a design reason.
 
 ## Commands
