@@ -233,8 +233,9 @@ func (o *OIDC) Complete(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	hasExplicitName := claims.Name != "" || claims.Username != "" || claims.Email != ""
 	id.Name = firstNonEmpty(claims.Name, claims.Username, claims.Email, "user")
 
-	// If Picture was not present in the ID token, query the UserInfo endpoint if available.
-	if id.AvatarURL == "" {
+	// If profile information (avatar, name, email) is missing from the ID token,
+	// query the UserInfo endpoint if available.
+	if id.AvatarURL == "" || id.Email == "" || !hasExplicitName {
 		uCtx, cancel := context.WithTimeout(o.ctx(ctx), userInfoTimeout)
 		defer cancel()
 		uInfo, err := provider.UserInfo(uCtx, oauth2.StaticTokenSource(tok))
@@ -255,7 +256,9 @@ func (o *OIDC) Complete(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			if err := uInfo.Claims(&uClaims); err != nil {
 				log.Warn().Err(err).Msg("failed to parse oidc userinfo claims")
 			} else {
-				id.AvatarURL = sanitizeAvatarURL(uClaims.Picture)
+				if id.AvatarURL == "" {
+					id.AvatarURL = sanitizeAvatarURL(uClaims.Picture)
+				}
 				if !hasExplicitName {
 					id.Name = firstNonEmpty(uClaims.Name, uClaims.Username, uClaims.Email, "user")
 				}

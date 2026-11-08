@@ -42,6 +42,8 @@ type fakeIdP struct {
 	nonceOver string // overrides the nonce claim
 	picture   string // picture in ID token
 	name      string // name in ID token
+	email     string // email in ID token
+	omitEmail bool   // explicitly omit email from ID token
 	userInfo  map[string]any
 	lastAuth  url.Values
 }
@@ -75,6 +77,11 @@ func newFakeIdP(t *testing.T, clk *clock) *fakeIdP {
 }
 
 func (f *fakeIdP) handleUserInfo(w http.ResponseWriter, r *http.Request) {
+	// Require valid Bearer token per OIDC Core §5.3.1
+	if r.Header.Get("Authorization") != "Bearer at-secret" {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.userInfo != nil {
@@ -128,7 +135,14 @@ func (f *fakeIdP) token(w http.ResponseWriter, r *http.Request) {
 	}
 	claims := map[string]any{
 		"iss": f.srv.URL, "sub": f.sub, "aud": f.audience, "iat": now.Unix(), "exp": now.Add(f.expiresIn).Unix(),
-		"nonce": rec.nonce, "name": tokName, "email": "alice@example.com",
+		"nonce": rec.nonce, "name": tokName,
+	}
+	if !f.omitEmail {
+		tokEmail := "alice@example.com"
+		if f.email != "" {
+			tokEmail = f.email
+		}
+		claims["email"] = tokEmail
 	}
 	if f.issuer != "" {
 		claims["iss"] = f.issuer
@@ -530,4 +544,48 @@ func TestOIDCAvatarURLFromIDTokenAndUserInfo(t *testing.T) {
 	var me4 map[string]string
 	require.NoError(t, json.Unmarshal(rec4.Body.Bytes(), &me4))
 	require.NotContains(t, me4, "avatar_url")
+
+	// 5. UserInfo query when ID token has avatar but missing email
+	e.idp.mu.Lock()
+	e.idp.sub = "sub-5"
+	e.idp.name = "Eve"
+	e.idp.omitEmail = true
+	e.idp.picture = "https://example.com/avatar5.png"
+	e.idp.userInfo = map[string]any{
+		"sub":   "sub-5",
+		"name":  "Eve",
+		"email": "eve@example.com",
+	}
+	e.idp.mu.Unlock()
+
+	sc5 := e.login(t)
+	wantID5 := OIDCUserID(e.idp.srv.URL, "sub-5")
+	var u5 dbmodels.User
+	require.NoError(t, e.m.db.First(&u5, "id = ?", wantID5).Error)
+	require.Equal(t, "https://example.com/avatar5.png", u5.AvatarURL)
+	require.Equal(t, "eve@example.com", u5.Email)
+
+	rec5 := call(e.h, "GET", "/api/auth/me", "", nil, sc5)
+	require.Equal(t, 200, rec5.Code)
+	var me5 map[string]string
+	require.NoError(t, json.Unmarshal(rec5.Body.Bytes(), &me5))
+	require.Equal(t, "https://example.com/avatar5.png", me5["avatar_url"])
+	require.Equal(t, "eve@example.com", me5["email"])
+
+	// 6. UserInfo unauthorized / network error is logged and gracefully skipped
+	e.idp.mu.Lock()
+	e.idp.sub = "sub-6"
+	e.idp.name = "Frank"
+	e.idp.picture = ""
+	e.idp.userInfo = nil // will return 404 (or 401 if token missing)
+	e.idp.mu.Unlock()
+
+	sc6 := e.login(t)
+	wantID6 := OIDCUserID(e.idp.srv.URL, "sub-6")
+	var u6 dbmodels.User
+	require.NoError(t, e.m.db.First(&u6, "id = ?", wantID6).Error)
+	require.Empty(t, u6.AvatarURL)
+	require.Equal(t, "Frank", u6.Name)
+	rec6 := call(e.h, "GET", "/api/auth/me", "", nil, sc6)
+	require.Equal(t, 200, rec6.Code)
 }

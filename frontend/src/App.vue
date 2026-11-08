@@ -27,21 +27,22 @@ function handleUnauthenticatedRedirect() {
     if (activationListenerInstalled) return
     activationListenerInstalled = true
 
+    const detach = () => {
+      activationListenerInstalled = false
+      removeActivationListener = null
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+
     const onVisible = async () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        activationListenerInstalled = false
-        removeActivationListener = null
-        document.removeEventListener('visibilitychange', onVisible)
+        detach()
         await auth.refreshStatus()
         if (!auth.authenticated && auth.loginRequired) {
           void router.replace({ name: 'login' })
         }
       }
     }
-    removeActivationListener = () => {
-      activationListenerInstalled = false
-      document.removeEventListener('visibilitychange', onVisible)
-    }
+    removeActivationListener = detach
     document.addEventListener('visibilitychange', onVisible)
     return
   }

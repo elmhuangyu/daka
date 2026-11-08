@@ -75,10 +75,7 @@ export function setAuthHooks(h: AuthHooks): void {
 }
 
 function getBroadcastChannelCtor(): typeof BroadcastChannel | undefined {
-  if (typeof BroadcastChannel !== 'undefined') {
-    return BroadcastChannel
-  }
-  return undefined
+  return typeof BroadcastChannel !== 'undefined' ? BroadcastChannel : undefined
 }
 
 const AUTH_CHANNEL_NAME = 'daka_auth_channel'
