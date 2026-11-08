@@ -9,16 +9,5 @@ import "gorm.io/gorm"
 // tokens, freezes, ...) are performed in the service layer, which keeps SQLite
 // and PostgreSQL behaviour identical. The Telegram tables arrive with P3-6.
 func AutoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate(
-		&User{},
-		&UserSettings{},
-		&Category{},
-		&Item{},
-		&ItemOption{},
-		&ItemRuleVersion{},
-		&CheckinLog{},
-		&FreezePeriod{},
-		&ApiToken{},
-		&IdempotencyKey{},
-	)
+	return db.AutoMigrate(AllModels()...)
 }

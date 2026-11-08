@@ -5,9 +5,13 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"net/url"
 	"strings"
 	"time"
 )
+
+// MinSharedSecretLen is the minimum length of auth.shared_secret.
+const MinSharedSecretLen = 16
 
 // IsLoopbackListen reports whether the listen address (host:port) binds only to
 // a loopback interface. An empty host means all interfaces and is not loopback.
@@ -63,11 +67,19 @@ func (c *Config) Validate() error {
 			return errors.New(`db.dsn for sqlite must be a plain file path (no "file:" prefix or "?" query)`)
 		}
 	}
+	if c.Auth.Issuer != "" {
+		if err := c.validateOIDC(); err != nil {
+			return err
+		}
+	}
 	if _, err := ParseTrustedProxies(c.Server.TrustedProxies); err != nil {
 		return err
 	}
 	if rl := c.Server.RateLimit; !rl.Disabled && (!(rl.RPS > 0) || rl.Burst < 1) {
 		return errors.New("server.rate_limit requires rps > 0 and burst >= 1 (or disabled: true)")
+	}
+	if s := c.Auth.SharedSecret; s != "" && len(s.Reveal()) < MinSharedSecretLen {
+		return fmt.Errorf("auth.shared_secret must be at least %d characters", MinSharedSecretLen)
 	}
 	loopback, err := IsLoopbackListen(c.Server.Listen)
 	if err != nil {
@@ -81,6 +93,28 @@ func (c *Config) Validate() error {
 	}
 	if c.Auth.SharedSecret == "" {
 		return fmt.Errorf("listening on non-loopback address %q requires auth.shared_secret", c.Server.Listen)
+	}
+	return nil
+}
+
+// validateOIDC checks the OIDC fields required once auth.issuer is set.
+func (c *Config) validateOIDC() error {
+	if err := absoluteHTTPURL("auth.issuer", c.Auth.Issuer); err != nil {
+		return err
+	}
+	if c.Auth.ClientID == "" {
+		return errors.New("auth.client_id is required when auth.issuer is set")
+	}
+	if c.Auth.RedirectURL == "" {
+		return errors.New("auth.redirect_url is required when auth.issuer is set")
+	}
+	return absoluteHTTPURL("auth.redirect_url", c.Auth.RedirectURL)
+}
+
+func absoluteHTTPURL(field, v string) error {
+	u, err := url.Parse(v)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("invalid %s %q (want an absolute http(s) URL)", field, v)
 	}
 	return nil
 }

@@ -2,6 +2,7 @@ package dbmodels
 
 import (
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -190,5 +191,22 @@ func TestCurrentRuleVersionRejectsMalformedDate(t *testing.T) {
 		_, err := CurrentRuleVersion(d.Read(), 1, bad)
 		require.Error(t, err, bad)
 		require.NotErrorIs(t, err, ErrNoRuleVersion, bad)
+	}
+}
+
+func TestUserOwnedTablesComplete(t *testing.T) {
+	owned := map[reflect.Type]bool{}
+	for _, m := range UserOwnedTables() {
+		owned[reflect.TypeOf(m)] = true
+	}
+	all := map[reflect.Type]bool{}
+	for _, m := range AllModels() {
+		typ := reflect.TypeOf(m)
+		all[typ] = true
+		_, has := typ.Elem().FieldByName("UserID")
+		require.Equal(t, has, owned[typ], "%s: UserID field and UserOwnedTables must agree", typ.Elem().Name())
+	}
+	for typ := range owned {
+		require.True(t, all[typ], "%s is in UserOwnedTables but not AllModels", typ)
 	}
 }

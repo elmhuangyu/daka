@@ -70,6 +70,10 @@ type ServerConfig struct {
 	// StaticDir, when set, is a directory with the built frontend served at
 	// "/" (SPA fallback to index.html).
 	StaticDir string `yaml:"static_dir" json:"static_dir"`
+	// AllowedHosts lists extra Host header names (hostname, no port) accepted
+	// in addition to localhost / loopback / the listen host; needed behind a
+	// reverse proxy that serves a public name. Defends against DNS rebinding.
+	AllowedHosts []string `yaml:"allowed_hosts" json:"allowed_hosts"`
 	// TrustedProxies lists IPs / CIDRs of reverse proxies whose X-Forwarded-For
 	// header is honored. Empty (default): only the TCP peer address is used.
 	TrustedProxies []string `yaml:"trusted_proxies" json:"trusted_proxies"`
@@ -106,9 +110,17 @@ type DBConfig struct {
 
 // AuthConfig holds the auth-related settings (rules are enforced elsewhere).
 type AuthConfig struct {
-	Issuer              string `yaml:"issuer" json:"issuer"`
-	AllowInsecurePublic bool   `yaml:"allow_insecure_public" json:"allow_insecure_public"`
-	SharedSecret        Secret `yaml:"shared_secret" json:"shared_secret"`
+	Issuer string `yaml:"issuer" json:"issuer"`
+	// ClientID, ClientSecret, RedirectURL and Scopes configure the OIDC
+	// Authorization Code + PKCE flow (required when Issuer is set). The client
+	// secret is optional for public clients; RedirectURL must point at
+	// <public base URL>/api/auth/oidc/callback.
+	ClientID            string   `yaml:"client_id" json:"client_id"`
+	ClientSecret        Secret   `yaml:"client_secret" json:"client_secret"`
+	RedirectURL         string   `yaml:"redirect_url" json:"redirect_url"`
+	Scopes              []string `yaml:"scopes" json:"scopes"`
+	AllowInsecurePublic bool     `yaml:"allow_insecure_public" json:"allow_insecure_public"`
+	SharedSecret        Secret   `yaml:"shared_secret" json:"shared_secret"`
 	// SecureCookie sets the Secure flag on session cookies. Disable only for
 	// plain-HTTP local / LAN deployments.
 	SecureCookie bool `yaml:"secure_cookie" json:"secure_cookie"`
@@ -140,9 +152,9 @@ func Default() Config {
 // String renders the config for logging; secrets are redacted.
 func (c Config) String() string {
 	return fmt.Sprintf(
-		"Config{server.listen=%q db.driver=%q db.dsn=%s auth.issuer=%q auth.allow_insecure_public=%t auth.shared_secret=%s auth.secure_cookie=%t secret_key=%s secret_key_old=%s telegram_bot_token=%s}",
-		c.Server.Listen, c.DB.Driver, c.DB.DSN, c.Auth.Issuer, c.Auth.AllowInsecurePublic,
-		c.Auth.SharedSecret, c.Auth.SecureCookie, c.Secrets.SecretKey, c.Secrets.SecretKeyOld, c.Secrets.TelegramBotToken,
+		"Config{server.listen=%q db.driver=%q db.dsn=%s auth.issuer=%q auth.client_id=%q auth.client_secret=%s auth.redirect_url=%q auth.allow_insecure_public=%t auth.shared_secret=%s auth.secure_cookie=%t secret_key=%s secret_key_old=%s telegram_bot_token=%s}",
+		c.Server.Listen, c.DB.Driver, c.DB.DSN, c.Auth.Issuer, c.Auth.ClientID, c.Auth.ClientSecret, c.Auth.RedirectURL,
+		c.Auth.AllowInsecurePublic, c.Auth.SharedSecret, c.Auth.SecureCookie, c.Secrets.SecretKey, c.Secrets.SecretKeyOld, c.Secrets.TelegramBotToken,
 	)
 }
 
@@ -214,6 +226,12 @@ func applyEnv(c *Config, getenv func(string) string) error {
 	str("DAKA_DB_DRIVER", &c.DB.Driver)
 	secret("DAKA_DB_DSN", &c.DB.DSN)
 	str("DAKA_AUTH_ISSUER", &c.Auth.Issuer)
+	str("DAKA_AUTH_CLIENT_ID", &c.Auth.ClientID)
+	secret("DAKA_AUTH_CLIENT_SECRET", &c.Auth.ClientSecret)
+	str("DAKA_AUTH_REDIRECT_URL", &c.Auth.RedirectURL)
+	if v := getenv("DAKA_AUTH_SCOPES"); v != "" {
+		c.Auth.Scopes = strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ' ' })
+	}
 	secret("DAKA_AUTH_SHARED_SECRET", &c.Auth.SharedSecret)
 	secret("DAKA_SECRET_KEY", &c.Secrets.SecretKey)
 	secret("DAKA_SECRET_KEY_OLD", &c.Secrets.SecretKeyOld)
@@ -223,6 +241,14 @@ func applyEnv(c *Config, getenv func(string) string) error {
 		for _, e := range strings.Split(v, ",") {
 			if e = strings.TrimSpace(e); e != "" {
 				c.Server.TrustedProxies = append(c.Server.TrustedProxies, e)
+			}
+		}
+	}
+	if v := getenv("DAKA_ALLOWED_HOSTS"); v != "" {
+		c.Server.AllowedHosts = nil
+		for _, e := range strings.Split(v, ",") {
+			if e = strings.TrimSpace(e); e != "" {
+				c.Server.AllowedHosts = append(c.Server.AllowedHosts, e)
 			}
 		}
 	}

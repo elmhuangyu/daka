@@ -76,6 +76,11 @@ auth:
 				"DAKA_AUTH_ALLOW_INSECURE_PUBLIC": "true",
 				"DAKA_AUTH_SHARED_SECRET":         "s3",
 				"DAKA_AUTH_SECURE_COOKIE":         "false",
+				"DAKA_ALLOWED_HOSTS":              "a.example, b.example",
+				"DAKA_AUTH_CLIENT_ID":             "cid",
+				"DAKA_AUTH_CLIENT_SECRET":         "csec",
+				"DAKA_AUTH_REDIRECT_URL":          "https://x/api/auth/oidc/callback",
+				"DAKA_AUTH_SCOPES":                "openid,email groups",
 			},
 			check: func(t *testing.T, c *Config) {
 				require.Equal(t, "127.0.0.1:1234", c.Server.Listen)
@@ -85,6 +90,11 @@ auth:
 				require.True(t, c.Auth.AllowInsecurePublic)
 				require.Equal(t, "s3", c.Auth.SharedSecret.Reveal())
 				require.False(t, c.Auth.SecureCookie)
+				require.Equal(t, []string{"a.example", "b.example"}, c.Server.AllowedHosts)
+				require.Equal(t, "cid", c.Auth.ClientID)
+				require.Equal(t, "csec", c.Auth.ClientSecret.Reveal())
+				require.Equal(t, "https://x/api/auth/oidc/callback", c.Auth.RedirectURL)
+				require.Equal(t, []string{"openid", "email", "groups"}, c.Auth.Scopes)
 			},
 		},
 		{
@@ -128,6 +138,7 @@ func TestSecretsNeverRendered(t *testing.T) {
 		"DAKA_SECRET_KEY":         "KEY-VALUE",
 		"DAKA_TELEGRAM_BOT_TOKEN": "TG-VALUE",
 		"DAKA_AUTH_SHARED_SECRET": "PW-VALUE",
+		"DAKA_AUTH_CLIENT_SECRET": "CS-VALUE",
 		"DAKA_DB_DSN":             "postgres://user:DSNPASS@h/db",
 	}))
 	require.NoError(t, err)
@@ -136,10 +147,10 @@ func TestSecretsNeverRendered(t *testing.T) {
 	outs := []string{
 		c.String(), fmt.Sprintf("%v", c), fmt.Sprintf("%+v", c), fmt.Sprintf("%#v", c),
 		fmt.Sprintf("%v", *c), fmt.Sprintf("%+v", c.Secrets), string(js),
-		fmt.Sprint(c.Secrets.SecretKey), fmt.Sprint(c.Auth.SharedSecret),
+		fmt.Sprint(c.Secrets.SecretKey), fmt.Sprint(c.Auth.SharedSecret), fmt.Sprint(c.Auth.ClientSecret),
 	}
 	for _, o := range outs {
-		for _, s := range []string{"KEY-VALUE", "TG-VALUE", "PW-VALUE", "DSNPASS"} {
+		for _, s := range []string{"KEY-VALUE", "TG-VALUE", "PW-VALUE", "CS-VALUE", "DSNPASS"} {
 			require.False(t, strings.Contains(o, s), "leaked %s in %q", s, o)
 		}
 	}

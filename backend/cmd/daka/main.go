@@ -42,6 +42,9 @@ func main() {
 
 // run loads the configuration and serves until ctx is cancelled.
 func run(ctx context.Context, args []string, getenv func(string) string, stderr io.Writer) error {
+	if len(args) >= 2 && args[0] == "user" && args[1] == "claim" {
+		return runUserClaim(args[2:], getenv, stderr)
+	}
 	cfg, err := loadConfig(args, getenv, stderr)
 	if err != nil {
 		return err
@@ -68,9 +71,6 @@ func loadConfig(args []string, getenv func(string) string, stderr io.Writer) (*c
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
-	}
-	if cfg.Auth.Issuer != "" {
-		return nil, errors.New("auth.issuer (multi-user mode) is not supported yet; unset it for single-user mode")
 	}
 	if cfg.Secrets.SecretKey == "" && strings.TrimSpace(cfg.Secrets.SecretKeyOld.Reveal()) != "" {
 		return nil, errors.New("invalid secrets: DAKA_SECRET_KEY_OLD is set but DAKA_SECRET_KEY is not")
@@ -103,31 +103,62 @@ func bootstrapDefaultUser(g *gorm.DB, timezone string) error {
 	})
 }
 
-func newHandler(cfg *config.Config, d *db.DB) (http.Handler, error) {
+// newHandler wires authentication and the API. Login is required (cookie
+// sessions) when OIDC or auth.shared_secret is configured; otherwise every
+// request is default_user (loopback single-user mode). It returns the session
+// manager (nil without login) so the caller can purge expired sessions.
+func newHandler(cfg *config.Config, d *db.DB) (http.Handler, *auth.Manager, error) {
 	proxies, err := config.ParseTrustedProxies(cfg.Server.TrustedProxies)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var limiter *ratelimit.Limiter
 	if rl := cfg.Server.RateLimit; !rl.Disabled {
 		limiter = ratelimit.NewLimiter(ratelimit.LimiterConfig{RPS: rl.RPS, Burst: rl.Burst})
 	}
-	var verifier auth.SessionVerifier // nil: single-user without shared_secret
-	if cfg.Auth.SharedSecret != "" {
-		verifier = auth.NewSharedSecretVerifier(cfg.Auth.SharedSecret.Reveal())
+	clientIP := ratelimit.ClientIPResolver{Trusted: proxies}
+	var (
+		manager  *auth.Manager
+		verifier auth.SessionVerifier // stays a nil interface without login
+		oidc     *auth.OIDC
+	)
+	loginRequired := cfg.Auth.Issuer != "" || cfg.Auth.SharedSecret != ""
+	if loginRequired {
+		manager = auth.NewManager(d.Write(), auth.ManagerOptions{SecureCookie: cfg.Auth.SecureCookie})
+		verifier = manager
 	}
-	apiHandler := api.NewRouter(api.Deps{
-		DB:       d,
-		Auth:     auth.Middleware(verifier),
-		Limiter:  limiter,
-		ClientIP: ratelimit.ClientIPResolver{Trusted: proxies},
+	if cfg.Auth.Issuer != "" {
+		oidc, err = auth.NewOIDC(auth.OIDCConfig{
+			Issuer: cfg.Auth.Issuer, ClientID: cfg.Auth.ClientID, ClientSecret: cfg.Auth.ClientSecret.Reveal(),
+			RedirectURL: cfg.Auth.RedirectURL, Scopes: cfg.Auth.Scopes,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	authFail := ratelimit.NewAuthFailureLimiter(ratelimit.AuthFailureConfig{})
+	authHandler := auth.NewHandler(auth.HandlerOptions{
+		DB: d.Write(), Manager: manager, SharedSecret: cfg.Auth.SharedSecret.Reveal(), OIDC: oidc,
+		Timezone: cfg.Timezone, SecureCookie: cfg.Auth.SecureCookie,
+		Limiter: authFail, ClientIP: clientIP.ClientIP,
 	})
+	apiHandler := api.NewRouter(api.Deps{DB: d, Auth: auth.Middleware(verifier), Limiter: limiter, ClientIP: clientIP})
 	mux := http.NewServeMux()
+	// Public auth endpoints authenticate themselves; they share the global
+	// per-IP rate limit (this covers GET /api/auth/oidc/login too).
+	mux.Handle("/api/auth/", ratelimit.Middleware(limiter, clientIP)(authHandler))
 	mux.Handle("/api/", apiHandler)
 	if cfg.Server.StaticDir != "" {
 		mux.Handle("/", api.StaticHandler(cfg.Server.StaticDir))
 	}
-	return mux, nil
+	var h http.Handler = mux
+	// DNS-rebinding defence: without login the only protection is the loopback
+	// bind, so unknown Host headers are refused. With login (possibly on a LAN
+	// address) the check applies only when server.allowed_hosts is configured.
+	if !loginRequired || len(cfg.Server.AllowedHosts) > 0 {
+		h = auth.HostGuard(auth.NewHostAllowlist(cfg.Server.Listen, cfg.Server.AllowedHosts))(h)
+	}
+	return h, manager, nil
 }
 
 // serve runs the server on ln until ctx is cancelled, then shuts down gracefully.
@@ -145,7 +176,7 @@ func serve(ctx context.Context, cfg *config.Config, ln net.Listener, logger zero
 		return fmt.Errorf("bootstrap default user: %w", err)
 	}
 
-	handler, err := newHandler(cfg, d)
+	handler, sessions, err := newHandler(cfg, d)
 	if err != nil {
 		return fmt.Errorf("build handler: %w", err)
 	}
@@ -168,8 +199,19 @@ func serve(ctx context.Context, cfg *config.Config, ln net.Listener, logger zero
 			}
 		}
 	}
-	if cfg.Auth.SharedSecret == "" {
+	switch {
+	case cfg.Auth.Issuer != "":
+		logger.Info().Str("issuer", cfg.Auth.Issuer).Msg("OIDC mode")
+		if cfg.Auth.SharedSecret != "" {
+			logger.Warn().Msg("auth.shared_secret is ignored when auth.issuer is set")
+		}
+	case cfg.Auth.SharedSecret != "":
+		logger.Info().Msg("single-user mode with shared-secret login")
+	default:
 		logger.Info().Msg("single-user mode: all requests use default_user")
+	}
+	if !cfg.Auth.SecureCookie && cfg.Auth.Issuer != "" {
+		logger.Warn().Msg("auth.secure_cookie=false: session cookies are sent over plain HTTP")
 	}
 
 	var wg sync.WaitGroup
@@ -177,7 +219,7 @@ func serve(ctx context.Context, cfg *config.Config, ln net.Listener, logger zero
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		purgeLoop(purgeCtx, d, logger)
+		purgeLoop(purgeCtx, d, sessions, logger)
 	}()
 	defer func() {
 		cancelPurge()
@@ -206,7 +248,7 @@ func serve(ctx context.Context, cfg *config.Config, ln net.Listener, logger zero
 }
 
 // purgeLoop deletes expired idempotency keys at start and then daily.
-func purgeLoop(ctx context.Context, d *db.DB, logger zerolog.Logger) {
+func purgeLoop(ctx context.Context, d *db.DB, sessions *auth.Manager, logger zerolog.Logger) {
 	purge := func() {
 		n, err := api.PurgeIdempotencyKeys(d, time.Now())
 		if err != nil {
@@ -215,6 +257,13 @@ func purgeLoop(ctx context.Context, d *db.DB, logger zerolog.Logger) {
 		}
 		if n > 0 {
 			logger.Info().Int64("deleted", n).Msg("purged idempotency keys")
+		}
+		if sessions != nil {
+			if n, err := sessions.Purge(); err != nil {
+				logger.Error().Err(err).Msg("purge sessions failed")
+			} else if n > 0 {
+				logger.Info().Int64("deleted", n).Msg("purged expired sessions")
+			}
 		}
 	}
 	purge()

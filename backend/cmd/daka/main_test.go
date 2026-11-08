@@ -23,7 +23,7 @@ func TestRun(t *testing.T) {
 		{
 			name: "0.0.0.0 flag and secret ok",
 			env: map[string]string{
-				"DAKA_LISTEN": "0.0.0.0:8080", "DAKA_AUTH_ALLOW_INSECURE_PUBLIC": "true", "DAKA_AUTH_SHARED_SECRET": "s",
+				"DAKA_LISTEN": "0.0.0.0:8080", "DAKA_AUTH_ALLOW_INSECURE_PUBLIC": "true", "DAKA_AUTH_SHARED_SECRET": "0123456789abcdef",
 			},
 		},
 		{name: "old key without current fails", env: map[string]string{"DAKA_SECRET_KEY_OLD": "a-long-enough-passphrase"}, wantErr: "DAKA_SECRET_KEY_OLD"},

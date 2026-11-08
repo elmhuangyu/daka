@@ -16,7 +16,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
-	"github.com/elmhuangyu/daka/backend/lib/auth"
 	"github.com/elmhuangyu/daka/backend/lib/config"
 )
 
@@ -122,14 +121,6 @@ func TestEndToEnd(t *testing.T) {
 	require.Equal(t, 1, td.Progress.Total)
 }
 
-func TestSharedSecretRequiresSession(t *testing.T) {
-	ts := startServer(t, func(c *config.Config) { c.Auth.SharedSecret = "s3cret" })
-	code, _ := ts.do(t, "GET", "/api/view/today", nil, nil)
-	require.Equal(t, 401, code)
-	code, _ = ts.do(t, "GET", "/api/view/today", nil, &http.Cookie{Name: auth.SessionCookieName, Value: auth.SessionToken("s3cret")})
-	require.Equal(t, 200, code)
-}
-
 func TestStaticDirServed(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html>app</html>"), 0o644))
@@ -156,9 +147,12 @@ func TestBootstrapIdempotent(t *testing.T) {
 	}
 }
 
-func TestLoadConfigRejectsIssuerAndBadTimezone(t *testing.T) {
-	_, err := loadConfig(nil, func(k string) string { return map[string]string{"DAKA_AUTH_ISSUER": "https://idp"}[k] }, io.Discard)
-	require.ErrorContains(t, err, "not supported yet")
+func TestLoadConfigAcceptsIssuerRejectsBadTimezone(t *testing.T) {
+	env := map[string]string{"DAKA_AUTH_ISSUER": "https://idp", "DAKA_AUTH_CLIENT_ID": "c", "DAKA_AUTH_REDIRECT_URL": "https://d/api/auth/oidc/callback"}
+	_, err := loadConfig(nil, func(k string) string { return env[k] }, io.Discard)
+	require.NoError(t, err)
+	_, err = loadConfig(nil, func(k string) string { return map[string]string{"DAKA_AUTH_ISSUER": "https://idp"}[k] }, io.Discard)
+	require.ErrorContains(t, err, "client_id")
 	_, err = loadConfig(nil, func(k string) string { return map[string]string{"DAKA_TIMEZONE": "Mars/Base"}[k] }, io.Discard)
 	require.ErrorContains(t, err, "invalid timezone")
 }

@@ -3,11 +3,14 @@ module github.com/elmhuangyu/daka/backend
 go 1.27
 
 require (
+	github.com/coreos/go-oidc/v3 v3.21.0
+	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/goccy/go-yaml v1.19.2
 	github.com/libtnb/sqlite v1.2.2
 	github.com/rs/zerolog v1.35.1
 	github.com/stretchr/testify v1.12.1
 	github.com/teambition/rrule-go v1.8.2
+	golang.org/x/oauth2 v0.37.0
 	gorm.io/driver/postgres v1.6.3
 	gorm.io/gorm v1.31.2
 )

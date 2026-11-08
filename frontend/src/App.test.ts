@@ -115,7 +115,7 @@ describe('Today page', () => {
     fetchMock.mockClear()
     mount(App)
     await flushPromises()
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/view/today?redact=1')
+    expect(calls('/api/view/today')[0][0]).toBe('/api/view/today?redact=1')
   })
 
   it('Ctrl+Shift+H toggles redact', async () => {

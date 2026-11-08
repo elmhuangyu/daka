@@ -41,9 +41,63 @@ export function newIdempotencyKey(): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
 }
 
+export interface Me {
+  id: string
+  name: string
+  email?: string
+  csrf_token?: string
+}
+
+// The CSRF token is session-bound and served by GET /api/auth/me. It is only
+// present when a cookie session exists; in loopback single-user mode there is
+// none and no header is sent (the server then relies on same-origin checks).
+let csrfPromise: Promise<string | null> | null = null
+
+async function loadCsrf(): Promise<string | null> {
+  try {
+    const res = await fetch('/api/auth/me')
+    if (!res.ok) return null
+    const me = (await res.json()) as Partial<Me>
+    return typeof me?.csrf_token === 'string' && me.csrf_token ? me.csrf_token : null
+  } catch {
+    return null
+  }
+}
+
+function getCsrf(): Promise<string | null> {
+  if (!csrfPromise) {
+    const p = loadCsrf()
+    csrfPromise = p
+    // Do not cache a miss (e.g. not logged in yet): retry on the next write.
+    void p.then((t) => {
+      if (t === null && csrfPromise === p) csrfPromise = null
+    })
+  }
+  return csrfPromise
+}
+
+/** Forget the cached CSRF token (after login / logout or a CSRF rejection; also for tests). */
+export function resetCsrf(): void {
+  csrfPromise = null
+}
+
+export function getMe(): Promise<Me> {
+  return request<Me>('/api/auth/me')
+}
+
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   let res: Response
+  const method = (init.method ?? 'GET').toUpperCase()
+  // Started early for every request so writes do not wait for a cold start.
+  const noToken = path === '/api/auth/me' || path === '/api/auth/login'
+  const csrf = noToken ? Promise.resolve(null) : getCsrf()
   try {
+    if (!SAFE_METHODS.has(method) && !noToken) {
+      const token = await csrf
+      if (token) init = { ...init, headers: { ...(init.headers as Record<string, string> | undefined), 'X-Daka-CSRF': token } }
+    }
     res = await fetch(path, init)
   } catch {
     throw new ApiError('Network error', 0)
@@ -56,6 +110,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     } catch {
       // keep the default message
     }
+    if (res.status === 401 || (res.status === 403 && msg === 'csrf')) resetCsrf()
     throw new ApiError(msg, res.status)
   }
   return (await res.json()) as T
