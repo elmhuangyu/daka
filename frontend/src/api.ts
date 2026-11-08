@@ -295,6 +295,8 @@ export interface ItemDetail {
   max_val?: number | null
   aggregate?: string
   warning_days?: number
+  pinned?: boolean
+  archived?: boolean
   options: OptionDetail[]
   current_rule: RuleDetail
   stats?: ItemStatsSummary
@@ -420,6 +422,8 @@ export interface ItemDto {
   max_val?: number | null
   aggregate?: string
   warning_days?: number
+  pinned?: boolean
+  archived?: boolean
   options: ItemOptionDto[]
   current_rule: ItemRuleDto
 }
@@ -432,8 +436,8 @@ export interface CategoryDto {
   is_sensitive: boolean
 }
 
-export function getItem(id: number): Promise<ItemDto> {
-  return request<ItemDto>(`/api/items/${id}`)
+export function getItem(id: number, redact = false): Promise<ItemDto> {
+  return request<ItemDto>(`/api/items/${id}${redact ? '?redact=1' : ''}`)
 }
 
 export function postItem(body: unknown): Promise<ItemDto> {
@@ -604,4 +608,97 @@ export function removeCategory(
   else q.set('uncategorize', '1')
   if (confirmExposure) q.set('confirm_exposure', '1')
   return request(`/api/categories/${id}?${q}`, { method: 'DELETE' })
+}
+
+
+// ---- Items panel and detail page ----
+
+/** GET /api/items with stats for the items panel (search is skipped by callers while redacting). */
+export function listItemsPanel(opts: { q?: string; archived?: boolean; redact: boolean }): Promise<{ items: ItemDetail[] }> {
+  const p = new URLSearchParams({ include: 'stats' })
+  if (opts.q) p.set('q', opts.q)
+  if (opts.archived) p.set('archived', 'true')
+  if (opts.redact) p.set('redact', '1')
+  return request(`/api/items?${p.toString()}`)
+}
+
+export interface HeatmapDay {
+  date: string
+  level: number
+  value: number
+}
+
+export interface OptionSummaryDto {
+  option_id: number | null
+  name: string
+  unit: string
+  count: number
+  sum: number
+  avg: number
+  last_value: number
+  last_date?: string
+}
+
+export interface ItemStats {
+  item_id: number
+  name: string
+  today: string
+  last_at: string | null
+  last_date: string | null
+  days_since_last: number | null
+  summary: string
+  counts: { last_30_days: number; this_year: number; total: number }
+  active_days: { last_30_days: number; this_year: number; total: number }
+  options: OptionSummaryDto[]
+  streak: { applicable: boolean; unit?: string; current: number; longest: number }
+  completion_rate_90: number | null
+  heatmap: HeatmapDay[]
+  quota: QuotaProgress | null
+  maintenance: MaintenanceInfo | null
+}
+
+export function getItemStats(id: number, redact: boolean): Promise<ItemStats> {
+  return request(`/api/items/${id}/stats${redact ? '?redact=1' : ''}`)
+}
+
+export interface HistoryLog {
+  id: number
+  item_id: number
+  option_id: number | null
+  date: string
+  time: string
+  value: number
+  note: string
+  source: string
+  is_supplement: boolean
+}
+
+export function getItemCheckins(
+  itemId: number, cursor: string, redact: boolean, limit = 20,
+): Promise<{ checkins?: HistoryLog[]; next_cursor?: string | null }> {
+  const p = new URLSearchParams({ item_id: String(itemId), limit: String(limit) })
+  if (cursor) p.set('cursor', cursor)
+  if (redact) p.set('redact', '1')
+  return request(`/api/checkins?${p.toString()}`)
+}
+
+export interface ItemCalendarDay {
+  date: string
+  weekday: number
+  status: string
+  frozen: boolean
+  items: Array<{ item_id: number; due: boolean; status: string; done: boolean; forecast: boolean; overdue: boolean; log_count: number }>
+}
+
+export function getItemCalendar(
+  itemId: number, start: string, end: string, redact: boolean,
+): Promise<{ today: string; week_start: number; days: ItemCalendarDay[] }> {
+  const p = new URLSearchParams({ start, end, item: String(itemId) })
+  if (redact) p.set('redact', '1')
+  return request(`/api/view/calendar?${p.toString()}`)
+}
+
+/** DELETE /api/items/{id}; the 403 reauth_required hook retries it after confirmation. */
+export function deleteItem(id: number): Promise<unknown> {
+  return request(`/api/items/${id}`, { method: 'DELETE' })
 }

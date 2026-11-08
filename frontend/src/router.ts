@@ -17,7 +17,13 @@ export function makeRouter(history: RouterHistory = createWebHistory()) {
       { path: '/login', name: 'login', component: () => import('./views/LoginView.vue'), meta: { public: true } },
       { path: '/', name: 'today', component: () => import('./views/TodayView.vue'), meta: { title: 'Today' } },
       { path: '/calendar', name: 'calendar', component: placeholder, meta: { title: 'Calendar' } },
-      { path: '/items', name: 'items', component: placeholder, meta: { title: 'Items' } },
+      {
+        path: '/items', component: () => import('./views/ItemsView.vue'), meta: { title: 'Items' },
+        children: [
+          { path: '', name: 'items', component: () => import('./views/ItemsEmpty.vue'), meta: { title: 'Items' } },
+          { path: ':id(\\d+)', name: 'item-detail', component: () => import('./views/ItemDetailView.vue'), meta: { title: 'Item' } },
+        ],
+      },
       { path: '/items/new', name: 'item-new', component: () => import('./views/ItemEditorView.vue'), meta: { title: 'New item' } },
       {
         path: '/items/:id(\\d+)/edit', name: 'item-edit',
