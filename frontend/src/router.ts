@@ -10,7 +10,6 @@ declare module 'vue-router' {
 }
 
 export function makeRouter(history: RouterHistory = createWebHistory()) {
-  const placeholder = () => import('./views/PlaceholderView.vue')
   const router = createRouter({
     history,
     routes: [
