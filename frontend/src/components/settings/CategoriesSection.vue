@@ -5,6 +5,9 @@ import {
   createCategory, describeError, listCategories, removeCategory, updateCategory, type CategoryDto,
 } from '../../api'
 import { useSettingsStore } from '../../stores/settings'
+import { useI18n } from '../../i18n'
+
+const { t, tn } = useI18n()
 
 const store = useSettingsStore()
 const cats = ref<CategoryDto[]>([])
@@ -77,7 +80,7 @@ const confirmUnmark = () => {
   return run(async () => {
     const r = await updateCategory(c.id, { is_sensitive: false }, expose.value)
     const n = r.affected_items ?? 0
-    if (n > 0) notice.value = expose.value ? `${n} item(s) are now exposed.` : `${n} item(s) were marked sensitive to keep them protected.`
+    if (n > 0) notice.value = tn(expose.value ? 'settings.categories.exposed' : 'settings.categories.protected', n)
   })
 }
 
@@ -89,12 +92,12 @@ function startDelete(c: CategoryDto) {
 
 const confirmDelete = () => {
   const c = deleting.value!
-  const t = target.value
+  const tgt = target.value
   deleting.value = null
   return run(async () => {
-    const dest = typeof t === 'number' ? cats.value.find((x) => x.id === t) : undefined
+    const dest = typeof tgt === 'number' ? cats.value.find((x) => x.id === tgt) : undefined
     const leaves = c.is_sensitive && !dest?.is_sensitive
-    await removeCategory(c.id, typeof t === 'number' ? { moveTo: t } : { uncategorize: true }, leaves && expose.value)
+    await removeCategory(c.id, typeof tgt === 'number' ? { moveTo: tgt } : { uncategorize: true }, leaves && expose.value)
   })
 }
 </script>
@@ -102,88 +105,88 @@ const confirmDelete = () => {
 <template>
   <section class="card bg-base-200" data-testid="section-categories">
     <div class="card-body gap-3">
-      <h2 class="card-title">Categories</h2>
+      <h2 class="card-title">{{ t('settings.categories.title') }}</h2>
       <p v-if="error" class="text-error" role="alert" data-testid="cat-error">{{ error }}</p>
       <p v-if="notice" class="text-info" data-testid="cat-notice">{{ notice }}</p>
       <ul class="flex flex-col gap-2">
         <li v-for="c in cats" :key="c.id" class="flex flex-wrap items-center gap-2" data-testid="cat-row">
           <template v-if="editingId === c.id">
             <input v-model="editName" class="input input-bordered input-sm" maxlength="64" data-testid="cat-edit-name" />
-            <button class="btn btn-sm btn-primary" data-testid="cat-edit-save" @click="rename(c)">Save</button>
-            <button class="btn btn-sm btn-ghost" @click="editingId = null">Cancel</button>
+            <button class="btn btn-sm btn-primary" data-testid="cat-edit-save" @click="rename(c)">{{ t('common.save') }}</button>
+            <button class="btn btn-sm btn-ghost" @click="editingId = null">{{ t('common.cancel') }}</button>
           </template>
           <template v-else>
             <span class="font-medium" data-testid="cat-name">{{ store.categoryLabel(c) }}</span>
-            <span v-if="c.is_sensitive" class="badge badge-warning gap-1"><Icon icon="lucide:lock" aria-hidden="true" />Sensitive</span>
+            <span v-if="c.is_sensitive" class="badge badge-warning gap-1"><Icon icon="lucide:lock" aria-hidden="true" />{{ t('settings.categories.sensitive') }}</span>
             <span class="flex-1" />
             <button
               class="btn btn-sm btn-ghost" :disabled="store.masking && c.is_sensitive"
-              :aria-label="`Rename ${store.categoryLabel(c)}`" @click="startEdit(c)"
-            >Rename</button>
+              :aria-label="t('settings.categories.renameAria', { name: store.categoryLabel(c) })" @click="startEdit(c)"
+            >{{ t('settings.categories.rename') }}</button>
             <button class="btn btn-sm btn-ghost" data-testid="cat-toggle" @click="toggleSensitive(c)">
-              {{ c.is_sensitive ? 'Make not sensitive' : 'Make sensitive' }}
+              {{ c.is_sensitive ? t('settings.categories.makeNotSensitive') : t('settings.categories.makeSensitive') }}
             </button>
             <button
               class="btn btn-sm btn-ghost text-error" data-testid="cat-delete"
-              :aria-label="`Delete ${store.categoryLabel(c)}`" @click="startDelete(c)"
+              :aria-label="t('settings.categories.deleteAria', { name: store.categoryLabel(c) })" @click="startDelete(c)"
             ><Icon icon="lucide:trash-2" aria-hidden="true" /></button>
           </template>
         </li>
-        <li v-if="!cats.length" class="opacity-70">No categories yet.</li>
+        <li v-if="!cats.length" class="opacity-70">{{ t('settings.categories.empty') }}</li>
       </ul>
       <form class="flex flex-wrap items-center gap-2" @submit.prevent="create">
-        <input v-model="newName" class="input input-bordered input-sm" placeholder="New category" maxlength="64" data-testid="cat-new-name" />
+        <input v-model="newName" class="input input-bordered input-sm" :placeholder="t('settings.categories.new')" maxlength="64" data-testid="cat-new-name" />
         <label class="label cursor-pointer gap-2">
           <input v-model="newSensitive" type="checkbox" class="checkbox checkbox-sm" data-testid="cat-new-sensitive" />
-          <span class="label-text">Sensitive</span>
+          <span class="label-text">{{ t('settings.categories.sensitive') }}</span>
         </label>
-        <button class="btn btn-sm btn-primary" type="submit" data-testid="cat-create">Add</button>
+        <button class="btn btn-sm btn-primary" type="submit" data-testid="cat-create">{{ t('common.add') }}</button>
       </form>
     </div>
 
     <div v-if="unmarking" class="modal modal-open" role="dialog" aria-modal="true" data-testid="cat-unmark-dialog">
       <div class="modal-box">
-        <h3 class="text-lg font-bold">Make this category not sensitive?</h3>
-        <p class="mt-2">Items in it are no longer protected by the category. Choose what happens to them:</p>
+        <h3 class="text-lg font-bold">{{ t('settings.categories.unmarkTitle') }}</h3>
+        <p class="mt-2">{{ t('settings.categories.unmarkBody') }}</p>
         <label class="label cursor-pointer justify-start gap-2">
           <input v-model="expose" type="radio" class="radio" :value="false" data-testid="cat-freeze" />
-          <span>Keep them protected (each item is marked sensitive)</span>
+          <span>{{ t('settings.categories.freeze') }}</span>
         </label>
         <label class="label cursor-pointer justify-start gap-2">
           <input v-model="expose" type="radio" class="radio" :value="true" data-testid="cat-expose" />
-          <span>Expose them (their names become visible to feeds and notifications)</span>
+          <span>{{ t('settings.categories.expose') }}</span>
         </label>
         <div class="modal-action">
-          <button class="btn" @click="unmarking = null">Cancel</button>
-          <button class="btn btn-primary" data-testid="cat-unmark-confirm" @click="confirmUnmark">Confirm</button>
+          <button class="btn" @click="unmarking = null">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" data-testid="cat-unmark-confirm" @click="confirmUnmark">{{ t('settings.categories.confirm') }}</button>
         </div>
       </div>
     </div>
 
     <div v-if="deleting" class="modal modal-open" role="dialog" aria-modal="true" data-testid="cat-delete-dialog">
       <div class="modal-box">
-        <h3 class="text-lg font-bold">Delete {{ store.categoryLabel(deleting) }}?</h3>
-        <p class="mt-2">What should happen to the items in this category?</p>
+        <h3 class="text-lg font-bold">{{ t('settings.categories.deleteTitle', { name: store.categoryLabel(deleting) }) }}</h3>
+        <p class="mt-2">{{ t('settings.categories.deleteBody') }}</p>
         <select v-model="target" class="select select-bordered mt-2 w-full" data-testid="cat-delete-target">
-          <option value="uncategorize">Leave them uncategorized</option>
+          <option value="uncategorize">{{ t('settings.categories.uncategorize') }}</option>
           <option v-for="c in cats.filter((x) => x.id !== deleting!.id)" :key="c.id" :value="c.id">
-            Move to {{ store.categoryLabel(c) }}
+            {{ t('settings.categories.moveTo', { name: store.categoryLabel(c) }) }}
           </option>
         </select>
         <div v-if="deleting.is_sensitive" class="mt-3">
-          <p>This category is sensitive. Items that do not land in another sensitive category:</p>
+          <p>{{ t('settings.categories.deleteSensitive') }}</p>
           <label class="label cursor-pointer justify-start gap-2">
             <input v-model="expose" type="radio" class="radio" :value="false" />
-            <span>Stay protected (marked sensitive)</span>
+            <span>{{ t('settings.categories.stayProtected') }}</span>
           </label>
           <label class="label cursor-pointer justify-start gap-2">
             <input v-model="expose" type="radio" class="radio" :value="true" data-testid="cat-delete-expose" />
-            <span>Become exposed</span>
+            <span>{{ t('settings.categories.becomeExposed') }}</span>
           </label>
         </div>
         <div class="modal-action">
-          <button class="btn" @click="deleting = null">Cancel</button>
-          <button class="btn btn-error" data-testid="cat-delete-confirm" @click="confirmDelete">Delete</button>
+          <button class="btn" @click="deleting = null">{{ t('common.cancel') }}</button>
+          <button class="btn btn-error" data-testid="cat-delete-confirm" @click="confirmDelete">{{ t('common.delete') }}</button>
         </div>
       </div>
     </div>

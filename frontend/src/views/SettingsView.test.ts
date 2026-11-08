@@ -86,7 +86,7 @@ describe('SettingsView', () => {
     const put = calls.find((c) => c.method === 'PUT' && c.url.startsWith('/api/categories/'))!
     expect(put.url).toBe('/api/categories/1?confirm_exposure=1')
     expect(put.body).toEqual({ is_sensitive: false })
-    expect(w.get('[data-testid=cat-notice]').text()).toContain('2 item(s) are now exposed')
+    expect(w.get('[data-testid=cat-notice]').text()).toContain('2 items are now exposed')
   })
 
   it('deletes a category moving its items', async () => {

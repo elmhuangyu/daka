@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { usePrivacyStore } from './privacy'
+import { t } from '../i18n'
 
 export const MASK_STORAGE_KEY = 'daka.mask_sensitive_categories'
 
@@ -12,8 +13,6 @@ function load(): boolean {
     return true
   }
 }
-
-export const MASKED_CATEGORY_NAME = 'Sensitive category'
 
 /**
  * Settings-page preferences kept in the browser only. Never put tokens or
@@ -36,7 +35,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const masking = computed(() => privacy.redact && maskCategories.value)
 
   function categoryLabel(c: { name: string; is_sensitive: boolean }): string {
-    return masking.value && c.is_sensitive ? MASKED_CATEGORY_NAME : c.name
+    return masking.value && c.is_sensitive ? t('settings.categories.masked') : c.name
   }
 
   return { maskCategories, masking, setMaskCategories, categoryLabel }

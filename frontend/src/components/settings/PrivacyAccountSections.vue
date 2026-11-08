@@ -5,6 +5,9 @@ import { describeError } from '../../api'
 import { useAuthStore } from '../../stores/auth'
 import { usePrivacyStore } from '../../stores/privacy'
 import { useSettingsStore } from '../../stores/settings'
+import { useI18n } from '../../i18n'
+
+const { t, tParts } = useI18n()
 
 const settings = useSettingsStore()
 const privacy = usePrivacyStore()
@@ -36,22 +39,25 @@ async function logout() {
 <template>
   <section class="card bg-base-200" data-testid="section-privacy">
     <div class="card-body gap-3">
-      <h2 class="card-title">Privacy</h2>
+      <h2 class="card-title">{{ t('settings.privacy.title') }}</h2>
       <p class="text-sm opacity-80">
-        The privacy guard is currently <strong>{{ privacy.redact ? 'on' : 'off' }}</strong>. Toggle it from the top bar.
+        <template v-for="(p, i) in tParts('settings.privacy.guardStatus')" :key="i">
+          <strong v-if="'slot' in p">{{ privacy.redact ? t('settings.privacy.on') : t('settings.privacy.off') }}</strong>
+          <template v-else>{{ p.text }}</template>
+        </template>
       </p>
       <label class="label cursor-pointer justify-start gap-3">
         <input
           type="checkbox" class="checkbox" :checked="settings.maskCategories" data-testid="p-mask"
           @change="settings.setMaskCategories(($event.target as HTMLInputElement).checked)"
         />
-        <span class="label-text">Mask sensitive category names while the privacy guard is on</span>
+        <span class="label-text">{{ t('settings.privacy.mask') }}</span>
       </label>
     </div>
   </section>
   <section class="card bg-base-200" data-testid="section-account">
     <div class="card-body gap-3">
-      <h2 class="card-title">Account</h2>
+      <h2 class="card-title">{{ t('settings.account.title') }}</h2>
       <div v-if="auth.user" class="flex items-center gap-3">
         <div class="size-12 shrink-0 overflow-hidden rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-base">
           <img
@@ -70,11 +76,10 @@ async function logout() {
         </div>
       </div>
       <p v-if="!auth.loginRequired" class="text-sm opacity-80" data-testid="claim-hint">
-        This instance has no login configured, so anyone who can reach it has access. Set a shared secret or OIDC
-        before exposing it beyond localhost.
+        {{ t('settings.account.noLogin') }}
       </p>
       <p v-if="error" class="text-error" role="alert">{{ error }}</p>
-      <button v-if="auth.loginRequired" class="btn btn-outline self-start" data-testid="logout" @click="logout">Log out</button>
+      <button v-if="auth.loginRequired" class="btn btn-outline self-start" data-testid="logout" @click="logout">{{ t('settings.account.logout') }}</button>
     </div>
   </section>
 </template>

@@ -3,6 +3,9 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   ApiError, createTelegramLinkCode, describeError, getTelegram, patchTelegram, unlinkTelegram, type TelegramStatus,
 } from '../../api'
+import { useI18n } from '../../i18n'
+
+const { t, tParts, locale } = useI18n()
 
 const st = ref<TelegramStatus | null>(null)
 const error = ref('')
@@ -69,50 +72,53 @@ async function patch(body: { enabled?: boolean; remind_sensitive?: boolean; dige
 <template>
   <section class="card bg-base-200" data-testid="section-telegram">
     <div class="card-body gap-3">
-      <h2 class="card-title">Telegram</h2>
+      <h2 class="card-title">{{ t('settings.telegram.title') }}</h2>
       <p v-if="error" class="text-error" role="alert" data-testid="tg-error">{{ error }}</p>
       <p v-if="unavailable || (st && !st.configured)" data-testid="tg-unconfigured">
-        The Telegram bot is not configured on this server.
+        {{ t('settings.telegram.unconfigured') }}
       </p>
       <template v-else-if="st">
         <template v-if="st.linked">
-          <p data-testid="tg-linked">Linked{{ st.linked_at ? ` since ${st.linked_at.slice(0, 10)}` : '' }}.</p>
+          <p data-testid="tg-linked">{{ st.linked_at ? t('settings.telegram.linkedSince', { date: st.linked_at.slice(0, 10) }) : t('settings.telegram.linked') }}</p>
           <label class="label cursor-pointer justify-start gap-3">
             <input
               type="checkbox" class="checkbox" :checked="st.enabled" data-testid="tg-enabled"
               @change="patch({ enabled: ($event.target as HTMLInputElement).checked })"
             />
-            <span class="label-text">Send reminders and the daily digest</span>
+            <span class="label-text">{{ t('settings.telegram.enabled') }}</span>
           </label>
           <label class="label cursor-pointer justify-start gap-3">
             <input
               type="checkbox" class="checkbox" :checked="st.remind_sensitive" data-testid="tg-sensitive"
               @change="patch({ remind_sensitive: ($event.target as HTMLInputElement).checked })"
             />
-            <span class="label-text">Remind sensitive items (otherwise they are sent as "a private item" or left out)</span>
+            <span class="label-text">{{ t('settings.telegram.remindSensitive') }}</span>
           </label>
           <form class="flex items-end gap-2" @submit.prevent="patch({ digest_time: digest })">
             <label class="form-control">
-              <span class="label-text">Daily digest time (empty disables)</span>
+              <span class="label-text">{{ t('settings.telegram.digestTime') }}</span>
               <input v-model="digest" type="time" class="input input-bordered input-sm" data-testid="tg-digest" />
             </label>
-            <button class="btn btn-sm btn-primary" type="submit" data-testid="tg-digest-save">Save</button>
+            <button class="btn btn-sm btn-primary" type="submit" data-testid="tg-digest-save">{{ t('settings.telegram.save') }}</button>
           </form>
-          <button class="btn btn-sm btn-ghost text-error self-start" data-testid="tg-unlink" @click="unlink">Unlink</button>
+          <button class="btn btn-sm btn-ghost text-error self-start" data-testid="tg-unlink" @click="unlink">{{ t('settings.telegram.unlink') }}</button>
         </template>
         <template v-else>
-          <p>Not linked.</p>
-          <button v-if="!link" class="btn btn-sm btn-primary self-start" data-testid="tg-connect" @click="connect">Connect Telegram</button>
+          <p>{{ t('settings.telegram.notLinked') }}</p>
+          <button v-if="!link" class="btn btn-sm btn-primary self-start" data-testid="tg-connect" @click="connect">{{ t('settings.telegram.connect') }}</button>
           <div v-else class="flex flex-col gap-2" data-testid="tg-code-box">
             <p>
-              Send <code data-testid="tg-code">/start {{ link.code }}</code> to the bot
-              <template v-if="st.bot_username">(@{{ st.bot_username }})</template>. The code expires at
-              {{ new Date(link.expires_at).toLocaleTimeString() }}.
+              <template v-for="(p, i) in tParts('settings.telegram.sendCode')" :key="i">
+                <code v-if="'slot' in p && p.slot === 'code'" data-testid="tg-code">/start {{ link.code }}</code>
+                <template v-else-if="'slot' in p && p.slot === 'bot'">{{ st.bot_username ? `(@${st.bot_username})` : '' }}</template>
+                <template v-else-if="'slot' in p">{{ new Date(link.expires_at).toLocaleTimeString(locale) }}</template>
+                <template v-else>{{ p.text }}</template>
+              </template>
             </p>
             <a v-if="link.deep_link" :href="link.deep_link" target="_blank" rel="noopener noreferrer" class="link" data-testid="tg-deeplink">
-              Open Telegram
+              {{ t('settings.telegram.openTelegram') }}
             </a>
-            <button class="btn btn-sm btn-outline self-start" data-testid="tg-refresh" @click="refresh">I have sent it</button>
+            <button class="btn btn-sm btn-outline self-start" data-testid="tg-refresh" @click="refresh">{{ t('settings.telegram.sent') }}</button>
           </div>
         </template>
       </template>
