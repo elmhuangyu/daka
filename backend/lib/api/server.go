@@ -93,6 +93,8 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /api/settings/calendar", s.getCalendarSettings)
 	mux.HandleFunc("PUT /api/settings/calendar", s.putCalendarSettings)
 	mux.HandleFunc("GET /api/calendar/external", s.getExternalCalendar)
+	mux.HandleFunc("GET /api/view/calendar", s.getCalendarView)
+	mux.HandleFunc("GET /api/calendar/holidays", s.getHolidays)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		errResult(http.StatusNotFound, "not found").write(w)
 	})
