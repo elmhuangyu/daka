@@ -2,7 +2,10 @@
 import { computed } from 'vue'
 import { Icon } from '@iconify/vue'
 import type { CalendarDay, CalendarDayItem, ExternalEvent } from '../../api'
-import { RIBBON_CLASS, dayLabel, dayNumber, eventTime } from '../../calendar/logic'
+import { RIBBON_CLASS, dayLabel, dayNumber, eventTime, joinParts } from '../../calendar/logic'
+import { useI18n } from '../../i18n'
+
+const { t, tn } = useI18n()
 
 const props = defineProps<{
   date: string
@@ -36,7 +39,7 @@ function dotClass(i: CalendarDayItem): string {
 }
 const label = computed(() => {
   const base = props.day ? dayLabel(props.day) : props.date
-  return props.external.length ? `${base}, ${props.external.length} external event${props.external.length === 1 ? '' : 's'}` : base
+  return props.external.length ? joinParts([base, tn('calendar.extEvents', props.external.length)]) : base
 })
 </script>
 
@@ -70,12 +73,12 @@ const label = computed(() => {
         />
         <span
           v-if="day?.day_type === 'holiday'" class="badge badge-success badge-xs" data-testid="badge-off"
-          :title="day.holiday_name || 'Holiday'" aria-hidden="true"
-        >Off</span>
+          :title="day.holiday_name || t('calendar.holiday')" aria-hidden="true"
+        >{{ t('calendar.off') }}</span>
         <span
           v-else-if="day?.day_type === 'workday'" class="badge badge-error badge-xs" data-testid="badge-work"
-          title="Makeup workday" aria-hidden="true"
-        >Work</span>
+          :title="t('calendar.makeupWorkday')" aria-hidden="true"
+        >{{ t('calendar.work') }}</span>
       </span>
     </span>
 
@@ -97,7 +100,7 @@ const label = computed(() => {
           class="ext-title truncate rounded bg-base-content/10 px-1 text-[11px] opacity-80"
         >{{ eventTime(x.event) }} {{ x.event.title }}</span>
       </template>
-      <span v-else class="truncate rounded bg-base-content/10 px-1 text-[11px] opacity-80">{{ external.length }} ext.</span>
+      <span v-else class="truncate rounded bg-base-content/10 px-1 text-[11px] opacity-80">{{ t('calendar.extShort', { count: external.length }) }}</span>
     </span>
 
     <span

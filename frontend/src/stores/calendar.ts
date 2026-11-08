@@ -5,6 +5,7 @@ import type { CalendarDay, CalendarViewData, CheckinInput, CheckinLog, ExternalE
 import { eventDates, gridRange, shiftAnchor, type CalendarMode } from '../calendar/logic'
 import { useOfflineStore } from './offline'
 import { usePrivacyStore } from './privacy'
+import { t } from '../i18n'
 
 export interface ExternalLayer {
   id: string
@@ -14,7 +15,8 @@ export interface ExternalLayer {
   events: ExternalEvent[]
 }
 
-export const REDACTED_EVENT_TITLE = 'External event'
+/** Stand-in title for external events while the privacy guard is on. */
+export const redactedEventTitle = () => t('calendar.extEvent')
 
 /** Today's date in an IANA timezone (falls back to the browser's local date). */
 export function todayIn(tz?: string): string {
@@ -118,10 +120,10 @@ export const useCalendarStore = defineStore('calendar', () => {
         try {
           const res = await api.getExternalCalendar(start, end, s.id)
           const src = (res.sources ?? []).find((x) => x.id === s.id) ?? res.sources?.[0]
-          if (!src || !src.ok) next = { status: 'error', error: src?.error || 'Could not load this calendar' }
+          if (!src || !src.ok) next = { status: 'error', error: src?.error || 'fetch_failed' }
           else {
             // Titles are not server-redacted: swap them for a placeholder while the guard is on.
-            const events = (src.events ?? []).map((e) => (redact ? { ...e, title: REDACTED_EVENT_TITLE } : e))
+            const events = (src.events ?? []).map((e) => (redact ? { ...e, title: redactedEventTitle() } : e))
             next = { status: 'ok', events }
           }
         } catch (e) {

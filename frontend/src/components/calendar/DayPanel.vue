@@ -2,10 +2,12 @@
 import { computed, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
 import type { CalendarDayItem, CheckinInput } from '../../api'
-import { DAY_STATUS_TEXT, canMakeUp, eventTime, longDate } from '../../calendar/logic'
+import { canMakeUp, dayStatusText, eventTime, longDate } from '../../calendar/logic'
+import { useI18n, type MessageKey } from '../../i18n'
 import { useCalendarStore } from '../../stores/calendar'
 import MakeupControl from './MakeupControl.vue'
 
+const { t } = useI18n()
 const store = useCalendarStore()
 const emit = defineEmits<{ close: [] }>()
 
@@ -35,17 +37,18 @@ function addPicked() {
   pick.value = ''
 }
 
-const STATUS_BADGE: Record<string, { text: string; cls: string }> = {
-  done: { text: 'Done', cls: 'badge-success' },
-  partial: { text: 'Partial', cls: 'badge-warning' },
-  missed: { text: 'Missed', cls: 'badge-neutral' },
-  frozen: { text: 'Frozen', cls: 'badge-info' },
-  pending: { text: 'Open', cls: 'badge-primary' },
-  upcoming: { text: 'Forecast', cls: 'badge-outline' },
-  extra: { text: 'Extra', cls: 'badge-ghost' },
-}
+const STATUS_BADGE = {
+  done: { text: 'calendar.badge.done', cls: 'badge-success' },
+  partial: { text: 'calendar.badge.partial', cls: 'badge-warning' },
+  missed: { text: 'calendar.badge.missed', cls: 'badge-neutral' },
+  frozen: { text: 'calendar.badge.frozen', cls: 'badge-info' },
+  pending: { text: 'calendar.badge.pending', cls: 'badge-primary' },
+  upcoming: { text: 'calendar.badge.upcoming', cls: 'badge-outline' },
+  extra: { text: 'calendar.badge.extra', cls: 'badge-ghost' },
+} as const
 function badge(i: CalendarDayItem) {
-  return i.overdue ? { text: 'Overdue', cls: 'badge-error' } : (STATUS_BADGE[i.status] ?? STATUS_BADGE.extra!)
+  const b = i.overdue ? { text: 'calendar.badge.overdue', cls: 'badge-error' } : ((STATUS_BADGE as Record<string, { text: string; cls: string }>)[i.status] ?? STATUS_BADGE.extra)
+  return { text: t(b.text as MessageKey), cls: b.cls }
 }
 const logsOf = (id: number) => store.dayLogs.filter((l) => l.item_id === id)
 const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
@@ -61,16 +64,16 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
         <h2 id="day-panel-title" class="text-lg font-semibold" tabindex="-1">{{ longDate(date) }}</h2>
         <p class="flex flex-wrap items-center gap-1 text-sm opacity-80">
           <span v-if="day?.day_type === 'holiday'" class="badge badge-success badge-sm">
-            Off{{ day.holiday_name ? `: ${day.holiday_name}` : '' }}
+            {{ day.holiday_name ? t('calendar.panel.offNamed', { name: day.holiday_name }) : t('calendar.panel.off') }}
           </span>
           <span v-else-if="day?.day_type === 'workday'" class="badge badge-error badge-sm">
-            Makeup workday{{ day.holiday_name ? `: ${day.holiday_name}` : '' }}
+            {{ day.holiday_name ? t('calendar.panel.workdayNamed', { name: day.holiday_name }) : t('calendar.panel.workday') }}
           </span>
-          <span v-if="day">{{ DAY_STATUS_TEXT[day.status] }}</span>
-          <span v-if="day?.frozen" class="badge badge-info badge-sm">Frozen</span>
+          <span v-if="day">{{ dayStatusText(day.status) }}</span>
+          <span v-if="day?.frozen" class="badge badge-info badge-sm">{{ t('calendar.panel.frozen') }}</span>
         </p>
       </div>
-      <button type="button" class="btn btn-ghost btn-sm btn-square" aria-label="Close day panel" data-testid="panel-close" @click="emit('close')">
+      <button type="button" class="btn btn-ghost btn-sm btn-square" :aria-label="t('calendar.panel.close')" data-testid="panel-close" @click="emit('close')">
         <Icon icon="lucide:x" aria-hidden="true" />
       </button>
     </header>
@@ -78,7 +81,7 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
     <p v-if="store.panelError" class="alert alert-error text-sm" role="alert" data-testid="panel-error">{{ store.panelError }}</p>
 
     <section v-if="external.length" aria-labelledby="panel-ext">
-      <h3 id="panel-ext" class="text-sm font-semibold">External calendar</h3>
+      <h3 id="panel-ext" class="text-sm font-semibold">{{ t('calendar.panel.external') }}</h3>
       <ul class="text-sm" data-testid="panel-external">
         <li v-for="(x, idx) in external" :key="idx" class="flex gap-2">
           <span class="w-12 shrink-0 opacity-70">{{ eventTime(x.event) }}</span>
@@ -88,26 +91,26 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
     </section>
 
     <section aria-labelledby="panel-items">
-      <h3 id="panel-items" class="text-sm font-semibold">{{ editable ? 'Items' : 'Planned items' }}</h3>
+      <h3 id="panel-items" class="text-sm font-semibold">{{ editable ? t('calendar.panel.items') : t('calendar.panel.planned') }}</h3>
       <p v-if="!listed.length && !forecast.length && !addedDetails.length" class="text-sm opacity-70" data-testid="panel-empty">
-        Nothing scheduled or recorded.
+        {{ t('calendar.panel.empty') }}
       </p>
       <ul class="space-y-2">
         <li v-for="i in listed" :key="i.item_id" class="rounded-box border border-base-300 p-2" :data-testid="`panel-item-${i.item_id}`">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <span class="name font-medium" :class="{ sensitive: i.is_sensitive }">{{ i.name }}</span>
             <span class="flex items-center gap-1">
-              <span v-if="i.has_supplement" class="badge badge-ghost badge-sm">Makeup</span>
+              <span v-if="i.has_supplement" class="badge badge-ghost badge-sm">{{ t('calendar.panel.makeup') }}</span>
               <span class="badge badge-sm" :class="badge(i).cls">{{ badge(i).text }}</span>
             </span>
           </div>
-          <p v-if="i.overdue" class="text-sm text-error">Overdue: shown on today until done.</p>
+          <p v-if="i.overdue" class="text-sm text-error">{{ t('calendar.panel.overdueNote') }}</p>
           <div v-if="editable && !(i.forecast && !i.overdue)" class="mt-2">
             <MakeupControl
               v-if="store.detailById.get(i.item_id)" :detail="store.detailById.get(i.item_id)!" :logs="logsOf(i.item_id)"
               :busy="store.busy.includes(i.item_id)" :date="date" @log="makeUp" @remove="store.removeLog(i.item_id, $event)"
             />
-            <p v-else class="text-sm opacity-60">Loading controls...</p>
+            <p v-else class="text-sm opacity-60">{{ t('calendar.panel.loadingControls') }}</p>
           </div>
         </li>
         <li
@@ -125,21 +128,21 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
       </ul>
 
       <div v-if="editable && addable.length" class="mt-3 flex items-center gap-2">
-        <label class="sr-only" for="makeup-pick">Add a check-in for another item</label>
+        <label class="sr-only" for="makeup-pick">{{ t('calendar.panel.addLabel') }}</label>
         <select id="makeup-pick" v-model="pick" class="select select-sm min-w-0 flex-1" data-testid="makeup-pick">
-          <option value="">Add another item...</option>
+          <option value="">{{ t('calendar.panel.addPlaceholder') }}</option>
           <option v-for="d in addable" :key="d.id" :value="String(d.id)">{{ d.name }}</option>
         </select>
-        <button type="button" class="btn btn-sm" :disabled="!pick" data-testid="makeup-add" @click="addPicked">Add</button>
+        <button type="button" class="btn btn-sm" :disabled="!pick" data-testid="makeup-add" @click="addPicked">{{ t('common.add') }}</button>
       </div>
     </section>
 
     <section v-if="forecast.length" aria-labelledby="panel-forecast">
-      <h3 id="panel-forecast" class="text-sm font-semibold">Forecast</h3>
+      <h3 id="panel-forecast" class="text-sm font-semibold">{{ t('calendar.panel.forecast') }}</h3>
       <ul class="text-sm" data-testid="panel-forecast">
         <li v-for="i in forecast" :key="i.item_id" class="flex items-center justify-between gap-2">
           <span class="name" :class="{ sensitive: i.is_sensitive }">{{ i.name }}</span>
-          <span class="badge badge-outline badge-sm">Expected</span>
+          <span class="badge badge-outline badge-sm">{{ t('calendar.panel.expected') }}</span>
         </li>
       </ul>
     </section>

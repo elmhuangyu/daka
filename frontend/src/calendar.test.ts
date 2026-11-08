@@ -152,12 +152,12 @@ describe('CalendarView', () => {
   })
 
   it('isolates external source failures and shows other sources', async () => {
-    extResponses.a = () => jsonRes({ sources: [{ id: 'a', name: 'Work', ok: false, error: 'fetch failed', events: [] }] })
+    extResponses.a = () => jsonRes({ sources: [{ id: 'a', name: 'Work', ok: false, error: 'fetch_failed', events: [] }] })
     extResponses.b = () =>
       jsonRes({ sources: [{ id: 'b', name: 'Home', ok: true, events: [{ title: 'Dentist', start: '2026-11-06', end: '2026-11-06', all_day: true }] }] })
     const { w } = await mountView()
     expect(w.findAll('[role=gridcell]')).toHaveLength(42)
-    expect(w.get('[data-testid=ext-error-a]').text()).toContain('fetch failed')
+    expect(w.get('[data-testid=ext-error-a]').text()).toContain('the download failed')
     expect(w.find('[data-testid=day-2026-11-06] [data-testid=external-chips]').exists()).toBe(true)
     expect(calls.filter((c) => c.url.startsWith('/api/calendar/external')).map((c) => c.url)).toEqual([
       '/api/calendar/external?start=2026-10-26&end=2026-12-06&source_id=a',

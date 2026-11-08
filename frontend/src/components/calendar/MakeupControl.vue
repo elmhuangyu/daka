@@ -2,6 +2,9 @@
 import { computed, reactive, ref } from 'vue'
 import type { CheckinInput, CheckinLog, ItemDetail } from '../../api'
 import { fmt, valueRows, type ValueRow } from '../../today/logic'
+import { useI18n } from '../../i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{ detail: ItemDetail; logs: CheckinLog[]; busy: boolean; date: string }>()
 const emit = defineEmits<{ log: [Omit<CheckinInput, 'date'>]; remove: [number] }>()
@@ -42,11 +45,11 @@ function occurrence() {
 function setValue(r: ValueRow) {
   const n = parse(inputs[r.key])
   if (n === null || n < 0) {
-    localError.value = 'Enter a value of 0 or more'
+    localError.value = t('today.card.err.valueMin')
     return
   }
   if ((r.min !== null && n < r.min) || (r.max !== null && n > r.max)) {
-    localError.value = `Value must be between ${r.min ?? '-inf'} and ${r.max ?? 'inf'}`
+    localError.value = t('today.card.err.range', { min: r.min ?? '-∞', max: r.max ?? '∞' })
     return
   }
   localError.value = ''
@@ -69,21 +72,21 @@ function setValue(r: ValueRow) {
       <button
         type="button" class="btn btn-sm" :class="checked ? 'btn-ghost' : 'btn-primary'" :disabled="busy"
         :data-testid="`makeup-toggle-${d.id}`" @click="toggle"
-      >{{ checked ? 'Undo' : 'Mark done' }}</button>
+      >{{ checked ? t('calendar.makeup.undo') : t('calendar.makeup.markDone') }}</button>
     </div>
 
     <div v-else-if="isOccurrence" class="flex flex-wrap items-center gap-2">
-      <button type="button" class="btn btn-sm btn-primary" :disabled="busy" @click="occurrence">Add occurrence</button>
-      <span class="text-sm opacity-70">{{ logs.length }} recorded</span>
+      <button type="button" class="btn btn-sm btn-primary" :disabled="busy" @click="occurrence">{{ t('calendar.makeup.addOccurrence') }}</button>
+      <span class="text-sm opacity-70">{{ t('calendar.makeup.recorded', { count: logs.length }) }}</span>
       <button v-if="checked" type="button" class="btn btn-sm btn-ghost" :disabled="busy" @click="emit('remove', lastLogId)">
-        Remove last
+        {{ t('calendar.makeup.removeLast') }}
       </button>
     </div>
 
     <template v-else>
       <div v-for="r in rows" :key="r.key" class="flex flex-wrap items-center gap-2">
-        <span class="min-w-16 text-sm">{{ r.label || 'Value' }}: {{ r.current == null ? '-' : fmt(r.current) }} {{ r.unit }}</span>
-        <label class="sr-only" :for="`${id}-${r.key}`">New value for {{ r.label || d.name }}</label>
+        <span class="min-w-16 text-sm">{{ t('calendar.makeup.rowLine', { label: r.label || t('today.card.value'), value: r.current == null ? '-' : fmt(r.current), unit: r.unit }) }}</span>
+        <label class="sr-only" :for="`${id}-${r.key}`">{{ t('calendar.makeup.newValue', { label: r.label || d.name }) }}</label>
         <input
           :id="`${id}-${r.key}`" v-model="inputs[r.key]" type="number" :step="r.step" inputmode="decimal"
           class="input input-sm w-24" :data-testid="`makeup-input-${d.id}-${r.key}`"
@@ -92,14 +95,14 @@ function setValue(r: ValueRow) {
         <button
           type="button" class="btn btn-sm btn-primary" :disabled="busy" :data-testid="`makeup-set-${d.id}-${r.key}`"
           @click="setValue(r)"
-        >{{ d.tracker_type === 'counter' ? 'Set' : 'Record' }}</button>
+        >{{ d.tracker_type === 'counter' ? t('calendar.makeup.set') : t('calendar.makeup.record') }}</button>
       </div>
     </template>
 
     <div v-if="!checked || !isToggle" class="flex items-center gap-2">
-      <label class="sr-only" :for="`${id}-note`">Makeup note</label>
+      <label class="sr-only" :for="`${id}-note`">{{ t('calendar.makeup.noteLabel') }}</label>
       <input
-        :id="`${id}-note`" v-model="note" type="text" maxlength="200" placeholder="Makeup note (optional)"
+        :id="`${id}-note`" v-model="note" type="text" maxlength="200" :placeholder="t('calendar.makeup.notePlaceholder')"
         class="input input-sm w-full" :data-testid="`makeup-note-${d.id}`"
       />
     </div>

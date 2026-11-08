@@ -1,4 +1,6 @@
 // Pure helpers for the Heatmap component: date grid, level buckets, labels.
+import { t, tn } from '../i18n'
+import { monthName, weekdayName } from '../i18n/format'
 
 export interface HeatmapCell {
   date: string
@@ -11,8 +13,6 @@ export interface HeatmapCell {
 export type GridCell = HeatmapCell | null
 
 const DAY_MS = 86_400_000
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 const toMs = (date: string) => Date.parse(`${date}T00:00:00Z`)
 const toDate = (ms: number) => new Date(ms).toISOString().slice(0, 10)
@@ -20,7 +20,7 @@ const toDate = (ms: number) => new Date(ms).toISOString().slice(0, 10)
 /** Weekday names in row order for the given week start (0 = Sunday, 1 = Monday). */
 export function weekdayNames(weekStart: number): string[] {
   const ws = weekStart === 0 ? 0 : 1
-  return Array.from({ length: 7 }, (_, i) => WEEKDAYS[(ws + i) % 7])
+  return Array.from({ length: 7 }, (_, i) => weekdayName((ws + i) % 7, 'short'))
 }
 
 /**
@@ -65,7 +65,7 @@ export function monthLabels(cols: GridCell[][]): string[] {
     prev = m
     if (ci - lastCol < 3) return ''
     lastCol = ci
-    return MONTHS[m]
+    return monthName(m + 1, 'short')
   })
 }
 
@@ -76,18 +76,18 @@ export interface LabelOpts {
 
 /** Text for tooltip and aria-label. Never contains option or item names; counts are hidden when redacted. */
 export function cellLabel(cell: HeatmapCell, opts: LabelOpts = {}): string {
-  const d = cell.date
+  const line = (status: string) => t('heatmap.line', { date: cell.date, status })
   const bucket = levelBucket(cell.level)
   if (opts.negative) {
-    if (!bucket) return `${d}: none`
-    if (opts.redact) return `${d}: occurred`
-    return `${d}: occurred${cell.value > 1 ? ` ${cell.value} times` : ''}`
+    if (!bucket) return line(t('heatmap.status.none'))
+    if (opts.redact || !(cell.value > 1)) return line(t('heatmap.status.occurred'))
+    return line(tn('heatmap.status.occurredTimes', cell.value))
   }
   const total = cell.options_total ?? 0
   const met = cell.options_met ?? 0
-  if (!bucket && !(cell.value > 0) && !total) return `${d}: no check-in`
-  let status = bucket === 4 ? 'completed' : bucket ? 'partly completed' : 'not completed'
-  if (opts.redact) return `${d}: ${status}`
-  if (total > 1) status += `, ${met} of ${total} options`
-  return `${d}: ${status}`
+  if (!bucket && !(cell.value > 0) && !total) return line(t('heatmap.status.noCheckin'))
+  let status = t(bucket === 4 ? 'heatmap.status.completed' : bucket ? 'heatmap.status.partlyCompleted' : 'heatmap.status.notCompleted')
+  if (opts.redact) return line(status)
+  if (total > 1) status = t('heatmap.status.withOptions', { status, met, total })
+  return line(status)
 }

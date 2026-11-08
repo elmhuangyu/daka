@@ -1,4 +1,6 @@
 import type { CalDayStatus, CalendarDay, ExternalEvent } from '../api'
+import { t } from '../i18n'
+import { formatLongDate, formatMonthYear, weekdayName } from '../i18n/format'
 
 export type CalendarMode = 'month' | 'week'
 
@@ -58,23 +60,17 @@ export function shiftAnchor(mode: CalendarMode, anchor: string, n: number): stri
   return mode === 'week' ? addDays(anchor, 7 * n) : addMonths(anchor, n)
 }
 
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December',
-]
-export const WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-export const WEEKDAYS_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-
 export function weekdayHeaders(weekStart: number): { short: string; long: string }[] {
   return Array.from({ length: 7 }, (_, i) => {
     const wd = (weekStart + i) % 7
-    return { short: WEEKDAYS_SHORT[wd]!, long: WEEKDAYS_LONG[wd]! }
+    return { short: weekdayName(wd, 'short'), long: weekdayName(wd, 'long') }
   })
 }
 
 export function periodTitle(mode: CalendarMode, anchor: string, weekStart: number): string {
-  if (mode === 'month') return `${MONTHS[Number(anchor.slice(5, 7)) - 1]} ${anchor.slice(0, 4)}`
+  if (mode === 'month') return formatMonthYear(anchor)
   const r = gridRange('week', anchor, weekStart)
-  return `${r.start} to ${r.end}`
+  return t('calendar.range', { start: r.start, end: r.end })
 }
 
 export function dayNumber(date: string): number {
@@ -82,8 +78,7 @@ export function dayNumber(date: string): number {
 }
 
 export function longDate(date: string): string {
-  const d = parseDate(date)
-  return `${WEEKDAYS_LONG[d.getUTCDay()]}, ${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`
+  return formatLongDate(date)
 }
 
 /** DaisyUI/Tailwind classes of the day ribbon (DESIGN 5.2). */
@@ -97,24 +92,22 @@ export const RIBBON_CLASS: Record<CalDayStatus, string> = {
   none: 'bg-transparent',
 }
 
-export const DAY_STATUS_TEXT: Record<CalDayStatus, string> = {
-  complete: 'all done',
-  partial: 'partly done',
-  incomplete: 'not completed',
-  frozen: 'frozen',
-  pending: 'open today',
-  upcoming: 'upcoming',
-  none: 'nothing scheduled',
+export function dayStatusText(status: CalDayStatus): string {
+  return t(`calendar.status.${status}`)
+}
+
+export function joinParts(parts: string[]): string {
+  return parts.reduce((a, b) => t('common.join', { a, b }))
 }
 
 export function dayLabel(day: CalendarDay): string {
   const parts = [longDate(day.date)]
-  if (day.day_type === 'holiday') parts.push(day.holiday_name ? `holiday, ${day.holiday_name}` : 'holiday')
-  if (day.day_type === 'workday') parts.push('makeup workday')
-  parts.push(DAY_STATUS_TEXT[day.status])
-  if (day.due_count > 0) parts.push(`${day.done_count} of ${day.due_count} done`)
-  if (day.has_overdue) parts.push('overdue item')
-  return parts.join(', ')
+  if (day.day_type === 'holiday') parts.push(day.holiday_name ? t('calendar.day.holidayNamed', { name: day.holiday_name }) : t('calendar.day.holiday'))
+  if (day.day_type === 'workday') parts.push(t('calendar.day.makeupWorkday'))
+  parts.push(dayStatusText(day.status))
+  if (day.due_count > 0) parts.push(t('calendar.day.doneOf', { done: day.done_count, due: day.due_count }))
+  if (day.has_overdue) parts.push(t('calendar.day.overdueItem'))
+  return joinParts(parts)
 }
 
 /** Local calendar dates (YYYY-MM-DD) an external event touches. */
@@ -130,7 +123,7 @@ export function eventDates(e: ExternalEvent): string[] {
 }
 
 export function eventTime(e: ExternalEvent): string {
-  return e.all_day ? 'All day' : e.start.slice(11, 16)
+  return e.all_day ? t('calendar.allDay') : e.start.slice(11, 16)
 }
 
 /** Whether a day can take a retroactive check-in (not in the future). */

@@ -73,6 +73,22 @@ export const ERROR_KEYS = {
 
 export type ErrorCode = keyof typeof ERROR_KEYS
 
+/** Machine codes of a failed external calendar fetch (`extcal.Code` on the server). */
+export const EXT_CAL_ERROR_KEYS = {
+  blocked_address: 'calendar.extErr.blocked_address',
+  unsupported_scheme: 'calendar.extErr.unsupported_scheme',
+  invalid_url: 'calendar.extErr.invalid_url',
+  too_large: 'calendar.extErr.too_large',
+  not_icalendar: 'calendar.extErr.not_icalendar',
+  fetch_failed: 'calendar.extErr.fetch_failed',
+} as const satisfies Record<string, MessageKey>
+
+export function extCalErrorKey(code: string): MessageKey {
+  return Object.prototype.hasOwnProperty.call(EXT_CAL_ERROR_KEYS, code)
+    ? EXT_CAL_ERROR_KEYS[code as keyof typeof EXT_CAL_ERROR_KEYS]
+    : 'calendar.extErr.unknown'
+}
+
 /** Prefix of import validation errors; the rest is a machine location such as `items[0]: bad_name`. */
 export const IMPORT_ERROR_PREFIX = 'invalid import: '
 

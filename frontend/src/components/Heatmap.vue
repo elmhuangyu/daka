@@ -1,6 +1,7 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
+import { useI18n } from '../i18n'
 import { buildGrid, cellLabel, levelBucket, monthLabels, weekdayNames, type HeatmapCell } from '../items/heatmap'
 
 const props = withDefaults(
@@ -14,8 +15,10 @@ const props = withDefaults(
     redact?: boolean
     label?: string
   }>(),
-  { weekStart: 1, negative: false, redact: false, label: 'Activity heatmap' },
+  { weekStart: 1, negative: false, redact: false, label: '' },
 )
+const { t } = useI18n()
+const gridLabel = computed(() => props.label || t('heatmap.label'))
 
 const root = ref<HTMLElement | null>(null)
 const grid = computed(() => buildGrid(props.days, props.weekStart))
@@ -41,12 +44,12 @@ const tip = computed(() => {
 })
 const legend = computed(() =>
   props.negative
-    ? [{ cls: palette.value[0], text: 'None' }, { cls: palette.value[4], text: 'Occurred', mark: true }]
+    ? [{ cls: palette.value[0], text: t('heatmap.legend.none') }, { cls: palette.value[4], text: t('heatmap.legend.occurred'), mark: true }]
     : [
-        { cls: palette.value[0], text: 'None' },
-        { cls: palette.value[1], text: 'Some' },
-        { cls: palette.value[3], text: 'Most' },
-        { cls: palette.value[4], text: 'All', mark: true },
+        { cls: palette.value[0], text: t('heatmap.legend.none') },
+        { cls: palette.value[1], text: t('heatmap.legend.some') },
+        { cls: palette.value[3], text: t('heatmap.legend.most') },
+        { cls: palette.value[4], text: t('heatmap.legend.all'), mark: true },
       ],
 )
 
@@ -79,7 +82,7 @@ async function onKey(e: KeyboardEvent, date: string) {
             <span class="absolute left-0 whitespace-nowrap">{{ m }}</span>
           </span>
         </div>
-        <div class="flex gap-0.5" role="grid" :aria-label="label">
+        <div class="flex gap-0.5" role="grid" :aria-label="gridLabel">
           <div v-for="(col, ci) in grid" :key="ci" role="row" class="flex flex-col gap-0.5">
             <template v-for="(cell, ri) in col" :key="ri">
               <button
