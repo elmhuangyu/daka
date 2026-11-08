@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -124,6 +125,9 @@ func (s *server) today(db *gorm.DB, userID string, redact bool) (*todayResponse,
 	for _, it := range items {
 		vs := byItem[it.ID]
 		due, err := schedule.IsDue(vs, date)
+		if errors.Is(err, schedule.ErrUnsupported) {
+			continue // rolling/quota items have their own sections (later phases)
+		}
 		if err != nil {
 			// A broken stored rule must not take the whole view down. Log ids only.
 			log.Warn().Err(err).Uint("item_id", it.ID).Msg("view/today: skipping item with unevaluable rule")

@@ -187,8 +187,9 @@ func checkRuleString(s string, start time.Time) error {
 	return nil
 }
 
-// ValidateRule checks a rule version at creation time. Only fixed_rrule
-// carries RRULE validation in Phase 0; other types are accepted as-is.
+// ValidateRule checks the schedule-specific syntax of a rule version
+// (RRULE, rolling interval) and rejects unknown schedule types. The full
+// type x schedule matrix lives in ValidateItemRule.
 func ValidateRule(v dbmodels.ItemRuleVersion) error {
 	if _, err := parseDate("effective_from", v.EffectiveFrom); err != nil {
 		return err
@@ -208,6 +209,9 @@ func ValidateRule(v dbmodels.ItemRuleVersion) error {
 			_, err := parseDate("dtstart", v.DtStart)
 			return err
 		}
+	case dbmodels.ScheduleQuota, dbmodels.ScheduleNone:
+	default:
+		return invalidf("unknown schedule_type %q", v.ScheduleType)
 	}
 	return nil
 }
