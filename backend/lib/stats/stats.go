@@ -48,6 +48,11 @@ type HeatmapDay struct {
 	Date  string  `json:"date"`
 	Level float64 `json:"level"`
 	Value float64 `json:"value"`
+	// OptionsMet and OptionsTotal are the completed / total options for the
+	// day (a boolean item has total 1). Both are 0 for negative items and for
+	// days without logs.
+	OptionsMet   int `json:"options_met"`
+	OptionsTotal int `json:"options_total"`
 }
 
 // QuotaProgress is the current quota window.
@@ -295,19 +300,20 @@ func heatmap(in Input, today time.Time, byDate map[string][]dbmodels.CheckinLog)
 		d := today.AddDate(0, 0, -i).Format(dbmodels.DateLayout)
 		cell := HeatmapDay{Date: d}
 		if logs := byDate[d]; len(logs) > 0 {
-			cell.Level, cell.Value = dayLevel(in, d, logs)
+			cell.Level, cell.Value, cell.OptionsMet, cell.OptionsTotal = dayLevel(in, d, logs)
 		}
 		out = append(out, cell)
 	}
 	return out
 }
 
-func dayLevel(in Input, date string, logs []dbmodels.CheckinLog) (level, value float64) {
+func dayLevel(in Input, date string, logs []dbmodels.CheckinLog) (level, value float64, met, total int) {
 	it := in.Item
 	if it.Polarity == dbmodels.PolarityNegative {
-		return 1, float64(len(logs))
+		return 1, float64(len(logs)), 0, 0
 	}
-	level = completion(in, date, logs).Shade()
+	c := completion(in, date, logs)
+	level, met, total = c.Shade(), c.OptionsMet, c.OptionsTotal
 	switch it.TrackerType {
 	case dbmodels.TrackerCounter:
 		for _, l := range logs {
@@ -324,7 +330,7 @@ func dayLevel(in Input, date string, logs []dbmodels.CheckinLog) (level, value f
 	default:
 		value = float64(len(logs))
 	}
-	return level, value
+	return level, value, met, total
 }
 
 func completionRate(in Input, today time.Time, byDate map[string][]dbmodels.CheckinLog) (*float64, error) {

@@ -97,6 +97,9 @@ func TestComputeStatsOptionsAndHeatmap(t *testing.T) {
 	require.Equal(t, 1.0, h[HeatmapDays-3].Level)
 	require.Equal(t, 14.0, h[HeatmapDays-3].Value)
 	require.Equal(t, 0.5, h[HeatmapDays-2].Level)
+	require.Equal(t, 1, h[HeatmapDays-2].OptionsMet)
+	require.Equal(t, 2, h[HeatmapDays-2].OptionsTotal)
+	require.Equal(t, 2, h[HeatmapDays-3].OptionsTotal)
 	require.Equal(t, 0.0, h[HeatmapDays-1].Level)
 
 	// completion rate: 11-01 done, 11-02 missed, today pending excluded

@@ -4,7 +4,9 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { usePrivacyStore } from '../stores/privacy'
 import { useItemDetailStore, useItemsStore } from '../stores/items'
-import { describeRule, heatmapColumns, shiftMonth } from '../items/logic'
+import { describeRule, shiftMonth } from '../items/logic'
+import Heatmap from '../components/Heatmap.vue'
+import { getCalendarSettings } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,7 +18,10 @@ const itemId = computed(() => Number(route.params.id))
 const confirmDelete = ref(false)
 const pendingLog = ref(0)
 
-const columns = computed(() => heatmapColumns(store.stats?.heatmap ?? []))
+const weekStart = ref(1)
+getCalendarSettings()
+  .then((s) => { if (s.week_start === 0 || s.week_start === 1) weekStart.value = s.week_start })
+  .catch(() => {})
 const rule = computed(() => (store.item ? describeRule(store.item.current_rule) : ''))
 const optionName = (id: number | null) =>
   id === null ? '' : (store.item?.options.find((o) => o.id === id)?.name ?? '')
@@ -138,15 +143,10 @@ const pct = (n: number | null) => (n === null ? 'n/a' : `${Math.round(n * 100)}%
 
       <section>
         <h3 class="mb-1 font-semibold">Last 365 days</h3>
-        <div class="flex gap-0.5 overflow-x-auto pb-1" data-testid="heatmap" role="img" aria-label="Activity heatmap">
-          <div v-for="(col, ci) in columns" :key="ci" class="flex flex-col gap-0.5">
-            <span
-              v-for="(cell, ri) in col" :key="ri" class="inline-block size-3 rounded-sm"
-              :class="cell ? 'bg-success' : ''" :style="cell ? { opacity: cell.level > 0 ? 0.25 + 0.75 * cell.level : 0.08 } : {}"
-              :title="cell ? `${cell.date}: ${cell.value}` : ''" :data-date="cell?.date"
-            ></span>
-          </div>
-        </div>
+        <Heatmap
+          :days="store.stats.heatmap" :week-start="weekStart" :negative="store.item?.polarity === 'negative'"
+          :redact="privacy.redact" label="Activity heatmap for the last 365 days"
+        />
       </section>
 
       <section>

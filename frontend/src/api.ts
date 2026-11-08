@@ -699,6 +699,9 @@ export interface HeatmapDay {
   date: string
   level: number
   value: number
+  /** Completed / total options for the day; 0/0 for negative items and empty days. */
+  options_met?: number
+  options_total?: number
 }
 
 export interface OptionSummaryDto {
