@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
@@ -208,6 +209,31 @@ func escapeLike(s string) string {
 	return r.Replace(s)
 }
 
+const (
+	maxSearchTerms   = 8
+	maxSearchRunes   = 200
+	maxSearchTermLen = 64
+)
+
+// searchTerms splits a search query into lower-cased whitespace-separated
+// terms; an item matches when its name contains every term (case-insensitive,
+// any order). The count and length are bounded to cap the query cost.
+func searchTerms(q string) ([]string, bool) {
+	if utf8.RuneCountInString(q) > maxSearchRunes {
+		return nil, false
+	}
+	terms := strings.Fields(strings.ToLower(q))
+	if len(terms) > maxSearchTerms {
+		return nil, false
+	}
+	for _, t := range terms {
+		if utf8.RuneCountInString(t) > maxSearchTermLen {
+			return nil, false
+		}
+	}
+	return terms, true
+}
+
 // GET /api/items?q=&kind=&polarity=&category_id=&archived=&pinned=&include=stats&redact=1
 func (s *server) listItems(w http.ResponseWriter, r *http.Request) {
 	userID, ok := requestUser(w, r)
@@ -223,7 +249,14 @@ func (s *server) listItems(w http.ResponseWriter, r *http.Request) {
 	tx := db.Model(&dbmodels.Item{}).Where("user_id = ?", userID)
 	bad := func(msg string) { errResult(http.StatusBadRequest, msg).write(w) }
 	if v := q.Get("q"); v != "" {
-		tx = tx.Where(`LOWER(name) LIKE ? ESCAPE '\'`, "%"+escapeLike(strings.ToLower(v))+"%")
+		terms, ok := searchTerms(v)
+		if !ok {
+			bad("q has too many terms or is too long")
+			return
+		}
+		for _, term := range terms {
+			tx = tx.Where(`LOWER(name) LIKE ? ESCAPE '\'`, "%"+escapeLike(term)+"%")
+		}
 	}
 	switch v := q.Get("kind"); v {
 	case "":
@@ -294,13 +327,27 @@ func (s *server) listItems(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err, "list items failed")
 		return
 	}
+	var sens func(dbmodels.Item) bool
+	if isReadToken(r) {
+		// Read tokens never see sensitive items (DESIGN 11.6): dropped, not masked.
+		if sens, err = sensitiveFn(db, userID); err != nil {
+			internalError(w, err, "list items failed")
+			return
+		}
+		kept := items[:0]
+		for _, it := range items {
+			if !sens(it) {
+				kept = append(kept, it)
+			}
+		}
+		items = kept
+	}
 	resps, err := buildItemResponses(db, items, today)
 	if err != nil {
 		internalError(w, err, "list items failed")
 		return
 	}
-	var sens func(dbmodels.Item) bool
-	if redact {
+	if redact && sens == nil {
 		if sens, err = sensitiveFn(db, userID); err != nil {
 			internalError(w, err, "list items failed")
 			return
@@ -351,6 +398,17 @@ func (s *server) getItem(w http.ResponseWriter, r *http.Request) {
 	if !found {
 		errResult(http.StatusNotFound, "item not found").write(w)
 		return
+	}
+	if isReadToken(r) {
+		sens, err := sensitiveFn(db, userID)
+		if err != nil {
+			internalError(w, err, "get item failed")
+			return
+		}
+		if sens(item) { // indistinguishable from a missing item
+			errResult(http.StatusNotFound, "item not found").write(w)
+			return
+		}
 	}
 	resp, err := s.itemResponseOf(db, userID, item)
 	if err != nil {

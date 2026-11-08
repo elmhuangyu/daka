@@ -1,11 +1,13 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/elmhuangyu/daka/backend/lib/auth"
 	"github.com/elmhuangyu/daka/backend/lib/db"
 	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
 	"github.com/elmhuangyu/daka/backend/lib/extcal"
@@ -133,11 +135,12 @@ func NewRouter(d Deps) http.Handler {
 	if d.Auth != nil {
 		h = d.Auth(h)
 	}
-	h = rejectAPITokenEarly(h)
+	h = s.tokenGate(mux, h)
 	// The feed authenticates by its own feed:read token and is the only route
 	// outside Auth; every other path, token-bearing or not, goes through Auth.
 	top := http.NewServeMux()
 	top.HandleFunc(feedPath, s.getFeed)
+	top.HandleFunc("/api/openapi.json", s.getOpenAPI)
 	top.Handle("/", h)
 	return ratelimit.Middleware(d.Limiter, d.ClientIP)(top)
 }
@@ -167,17 +170,52 @@ func (r result) write(w http.ResponseWriter) {
 	_, _ = w.Write(r.body)
 }
 
-// rejectAPITokenEarly refuses API tokens (Authorization: Bearer dk_...) on
-// every route except the feed, before Auth runs, so a token can never act as a
-// credential even where Auth is permissive (single-user mode without login).
-func rejectAPITokenEarly(next http.Handler) http.Handler {
+// tokenGate handles API tokens (Authorization: Bearer dk_...) before Auth runs,
+// so a token can never act as a session credential even where Auth is
+// permissive (single-user mode without login). The only thing a token may do
+// here is a GET on the read allowlist with a read-scope token; every other
+// token-bearing request is refused before any database lookup. The feed is
+// mounted outside this gate and takes feed:read tokens only.
+func (s *server) tokenGate(mux, authed http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if tok := presentedBearer(r); strings.HasPrefix(tok, apiTokenPrefix) {
+		tok := presentedBearer(r)
+		if !strings.HasPrefix(tok, apiTokenPrefix) {
+			authed.ServeHTTP(w, r)
+			return
+		}
+		if r.Method != http.MethodGet || !readAllowed(r.URL.Path) {
 			errResult(http.StatusUnauthorized, "api token not accepted here").write(w)
 			return
 		}
-		next.ServeHTTP(w, r)
+		t, ok := s.authenticateToken(w, r, tok, dbmodels.ScopeRead)
+		if !ok {
+			return
+		}
+		s.touchToken(t)
+		ctx := auth.WithUser(r.Context(), auth.User{ID: t.UserID})
+		ctx = context.WithValue(ctx, readTokenKey{}, true)
+		w.Header().Set("Cache-Control", "private, no-store")
+		mux.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// readAllowed is the strict allowlist of paths a read token may GET. Anything
+// else (tokens, telegram, settings, auth, external calendar, categories,
+// options, freezes) is refused.
+func readAllowed(path string) bool {
+	switch path {
+	case "/api/items", "/api/checkins", "/api/view/today", "/api/view/calendar", "/api/calendar/holidays":
+		return true
+	}
+	rest, ok := strings.CutPrefix(path, "/api/items/")
+	if !ok {
+		return false
+	}
+	id, suffix, _ := strings.Cut(rest, "/")
+	if id == "" || strings.ContainsAny(id, "/") {
+		return false
+	}
+	return suffix == "" || suffix == "stats"
 }
 
 func presentedBearer(r *http.Request) string {

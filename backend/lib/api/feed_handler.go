@@ -51,8 +51,14 @@ func presentedToken(r *http.Request) string {
 // authenticateFeed resolves the token. It returns (token, true) on success;
 // otherwise it has already written the response.
 func (s *server) authenticateFeed(w http.ResponseWriter, r *http.Request) (dbmodels.ApiToken, bool) {
+	return s.authenticateToken(w, r, presentedToken(r), dbmodels.ScopeFeedRead)
+}
+
+// authenticateToken resolves tok, which must carry the given scope. Feed and
+// read tokens share the failure limiters (per (IP, prefix) and per-IP aggregate)
+// and the uniform 401, so a failure never reveals why it failed.
+func (s *server) authenticateToken(w http.ResponseWriter, r *http.Request, tok string, scope dbmodels.Scope) (dbmodels.ApiToken, bool) {
 	ip := s.clientIP.ClientIP(r)
-	tok := presentedToken(r)
 	prefix := ratelimit.TokenPrefix(tok)
 	// Two keys: (ip, token prefix) and an (ip, any) aggregate, so an attacker
 	// cannot dodge the lockout by varying the prefix.
@@ -84,7 +90,7 @@ func (s *server) authenticateFeed(w http.ResponseWriter, r *http.Request) (dbmod
 		return dbmodels.ApiToken{}, false
 	}
 	if subtle.ConstantTimeCompare([]byte(hash), []byte(t.TokenHash)) != 1 ||
-		t.RevokedAt != nil || !s.now().Before(t.ExpiresAt) || !hasScope(t.Scopes, dbmodels.ScopeFeedRead) {
+		t.RevokedAt != nil || !s.now().Before(t.ExpiresAt) || !hasScope(t.Scopes, scope) {
 		return fail()
 	}
 	s.feedFail.Success(ip, prefix)

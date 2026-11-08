@@ -68,6 +68,8 @@ type tokenRequest struct {
 	Privacy         *string `json:"privacy"`
 	ExpiresInDays   *int    `json:"expires_in_days"`
 	IncludeNegative *bool   `json:"include_negative"`
+	// Scope is "feed:read" (default) or "read". It is fixed at creation.
+	Scope *string `json:"scope"`
 }
 
 // GET /api/tokens: token metadata only (never the token or its hash).
@@ -88,7 +90,7 @@ func (s *server) listTokens(w http.ResponseWriter, r *http.Request) {
 	jsonResult(http.StatusOK, map[string]any{"tokens": out}).write(w)
 }
 
-// POST /api/tokens (behind reauth): creates a feed:read token. The plaintext
+// POST /api/tokens (behind reauth): creates a feed:read (default) or read token. The plaintext
 // is returned exactly once.
 func (s *server) postToken(w http.ResponseWriter, r *http.Request) {
 	userID, ok := requestUser(w, r)
@@ -107,6 +109,21 @@ func (s *server) postToken(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(*req.Name)
 	if utf8.RuneCountInString(name) > maxNameLen {
 		bad("name too long")
+		return
+	}
+	scope := dbmodels.ScopeFeedRead
+	if req.Scope != nil {
+		switch sc := dbmodels.Scope(*req.Scope); sc {
+		case dbmodels.ScopeFeedRead, dbmodels.ScopeRead:
+			scope = sc
+		default:
+			bad("invalid scope")
+			return
+		}
+	}
+	if scope == dbmodels.ScopeRead && (req.IncludeNegative != nil || (req.Privacy != nil && *req.Privacy != string(dbmodels.PrivacyExcludeSensitive))) {
+		// Read tokens always exclude sensitive items; there is no knob to loosen it.
+		bad("privacy and include_negative apply to feed:read tokens only")
 		return
 	}
 	privacy := dbmodels.PrivacyExcludeSensitive
@@ -143,7 +160,7 @@ func (s *server) postToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t := dbmodels.ApiToken{
-		UserID: userID, TokenHash: hashToken(plain), Name: name, Scopes: string(dbmodels.ScopeFeedRead),
+		UserID: userID, TokenHash: hashToken(plain), Name: name, Scopes: string(scope),
 		Privacy: privacy, ExpiresAt: s.now().Add(time.Duration(days) * 24 * time.Hour).UTC(),
 	}
 	if req.IncludeNegative != nil {
@@ -155,7 +172,9 @@ func (s *server) postToken(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := s.newTokenResponse(t)
 	resp.Token = plain
-	resp.FeedPath = feedPath + "?token=" + plain
+	if scope == dbmodels.ScopeFeedRead {
+		resp.FeedPath = feedPath + "?token=" + plain
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	jsonResult(http.StatusCreated, resp).write(w)
 }

@@ -38,7 +38,7 @@ func (s *server) getItemStats(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	res, err := s.itemStats(u.ID, uint(id), redact)
+	res, err := s.itemStats(u.ID, uint(id), redact, isReadToken(r))
 	if err != nil {
 		log.Error().Err(err).Msg("item stats failed")
 		errResult(http.StatusInternalServerError, "internal error").write(w)
@@ -47,7 +47,7 @@ func (s *server) getItemStats(w http.ResponseWriter, r *http.Request) {
 	res.write(w)
 }
 
-func (s *server) itemStats(userID string, itemID uint, redact bool) (result, error) {
+func (s *server) itemStats(userID string, itemID uint, redact, hideSensitive bool) (result, error) {
 	db := s.db.Read()
 	var item dbmodels.Item
 	err := db.Where("id = ? AND user_id = ?", itemID, userID).Take(&item).Error
@@ -67,6 +67,9 @@ func (s *server) itemStats(userID string, itemID uint, redact bool) (result, err
 		return result{}, err
 	}
 	sensitive := sens(item)
+	if hideSensitive && sensitive {
+		return errResult(http.StatusNotFound, "item not found"), nil
+	}
 	resp := statsResponse{ItemID: item.ID, Name: item.Name, IsSensitive: sensitive, Stats: val}
 	if redact && sensitive {
 		resp.Name = privateItemName

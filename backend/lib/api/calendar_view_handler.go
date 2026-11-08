@@ -144,7 +144,7 @@ func (s *server) getCalendarView(w http.ResponseWriter, r *http.Request) {
 		}
 		onlyItem = uint(id)
 	}
-	resp, err := s.calendarView(s.db.Read(), u.ID, q.Get("start"), q.Get("end"), onlyItem, redact)
+	resp, err := s.calendarView(s.db.Read(), u.ID, q.Get("start"), q.Get("end"), onlyItem, redact, isReadToken(r))
 	if err != nil {
 		log.Error().Err(err).Msg("view/calendar failed")
 		errResult(http.StatusInternalServerError, "internal error").write(w)
@@ -165,7 +165,7 @@ type calendarData struct {
 	rollingDates map[uint][]string
 }
 
-func (s *server) calendarView(db *gorm.DB, userID, start, end string, onlyItem uint, redact bool) (*calendarViewResponse, error) {
+func (s *server) calendarView(db *gorm.DB, userID, start, end string, onlyItem uint, redact, hideSensitive bool) (*calendarViewResponse, error) {
 	st, err := userSettings(db, userID)
 	if err != nil {
 		return nil, err
@@ -186,7 +186,11 @@ func (s *server) calendarView(db *gorm.DB, userID, start, end string, onlyItem u
 		return nil, err
 	}
 	for _, f := range freezes {
-		resp.Freezes = append(resp.Freezes, calendarFreeze{ID: f.ID, StartDate: f.StartDate, EndDate: f.EndDate, Reason: f.Reason})
+		reason := f.Reason
+		if hideSensitive {
+			reason = "" // free text may describe a private matter
+		}
+		resp.Freezes = append(resp.Freezes, calendarFreeze{ID: f.ID, StartDate: f.StartDate, EndDate: f.EndDate, Reason: reason})
 	}
 
 	d, err := s.loadCalendarData(db, userID, start, end, today, onlyItem)
@@ -241,6 +245,9 @@ func (s *server) calendarView(db *gorm.DB, userID, start, end string, onlyItem u
 	resp.HolidayPublished = published
 
 	for _, it := range d.items {
+		if hideSensitive && sens(it) {
+			continue
+		}
 		vs := d.versions[it.ID]
 		entries := map[string]*calendarDayItem{}
 		get := func(date string) *calendarDayItem {

@@ -50,7 +50,7 @@ func (s *server) getToday(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	resp, err := s.today(s.db.Read(), u.ID, redact)
+	resp, err := s.today(s.db.Read(), u.ID, redact, isReadToken(r))
 	if err != nil {
 		log.Error().Err(err).Msg("view/today failed")
 		errResult(http.StatusInternalServerError, "internal error").write(w)
@@ -59,7 +59,7 @@ func (s *server) getToday(w http.ResponseWriter, r *http.Request) {
 	jsonResult(http.StatusOK, resp).write(w)
 }
 
-func (s *server) today(db *gorm.DB, userID string, redact bool) (*todayResponse, error) {
+func (s *server) today(db *gorm.DB, userID string, redact, hideSensitive bool) (*todayResponse, error) {
 	st, err := userSettings(db, userID)
 	if err != nil {
 		return nil, err
@@ -124,6 +124,9 @@ func (s *server) today(db *gorm.DB, userID string, redact bool) (*todayResponse,
 	}
 
 	for _, it := range items {
+		if hideSensitive && sens(it) {
+			continue
+		}
 		vs := byItem[it.ID]
 		due, err := schedule.IsDueWith(vs, date, cal)
 		if errors.Is(err, schedule.ErrUnsupported) {

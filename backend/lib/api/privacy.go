@@ -39,3 +39,34 @@ func sensitiveFn(db *gorm.DB, userID string) (func(dbmodels.Item) bool, error) {
 		return it.IsSensitive || (it.CategoryID != nil && set[*it.CategoryID])
 	}, nil
 }
+
+// readTokenKey marks requests authenticated by a read-scope ApiToken.
+type readTokenKey struct{}
+
+// isReadToken reports whether the request came in through a read-scope
+// ApiToken. Such requests never see sensitive items (DESIGN 11.6): handlers
+// exclude them entirely (no placeholder, no count), whatever redact says.
+func isReadToken(r *http.Request) bool {
+	v, _ := r.Context().Value(readTokenKey{}).(bool)
+	return v
+}
+
+// sensitiveItemIDs lists the items that are effectively sensitive (own flag or
+// sensitive category), archived ones included.
+func sensitiveItemIDs(db *gorm.DB, userID string) ([]uint, error) {
+	sens, err := sensitiveFn(db, userID)
+	if err != nil {
+		return nil, err
+	}
+	var items []dbmodels.Item
+	if err := db.Select("id", "user_id", "category_id", "is_sensitive").Where("user_id = ?", userID).Find(&items).Error; err != nil {
+		return nil, err
+	}
+	var ids []uint
+	for _, it := range items {
+		if sens(it) {
+			ids = append(ids, it.ID)
+		}
+	}
+	return ids, nil
+}

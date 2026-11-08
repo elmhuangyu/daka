@@ -67,6 +67,18 @@ func (s *server) listCheckins(w http.ResponseWriter, r *http.Request) {
 	bad := func(msg string) { errResult(http.StatusBadRequest, msg).write(w) }
 	db := s.db.Read()
 	tx := db.Model(&dbmodels.CheckinLog{}).Where("user_id = ?", userID)
+	readTok := isReadToken(r)
+	if readTok {
+		// Logs of sensitive items are excluded in SQL so pagination stays exact.
+		hiddenIDs, err := sensitiveItemIDs(db, userID)
+		if err != nil {
+			internalError(w, err, "list checkins failed")
+			return
+		}
+		if len(hiddenIDs) > 0 {
+			tx = tx.Where("item_id NOT IN ?", hiddenIDs)
+		}
+	}
 
 	if v := q.Get("item_id"); v != "" {
 		id, err := strconv.ParseUint(v, 10, 32)
@@ -74,10 +86,18 @@ func (s *server) listCheckins(w http.ResponseWriter, r *http.Request) {
 			bad("invalid item_id")
 			return
 		}
-		_, found, err := loadOwnedItem(db, userID, uint(id))
+		item, found, err := loadOwnedItem(db, userID, uint(id))
 		if err != nil {
 			internalError(w, err, "list checkins failed")
 			return
+		}
+		if found && readTok {
+			sens, err := sensitiveFn(db, userID)
+			if err != nil {
+				internalError(w, err, "list checkins failed")
+				return
+			}
+			found = !sens(item)
 		}
 		if !found {
 			errResult(http.StatusNotFound, "item not found").write(w)
