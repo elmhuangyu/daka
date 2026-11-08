@@ -92,6 +92,16 @@ const (
 // serve runs the server on ln until ctx is cancelled, then shuts down gracefully.
 func serve(ctx context.Context, cfg *config.Config, ln net.Listener, logger zerolog.Logger) error {
 	defer func() { _ = ln.Close() }()
+	if cfg.Server.StaticDir != "" {
+		abs, hasIndex, err := api.ResolveStaticDir(cfg.Server.StaticDir)
+		if err != nil {
+			return err
+		}
+		cfg.Server.StaticDir = abs
+		if !hasIndex {
+			logger.Warn().Str("static_dir", abs).Msg("static_dir has no index.html; build the frontend (just fe-build)")
+		}
+	}
 	d, err := db.Open(cfg.DB)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)

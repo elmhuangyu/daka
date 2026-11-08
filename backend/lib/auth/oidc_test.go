@@ -64,7 +64,7 @@ func newFakeIdP(t *testing.T, clk *clock) *fakeIdP {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"issuer": f.srv.URL, "authorization_endpoint": f.srv.URL + "/authorize",
 			"token_endpoint": f.srv.URL + "/token", "userinfo_endpoint": f.srv.URL + "/userinfo",
-			"jwks_uri": f.srv.URL + "/jwks",
+			"jwks_uri":                              f.srv.URL + "/jwks",
 			"id_token_signing_alg_values_supported": []string{"RS256"},
 		})
 	})
