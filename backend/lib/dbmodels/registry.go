@@ -21,6 +21,9 @@ func AllModels() []any {
 		&ApiToken{},
 		&IdempotencyKey{},
 		&Session{},
+		&TelegramLink{},
+		&TelegramLinkCode{},
+		&ReminderLog{},
 	}
 }
 
@@ -37,6 +40,9 @@ func UserOwnedTables() []any {
 		&ApiToken{},
 		&IdempotencyKey{},
 		&Session{},
+		&TelegramLink{},
+		&TelegramLinkCode{},
+		&ReminderLog{},
 	}
 }
 

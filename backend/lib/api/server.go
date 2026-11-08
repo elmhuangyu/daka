@@ -47,6 +47,8 @@ type Deps struct {
 	// creates defaults (5 failures per pair, 20 per IP, exponential lockout).
 	FeedFailures   *ratelimit.AuthFailureLimiter
 	FeedIPFailures *ratelimit.AuthFailureLimiter
+	// Telegram is the notify service; nil means Telegram is not configured.
+	Telegram TelegramBot
 }
 
 type server struct {
@@ -56,6 +58,7 @@ type server struct {
 	versions *stats.Versions
 	cache    *stats.Cache
 	ext      *extcal.Service
+	telegram TelegramBot
 
 	clientIP   ratelimit.ClientIPResolver
 	feedFail   *ratelimit.AuthFailureLimiter
@@ -66,7 +69,7 @@ type server struct {
 // static frontend files are served outside this router and are not limited.
 func NewRouter(d Deps) http.Handler {
 	s := &server{db: d.DB, now: d.Now, calendar: d.Calendar, versions: d.Versions, cache: d.StatsCache, ext: d.ExtCal,
-		clientIP: d.ClientIP, feedFail: d.FeedFailures, feedIPFail: d.FeedIPFailures}
+		clientIP: d.ClientIP, feedFail: d.FeedFailures, feedIPFail: d.FeedIPFailures, telegram: d.Telegram}
 	if s.versions == nil {
 		s.versions = stats.NewVersions()
 	}
@@ -119,6 +122,10 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /api/tokens", s.listTokens)
 	mux.Handle("POST /api/tokens", reauth(http.HandlerFunc(s.postToken)))
 	mux.Handle("DELETE /api/tokens/{id}", reauth(http.HandlerFunc(s.deleteToken)))
+	mux.HandleFunc("GET /api/telegram", s.getTelegram)
+	mux.Handle("POST /api/telegram/link-code", reauth(http.HandlerFunc(s.postTelegramLinkCode)))
+	mux.Handle("DELETE /api/telegram", reauth(http.HandlerFunc(s.deleteTelegram)))
+	mux.HandleFunc("PATCH /api/telegram/settings", s.patchTelegramSettings)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		errResult(http.StatusNotFound, "not found").write(w)
 	})

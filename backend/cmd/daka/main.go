@@ -29,6 +29,7 @@ import (
 	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
 	"github.com/elmhuangyu/daka/backend/lib/extcal"
 	"github.com/elmhuangyu/daka/backend/lib/holiday"
+	"github.com/elmhuangyu/daka/backend/lib/notify"
 	"github.com/elmhuangyu/daka/backend/lib/ratelimit"
 	"github.com/elmhuangyu/daka/backend/lib/schedule"
 	"github.com/elmhuangyu/daka/backend/lib/secret"
@@ -110,7 +111,7 @@ func bootstrapDefaultUser(g *gorm.DB, timezone string) error {
 // sessions) when OIDC or auth.shared_secret is configured; otherwise every
 // request is default_user (loopback single-user mode). It returns the session
 // manager (nil without login) so the caller can purge expired sessions.
-func newHandler(cfg *config.Config, d *db.DB, hp *holiday.Provider) (http.Handler, *auth.Manager, error) {
+func newHandler(cfg *config.Config, d *db.DB, hp *holiday.Provider, tg *notify.Service) (http.Handler, *auth.Manager, error) {
 	proxies, err := config.ParseTrustedProxies(cfg.Server.TrustedProxies)
 	if err != nil {
 		return nil, nil, err
@@ -153,7 +154,7 @@ func newHandler(cfg *config.Config, d *db.DB, hp *holiday.Provider) (http.Handle
 	}
 	extCal := extcal.NewService(extcal.ServiceOptions{Keys: keys, AllowHTTP: cfg.ExternalCalendar.AllowHTTP})
 	apiHandler := api.NewRouter(api.Deps{DB: d, Auth: auth.Middleware(verifier), Limiter: limiter, ClientIP: clientIP, ExtCal: extCal, Reauth: auth.RequireReauth(nil),
-		Calendar: holidayCalendars(hp)})
+		Calendar: holidayCalendars(hp), Telegram: tg})
 	mux := http.NewServeMux()
 	// Public auth endpoints authenticate themselves; they share the global
 	// per-IP rate limit (this covers GET /api/auth/oidc/login too).
@@ -191,7 +192,8 @@ func serve(ctx context.Context, cfg *config.Config, ln net.Listener, logger zero
 	if err != nil {
 		return fmt.Errorf("holiday data: %w", err)
 	}
-	handler, sessions, err := newHandler(cfg, d, hp)
+	tg := notify.New(notify.Options{DB: d.Write(), Token: cfg.Secrets.TelegramBotToken.Reveal(), Calendar: holidayCalendars(hp)})
+	handler, sessions, err := newHandler(cfg, d, hp, tg)
 	if err != nil {
 		return fmt.Errorf("build handler: %w", err)
 	}
@@ -236,6 +238,14 @@ func serve(ctx context.Context, cfg *config.Config, ln net.Listener, logger zero
 		defer wg.Done()
 		purgeLoop(purgeCtx, d, sessions, logger)
 	}()
+	if tg.Configured() {
+		logger.Info().Msg("telegram reminders enabled (long polling)")
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			tg.Run(purgeCtx)
+		}()
+	}
 	if hp != nil {
 		wg.Add(1)
 		go func() {
