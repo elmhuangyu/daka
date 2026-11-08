@@ -143,7 +143,6 @@ func TestRejections(t *testing.T) {
 	other := e.item("u2", nil)
 	neg := e.item("u1", func(i *dbmodels.Item) { i.Polarity = dbmodels.PolarityNegative })
 	arch := e.item("u1", func(i *dbmodels.Item) { i.Archived = true })
-	counter := e.item("u1", func(i *dbmodels.Item) { i.TrackerType = dbmodels.TrackerCounter })
 	opt := uint(1)
 
 	tests := []struct {
@@ -170,10 +169,8 @@ func TestRejections(t *testing.T) {
 		{"archived", m{"item_id": arch, "mode": "set"}, 400},
 		{"negative set", m{"item_id": neg, "mode": "set"}, 400},
 		{"negative unset", m{"item_id": neg, "mode": "unset"}, 400},
-		{"negative append not yet", m{"item_id": neg, "mode": "append"}, 400},
 		{"boolean delta mismatch", m{"item_id": good, "mode": "delta", "value": 1}, 400},
 		{"boolean append mismatch", m{"item_id": good, "mode": "append"}, 400},
-		{"counter not supported", m{"item_id": counter, "mode": "delta", "value": 1}, 400},
 		{"option not supported", m{"item_id": good, "mode": "set", "option_id": opt}, 400},
 	}
 	for _, tc := range tests {
