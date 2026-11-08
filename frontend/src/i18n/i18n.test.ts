@@ -144,13 +144,28 @@ describe('setLocale', () => {
   })
 
   it('ignores a stale load that finishes after a newer choice', async () => {
-    const { data } = mockStorage()
-    const slow = setLocale('zh-CN', { persist: true })
-    const fast = setLocale('en', { persist: true })
-    await Promise.all([slow, fast])
-    expect(currentLocale()).toBe('en')
-    expect(document.documentElement.lang).toBe('en')
-    expect(data.get(LOCALE_STORAGE_KEY)).toBe('en')
+    // A fresh module instance has an empty catalog cache, so zh-CN really awaits the chunk.
+    vi.resetModules()
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    vi.doMock('./zh-CN', async () => {
+      await gate
+      return { default: { 'nav.today': '今天' } }
+    })
+    try {
+      const fresh = await import('./index')
+      const { data } = mockStorage()
+      const slow = fresh.setLocale('zh-CN', { persist: true })
+      await fresh.setLocale('en', { persist: true })
+      release()
+      await slow
+      expect(fresh.currentLocale()).toBe('en')
+      expect(document.documentElement.lang).toBe('en')
+      expect(data.get(LOCALE_STORAGE_KEY)).toBe('en')
+    } finally {
+      vi.doUnmock('./zh-CN')
+      vi.resetModules()
+    }
   })
 
   it('does not persist unless asked', async () => {
