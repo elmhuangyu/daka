@@ -11,7 +11,7 @@ type CheckinLog struct {
 	ItemID      uint      `gorm:"not null;index:idx_checkin_item_date"`
 	CheckinDate string    `gorm:"size:10;not null;index:idx_checkin_item_date"`
 	CheckinTime time.Time `gorm:"not null"`
-	OptionID    *uint
+	OptionID    *uint     `gorm:"index"`
 	Value       float64
 	Note        string        `gorm:"type:text"`
 	Source      CheckinSource `gorm:"size:16"`

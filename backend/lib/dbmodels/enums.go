@@ -121,3 +121,20 @@ const (
 	RegionCN HolidayRegion = "CN"
 	RegionUS HolidayRegion = "US"
 )
+
+// Privacy is the sensitivity filter bound to an ApiToken (server-side only).
+type Privacy string
+
+const (
+	PrivacyAll                Privacy = "all"
+	PrivacyExcludeSensitive   Privacy = "exclude_sensitive"
+	PrivacyAnonymizeSensitive Privacy = "anonymize_sensitive"
+)
+
+// Scope is an ApiToken permission; ApiToken.Scopes holds a comma-separated list.
+type Scope string
+
+const (
+	ScopeFeedRead Scope = "feed:read"
+	ScopeRead     Scope = "read"
+)
