@@ -476,3 +476,132 @@ export function createItem(item: NewItem): Promise<unknown> {
     }),
   )
 }
+
+// ---- Settings (P3-5) ----
+
+export interface ExternalCalendarDto {
+  id: string
+  name: string
+  url_hint: string
+}
+
+export interface CalendarSettings {
+  timezone: string
+  week_start: number
+  holiday_region: string
+  streak_holiday_freeze: boolean
+  external_calendars: ExternalCalendarDto[]
+}
+
+export function getCalendarSettings(): Promise<CalendarSettings> {
+  return request<CalendarSettings>('/api/settings/calendar')
+}
+
+/** Partial update; `external_calendars` entries without `url` keep their stored URL. */
+export function putCalendarSettings(body: {
+  timezone?: string
+  week_start?: number
+  holiday_region?: string
+  streak_holiday_freeze?: boolean
+  external_calendars?: { id?: string; name: string; url?: string }[]
+}): Promise<CalendarSettings> {
+  return request<CalendarSettings>('/api/settings/calendar', jsonInit('PUT', body))
+}
+
+export interface ExternalSourceStatus {
+  id: string
+  name: string
+  ok: boolean
+  error?: string
+}
+
+export async function getExternalStatus(day: string): Promise<ExternalSourceStatus[]> {
+  const r = await request<{ sources: ExternalSourceStatus[] }>(`/api/calendar/external?start=${day}&end=${day}`)
+  return r.sources
+}
+
+export interface TokenDto {
+  id: number
+  name: string
+  scopes: string[]
+  privacy: string
+  include_negative: boolean
+  expires_at: string
+  expired: boolean
+  revoked_at: string | null
+  last_used_at: string | null
+  /** Creation response only. */
+  token?: string
+  feed_path?: string
+}
+
+export async function listTokens(): Promise<TokenDto[]> {
+  return (await request<{ tokens?: TokenDto[] }>('/api/tokens')).tokens ?? []
+}
+
+export function createToken(body: {
+  name: string
+  privacy: string
+  expires_in_days: number
+  include_negative?: boolean
+}): Promise<TokenDto> {
+  return request<TokenDto>('/api/tokens', jsonInit('POST', body))
+}
+
+export function revokeToken(id: number): Promise<unknown> {
+  return request(`/api/tokens/${id}`, { method: 'DELETE' })
+}
+
+export interface TelegramStatus {
+  configured: boolean
+  linked: boolean
+  enabled: boolean
+  remind_sensitive: boolean
+  digest_time: string
+  linked_at: string | null
+  bot_username?: string
+}
+
+export function getTelegram(): Promise<TelegramStatus> {
+  return request<TelegramStatus>('/api/telegram')
+}
+
+export function createTelegramLinkCode(): Promise<{ code: string; expires_at: string; deep_link?: string }> {
+  return request('/api/telegram/link-code', { method: 'POST' })
+}
+
+export function unlinkTelegram(): Promise<unknown> {
+  return request('/api/telegram', { method: 'DELETE' })
+}
+
+export function patchTelegram(body: { enabled?: boolean; remind_sensitive?: boolean; digest_time?: string }): Promise<TelegramStatus> {
+  return request<TelegramStatus>('/api/telegram/settings', jsonInit('PATCH', body))
+}
+
+export interface CategoryChange {
+  id: number
+  name: string
+  is_sensitive: boolean
+  affected_items?: number
+}
+
+/** `confirmExposure` leaves items of a category that stops being sensitive exposed instead of freezing them. */
+export function updateCategory(
+  id: number,
+  body: { name?: string; is_sensitive?: boolean },
+  confirmExposure = false,
+): Promise<CategoryChange> {
+  return request<CategoryChange>(`/api/categories/${id}${confirmExposure ? '?confirm_exposure=1' : ''}`, jsonInit('PUT', body))
+}
+
+export function removeCategory(
+  id: number,
+  how: { moveTo: number } | { uncategorize: true },
+  confirmExposure = false,
+): Promise<{ deleted: boolean; moved_items: number; affected_items: number }> {
+  const q = new URLSearchParams()
+  if ('moveTo' in how) q.set('move_to', String(how.moveTo))
+  else q.set('uncategorize', '1')
+  if (confirmExposure) q.set('confirm_exposure', '1')
+  return request(`/api/categories/${id}?${q}`, { method: 'DELETE' })
+}

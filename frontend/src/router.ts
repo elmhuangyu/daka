@@ -23,7 +23,7 @@ export function makeRouter(history: RouterHistory = createWebHistory()) {
         path: '/items/:id(\\d+)/edit', name: 'item-edit',
         component: () => import('./views/ItemEditorView.vue'), meta: { title: 'Edit item' },
       },
-      { path: '/settings', name: 'settings', component: placeholder, meta: { title: 'Settings' } },
+      { path: '/settings', name: 'settings', component: () => import('./views/SettingsView.vue'), meta: { title: 'Settings' } },
       { path: '/:pathMatch(.*)*', redirect: '/' },
     ],
   })
