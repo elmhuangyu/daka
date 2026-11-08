@@ -2,7 +2,9 @@ package config
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 
@@ -111,8 +113,8 @@ func (c Config) GoString() string { return c.String() }
 // Load builds the configuration: defaults, then the YAML file at path (skipped
 // when empty), then environment overrides read through getenv (os.Getenv when
 // nil). Unknown YAML keys are rejected, so secrets cannot be smuggled into YAML.
-// Only syntax and enum values are checked here; auth/listen policy belongs to
-// the auth layer.
+// Only syntax and enum values are checked here; callers must run Validate for
+// the listen/auth policy and DSN rules.
 func Load(path string, getenv func(string) string) (*Config, error) {
 	if getenv == nil {
 		getenv = os.Getenv
@@ -123,9 +125,13 @@ func Load(path string, getenv func(string) string) (*Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read config: %w", err)
 		}
+		def := c
 		dec := yaml.NewDecoder(bytes.NewReader(data), yaml.Strict())
-		if err := dec.Decode(&c); err != nil && err.Error() != "EOF" {
+		if err := dec.Decode(&c); err != nil && !errors.Is(err, io.EOF) {
 			return nil, fmt.Errorf("parse config %s: %w", path, err)
+		}
+		if c == (Config{}) { // empty / comment-only document decodes to the zero value
+			c = def
 		}
 	}
 	if err := applyEnv(&c, getenv); err != nil {
