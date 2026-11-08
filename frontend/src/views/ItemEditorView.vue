@@ -13,6 +13,10 @@ import {
 } from '../itemForm'
 import { localIso, WEEKDAYS } from '../rrule'
 import { usePrivacyStore } from '../stores/privacy'
+import { useI18n } from '../i18n'
+import { monthName, weekdayName } from '../i18n/format'
+
+const { t, tParts } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -35,19 +39,9 @@ const newCategory = ref('')
 const newCategorySensitive = ref(false)
 const today = localIso()
 
-const TRACKERS = [
-  { v: 'boolean', label: 'Yes / no' },
-  { v: 'counter', label: 'Counter' },
-  { v: 'metric', label: 'Metric' },
-  { v: 'maintenance', label: 'Maintenance' },
-] as const
-const SCHEDULES = {
-  fixed_rrule: 'Repeats on a pattern',
-  rolling: 'Rolling (after last done)',
-  quota: 'Quota (N per period)',
-  none: 'Unscheduled',
-} as const
-const WD_LABEL: Record<string, string> = { MO: 'Mon', TU: 'Tue', WE: 'Wed', TH: 'Thu', FR: 'Fri', SA: 'Sat', SU: 'Sun' }
+const TRACKERS = ['boolean', 'counter', 'metric', 'maintenance'] as const
+// 0 = Sunday .. 6 = Saturday for the short weekday names.
+const WD_INDEX: Record<string, number> = { MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6, SU: 0 }
 
 // Editing an existing item needs plaintext; with the privacy guard on the
 // server redacts names, so saving would overwrite them. Block instead.
@@ -156,7 +150,7 @@ async function saveCreate() {
     } catch (e) {
       // The item exists; continue in edit mode so the reminder can be retried.
       await router.replace({ name: 'item-edit', params: { id: item.id } })
-      submitError.value = `Item created, but the reminder time was not saved: ${describeItemError(e)}`
+      submitError.value = t('items.editor.reminderNotSaved', { reason: describeItemError(e) })
       return
     }
   }
@@ -188,178 +182,198 @@ const showHoliday = computed(() => holidayAllowed(form))
 
 <template>
   <section class="mx-auto max-w-2xl p-4" data-testid="item-editor">
-    <h1 class="mb-4 text-2xl font-bold">{{ isEdit ? 'Edit item' : 'New item' }}</h1>
+    <h1 class="mb-4 text-2xl font-bold">{{ isEdit ? t('items.editor.titleEdit') : t('items.editor.titleNew') }}</h1>
 
     <p v-if="blocked" class="alert alert-warning" role="alert" data-testid="privacy-blocked">
-      The privacy guard is on. Turn it off to edit this item.
+      {{ t('items.editor.blocked') }}
     </p>
     <p v-else-if="loadError" class="alert alert-error" role="alert">{{ loadError }}</p>
-    <p v-else-if="loading" class="opacity-70">Loading...</p>
+    <p v-else-if="loading" class="opacity-70">{{ t('common.loading') }}</p>
 
     <form v-else class="flex flex-col gap-5" novalidate @submit.prevent="submit">
       <label class="flex flex-col gap-1">
-        <span class="label-text font-medium">Name</span>
+        <span class="label-text font-medium">{{ t('items.editor.name') }}</span>
         <input v-model="form.name" class="input input-bordered w-full" maxlength="200" autocomplete="off" data-testid="f-name" />
       </label>
 
       <fieldset class="flex flex-col gap-2" :disabled="isEdit">
-        <legend class="label-text font-medium">Type</legend>
+        <legend class="label-text font-medium">{{ t('items.editor.type') }}</legend>
         <div class="join flex-wrap">
           <button
-            v-for="t in TRACKERS" :key="t.v" type="button" class="btn join-item btn-sm"
-            :class="{ 'btn-primary': form.trackerType === t.v }" :data-testid="`tracker-${t.v}`"
-            @click="form.trackerType = t.v"
-          >{{ t.label }}</button>
+            v-for="tk in TRACKERS" :key="tk" type="button" class="btn join-item btn-sm"
+            :class="{ 'btn-primary': form.trackerType === tk }" :data-testid="`tracker-${tk}`"
+            @click="form.trackerType = tk"
+          >{{ t(`items.editor.tracker.${tk}`) }}</button>
         </div>
         <label v-if="allowedPolarities(form.trackerType).length > 1" class="flex items-center gap-2">
-          <input v-model="form.polarity" type="radio" value="positive" class="radio radio-sm" /> Build it up (do more)
-          <input v-model="form.polarity" type="radio" value="negative" class="radio radio-sm ml-3" data-testid="polarity-negative" /> Limit it (do less)
+          <input v-model="form.polarity" type="radio" value="positive" class="radio radio-sm" /> {{ t('items.editor.positive') }}
+          <input v-model="form.polarity" type="radio" value="negative" class="radio radio-sm ml-3" data-testid="polarity-negative" /> {{ t('items.editor.negative') }}
         </label>
-        <p v-if="isEdit" class="text-xs opacity-70">Type and polarity cannot be changed after creation.</p>
+        <p v-if="isEdit" class="text-xs opacity-70">{{ t('items.editor.immutable') }}</p>
       </fieldset>
 
       <fieldset v-if="isNumeric(form.trackerType)" class="grid grid-cols-2 gap-2">
-        <legend class="label-text mb-1 font-medium">Measurement</legend>
-        <label class="flex flex-col gap-1"><span class="text-xs">Unit</span>
+        <legend class="label-text mb-1 font-medium">{{ t('items.editor.measurement') }}</legend>
+        <label class="flex flex-col gap-1"><span class="text-xs">{{ t('items.editor.unit') }}</span>
           <input v-model="form.unit" class="input input-bordered input-sm" maxlength="32" /></label>
-        <label class="flex flex-col gap-1"><span class="text-xs">Step</span>
+        <label class="flex flex-col gap-1"><span class="text-xs">{{ t('items.editor.step') }}</span>
           <input v-model="form.step" inputmode="decimal" class="input input-bordered input-sm" /></label>
-        <label class="flex flex-col gap-1"><span class="text-xs">Min</span>
+        <label class="flex flex-col gap-1"><span class="text-xs">{{ t('items.editor.min') }}</span>
           <input v-model="form.minVal" inputmode="decimal" class="input input-bordered input-sm" /></label>
-        <label class="flex flex-col gap-1"><span class="text-xs">Max</span>
+        <label class="flex flex-col gap-1"><span class="text-xs">{{ t('items.editor.max') }}</span>
           <input v-model="form.maxVal" inputmode="decimal" class="input input-bordered input-sm" /></label>
         <label v-if="form.trackerType === 'metric'" class="col-span-2 flex flex-col gap-1">
-          <span class="text-xs">Daily value is the</span>
+          <span class="text-xs">{{ t('items.editor.aggregate') }}</span>
           <select v-model="form.aggregate" class="select select-bordered select-sm">
-            <option value="">Default</option><option value="sum">Sum</option>
-            <option value="latest">Latest</option><option value="avg">Average</option>
+            <option value="">{{ t('items.editor.aggDefault') }}</option><option value="sum">{{ t('items.editor.aggSum') }}</option>
+            <option value="latest">{{ t('items.editor.aggLatest') }}</option><option value="avg">{{ t('items.editor.aggAvg') }}</option>
           </select>
         </label>
         <label v-if="form.options.length === 0" class="col-span-2 flex flex-col gap-1">
-          <span class="text-xs">Daily target (optional)</span>
+          <span class="text-xs">{{ t('items.editor.dailyTarget') }}</span>
           <input v-model="form.target" inputmode="decimal" class="input input-bordered input-sm" data-testid="f-target" />
         </label>
       </fieldset>
 
       <fieldset v-if="isNumeric(form.trackerType)" class="flex flex-col gap-2">
-        <legend class="label-text font-medium">Options (optional)</legend>
+        <legend class="label-text font-medium">{{ t('items.editor.options') }}</legend>
         <div v-for="(o, i) in form.options" :key="i" class="flex flex-wrap items-end gap-2 rounded border border-base-300 p-2">
-          <label class="flex min-w-32 flex-1 flex-col gap-1"><span class="text-xs">Name</span>
+          <label class="flex min-w-32 flex-1 flex-col gap-1"><span class="text-xs">{{ t('items.editor.name') }}</span>
             <input v-model="o.name" class="input input-bordered input-sm" maxlength="200" :data-testid="`opt-name-${i}`" /></label>
-          <label class="flex w-20 flex-col gap-1"><span class="text-xs">Unit</span>
+          <label class="flex w-20 flex-col gap-1"><span class="text-xs">{{ t('items.editor.unit') }}</span>
             <input v-model="o.unit" class="input input-bordered input-sm" /></label>
-          <label class="flex w-20 flex-col gap-1"><span class="text-xs">Step</span>
+          <label class="flex w-20 flex-col gap-1"><span class="text-xs">{{ t('items.editor.step') }}</span>
             <input v-model="o.step" inputmode="decimal" class="input input-bordered input-sm" /></label>
-          <label class="flex w-24 flex-col gap-1"><span class="text-xs">Target</span>
+          <label class="flex w-24 flex-col gap-1"><span class="text-xs">{{ t('items.editor.target') }}</span>
             <input v-model="o.target" inputmode="decimal" class="input input-bordered input-sm" /></label>
-          <button type="button" class="btn btn-ghost btn-sm btn-square" aria-label="Remove option" @click="removeOption(i)">
+          <button type="button" class="btn btn-ghost btn-sm btn-square" :aria-label="t('items.editor.removeOption')" @click="removeOption(i)">
             <Icon icon="lucide:trash-2" aria-hidden="true" />
           </button>
         </div>
         <button type="button" class="btn btn-sm btn-outline self-start" data-testid="add-option" @click="addOption">
-          <Icon icon="lucide:plus" aria-hidden="true" /> Add option
+          <Icon icon="lucide:plus" aria-hidden="true" /> {{ t('items.editor.addOption') }}
         </button>
         <div v-if="form.options.length > 0" class="flex flex-wrap items-center gap-2">
-          <span class="text-sm">Done when</span>
+          <span class="text-sm">{{ t('items.editor.doneWhen') }}</span>
           <select v-model="form.completionRule" class="select select-bordered select-sm">
-            <option value="">any option meets its target</option>
-            <option value="all">all options meet their targets</option>
-            <option value="at_least_n">at least N options meet their targets</option>
+            <option value="">{{ t('items.editor.doneAny') }}</option>
+            <option value="all">{{ t('items.editor.doneAll') }}</option>
+            <option value="at_least_n">{{ t('items.editor.doneAtLeastN') }}</option>
           </select>
           <input v-if="form.completionRule === 'at_least_n'" v-model="form.completionN" inputmode="numeric" class="input input-bordered input-sm w-16" />
         </div>
       </fieldset>
 
       <fieldset class="flex flex-col gap-3">
-        <legend class="label-text font-medium">Schedule</legend>
+        <legend class="label-text font-medium">{{ t('items.editor.schedule') }}</legend>
         <select v-model="form.scheduleType" class="select select-bordered" data-testid="f-schedule">
-          <option v-for="s in allowedSchedules(form.trackerType, form.polarity)" :key="s" :value="s">{{ SCHEDULES[s] }}</option>
+          <option v-for="s in allowedSchedules(form.trackerType, form.polarity)" :key="s" :value="s">{{ t(`items.editor.sched.${s}`) }}</option>
         </select>
 
         <template v-if="form.scheduleType === 'fixed_rrule'">
           <select v-model="form.periodKind" class="select select-bordered" data-testid="f-period">
-            <option value="daily">Every day</option>
-            <option value="interval">Every N days</option>
-            <option value="weekly">On certain weekdays</option>
-            <option value="monthly">On a day of the month</option>
-            <option value="yearly">On a date each year</option>
-            <option value="custom">Custom RRULE (advanced)</option>
+            <option value="daily">{{ t('items.editor.period.daily') }}</option>
+            <option value="interval">{{ t('items.editor.period.interval') }}</option>
+            <option value="weekly">{{ t('items.editor.period.weekly') }}</option>
+            <option value="monthly">{{ t('items.editor.period.monthly') }}</option>
+            <option value="yearly">{{ t('items.editor.period.yearly') }}</option>
+            <option value="custom">{{ t('items.editor.period.custom') }}</option>
           </select>
-          <label v-if="form.periodKind === 'interval'" class="flex items-center gap-2">Every
-            <input v-model="form.interval" inputmode="numeric" class="input input-bordered input-sm w-20" data-testid="f-interval" /> days</label>
+          <label v-if="form.periodKind === 'interval'" class="flex items-center gap-2">
+            <template v-for="(p, i) in tParts('items.editor.everyNDays')" :key="i">
+              <input v-if="'slot' in p" v-model="form.interval" inputmode="numeric" class="input input-bordered input-sm w-20" data-testid="f-interval" />
+              <template v-else>{{ p.text }}</template>
+            </template>
+          </label>
           <div v-if="form.periodKind === 'weekly'" class="flex flex-wrap gap-1">
             <button
               v-for="d in WEEKDAYS" :key="d" type="button" class="btn btn-sm"
               :class="{ 'btn-primary': form.weekDays.includes(d) }" :aria-pressed="form.weekDays.includes(d)"
               :data-testid="`wd-${d}`" @click="toggleDay(d)"
-            >{{ WD_LABEL[d] }}</button>
+            >{{ weekdayName(WD_INDEX[d], 'short') }}</button>
           </div>
-          <label v-if="form.periodKind === 'monthly'" class="flex items-center gap-2">On day
-            <select v-model="form.monthDay" class="select select-bordered select-sm" data-testid="f-monthday">
-              <option v-for="n in 31" :key="n" :value="String(n)">{{ n }}</option>
-              <option value="-1">last day</option>
-            </select> of every month</label>
+          <label v-if="form.periodKind === 'monthly'" class="flex items-center gap-2">
+            <template v-for="(p, i) in tParts('items.editor.monthDayLine')" :key="i">
+              <select v-if="'slot' in p" v-model="form.monthDay" class="select select-bordered select-sm" data-testid="f-monthday">
+                <option v-for="n in 31" :key="n" :value="String(n)">{{ t('items.editor.monthDayOption', { n }) }}</option>
+                <option value="-1">{{ t('items.editor.lastDay') }}</option>
+              </select>
+              <template v-else>{{ p.text }}</template>
+            </template>
+          </label>
           <div v-if="form.periodKind === 'yearly'" class="flex items-center gap-2">
-            <select v-model="form.yearMonth" class="select select-bordered select-sm" aria-label="Month">
-              <option v-for="(m, i) in ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']" :key="m" :value="String(i + 1)">{{ m }}</option>
+            <select v-model="form.yearMonth" class="select select-bordered select-sm" :aria-label="t('items.editor.month')">
+              <option v-for="m in 12" :key="m" :value="String(m)">{{ monthName(m, 'short') }}</option>
             </select>
-            <select v-model="form.yearDay" class="select select-bordered select-sm" aria-label="Day">
-              <option v-for="n in 31" :key="n" :value="String(n)">{{ n }}</option>
+            <select v-model="form.yearDay" class="select select-bordered select-sm" :aria-label="t('items.editor.day')">
+              <option v-for="n in 31" :key="n" :value="String(n)">{{ t('items.editor.monthDayOption', { n }) }}</option>
             </select>
           </div>
           <label v-if="form.periodKind === 'custom'" class="flex flex-col gap-1">
-            <span class="text-xs">RRULE, for example FREQ=MONTHLY;BYDAY=MO;BYSETPOS=1</span>
+            <span class="text-xs">{{ t('items.editor.customHint') }}</span>
             <input v-model="form.custom" class="input input-bordered font-mono" spellcheck="false" data-testid="f-custom" />
           </label>
-          <label class="flex items-center gap-2 text-sm">Ends on (optional)
+          <label class="flex items-center gap-2 text-sm">{{ t('items.editor.endsOn') }}
             <input v-model="form.until" type="date" class="input input-bordered input-sm" /></label>
           <fieldset v-if="showHoliday" class="flex flex-col gap-1" data-testid="holiday">
-            <legend class="text-sm font-medium">Holidays</legend>
-            <label class="flex items-center gap-2"><input v-model="form.holidayMode" type="radio" value="none" class="radio radio-sm" /> Ignore holidays</label>
-            <label class="flex items-center gap-2"><input v-model="form.holidayMode" type="radio" value="skip_holidays" class="radio radio-sm" /> Skip statutory holidays</label>
-            <label class="flex items-center gap-2"><input v-model="form.holidayMode" type="radio" value="workdays_only" class="radio radio-sm" /> Workdays only (move to the next workday)</label>
+            <legend class="text-sm font-medium">{{ t('items.editor.holidays') }}</legend>
+            <label class="flex items-center gap-2"><input v-model="form.holidayMode" type="radio" value="none" class="radio radio-sm" /> {{ t('items.editor.holidayNone') }}</label>
+            <label class="flex items-center gap-2"><input v-model="form.holidayMode" type="radio" value="skip_holidays" class="radio radio-sm" /> {{ t('items.editor.holidaySkip') }}</label>
+            <label class="flex items-center gap-2"><input v-model="form.holidayMode" type="radio" value="workdays_only" class="radio radio-sm" /> {{ t('items.editor.holidayWorkdays') }}</label>
           </fieldset>
         </template>
 
-        <div v-if="form.scheduleType === 'rolling'" class="flex items-center gap-2">Due every
-          <input v-model="form.rollingInterval" inputmode="numeric" class="input input-bordered input-sm w-20" data-testid="f-rolling" />
-          <select v-model="form.rollingUnit" class="select select-bordered select-sm">
-            <option value="day">days</option><option value="month">months</option><option value="year">years</option>
-          </select> after the last completion</div>
+        <div v-if="form.scheduleType === 'rolling'" class="flex flex-wrap items-center gap-2">
+          <template v-for="(p, i) in tParts('items.editor.rollingLine')" :key="i">
+            <input v-if="'slot' in p && p.slot === 'input'" v-model="form.rollingInterval" inputmode="numeric" class="input input-bordered input-sm w-20" data-testid="f-rolling" />
+            <select v-else-if="'slot' in p" v-model="form.rollingUnit" class="select select-bordered select-sm">
+              <option value="day">{{ t('items.editor.unitDays') }}</option><option value="month">{{ t('items.editor.unitMonths') }}</option><option value="year">{{ t('items.editor.unitYears') }}</option>
+            </select>
+            <template v-else>{{ p.text }}</template>
+          </template>
+        </div>
 
         <div v-if="form.scheduleType === 'quota'" class="flex flex-col gap-2" data-testid="quota">
           <div class="flex flex-wrap items-center gap-2">
             <select v-model="form.quotaComparator" class="select select-bordered select-sm" :disabled="form.polarity === 'negative'">
-              <option value="at_least">At least</option><option value="at_most">At most</option>
+              <option value="at_least">{{ t('items.editor.atLeast') }}</option><option value="at_most">{{ t('items.editor.atMost') }}</option>
             </select>
             <input v-model="form.quotaCount" inputmode="decimal" class="input input-bordered input-sm w-20" data-testid="f-quota-count" />
             <select v-model="form.quotaMeasure" class="select select-bordered select-sm">
-              <option v-for="m in allowedMeasures(form)" :key="m" :value="m">{{ m === 'days' ? 'days' : m === 'occurrences' ? 'times' : 'total amount' }}</option>
+              <option v-for="m in allowedMeasures(form)" :key="m" :value="m">{{ t(`items.editor.measure.${m}`) }}</option>
             </select>
           </div>
-          <div class="flex flex-wrap items-center gap-2">per
+          <div class="flex flex-wrap items-center gap-2">{{ t('items.editor.per') }}
             <select v-model="form.quotaPeriod" class="select select-bordered select-sm">
-              <option value="week">week</option><option value="month">month</option><option value="year">year</option>
+              <option value="week">{{ t('today.quota.week') }}</option><option value="month">{{ t('today.quota.month') }}</option><option value="year">{{ t('today.quota.year') }}</option>
             </select>
             <select v-model="form.quotaWindow" class="select select-bordered select-sm">
-              <option value="calendar">calendar period</option><option value="rolling">rolling window</option>
+              <option value="calendar">{{ t('items.editor.calendarPeriod') }}</option><option value="rolling">{{ t('items.editor.rollingWindow') }}</option>
             </select>
           </div>
-          <label v-if="quotaNeedsOption(form)" class="flex items-center gap-2 text-sm">Count option
+          <label v-if="quotaNeedsOption(form)" class="flex items-center gap-2 text-sm">{{ t('items.editor.countOption') }}
             <select v-model="form.quotaOption" class="select select-bordered select-sm">
-              <option :value="null">Choose...</option>
-              <option v-for="(o, i) in form.options" :key="i" :value="i">{{ o.name || `Option ${i + 1}` }}</option>
+              <option :value="null">{{ t('items.editor.choose') }}</option>
+              <option v-for="(o, i) in form.options" :key="i" :value="i">{{ o.name || t('items.editor.optionN', { n: i + 1 }) }}</option>
             </select></label>
         </div>
 
-        <label v-if="form.scheduleType === 'none'" class="flex items-center gap-2 text-sm">Flag as stale after
-          <input v-model="form.staleAfterDays" inputmode="numeric" class="input input-bordered input-sm w-20" /> days without activity (0 = never)</label>
-        <label v-if="form.trackerType === 'maintenance'" class="flex items-center gap-2 text-sm">Warn
-          <input v-model="form.warningDays" inputmode="numeric" class="input input-bordered input-sm w-20" /> days before due</label>
+        <label v-if="form.scheduleType === 'none'" class="flex items-center gap-2 text-sm">
+          <template v-for="(p, i) in tParts('items.editor.staleLine')" :key="i">
+            <input v-if="'slot' in p" v-model="form.staleAfterDays" inputmode="numeric" class="input input-bordered input-sm w-20" />
+            <template v-else>{{ p.text }}</template>
+          </template>
+        </label>
+        <label v-if="form.trackerType === 'maintenance'" class="flex items-center gap-2 text-sm">
+          <template v-for="(p, i) in tParts('items.editor.warnLine')" :key="i">
+            <input v-if="'slot' in p" v-model="form.warningDays" inputmode="numeric" class="input input-bordered input-sm w-20" />
+            <template v-else>{{ p.text }}</template>
+          </template>
+        </label>
       </fieldset>
 
       <section class="rounded border border-base-300 bg-base-200 p-3" aria-live="polite" data-testid="preview">
-        <h2 class="text-sm font-semibold">Preview</h2>
+        <h2 class="text-sm font-semibold">{{ t('items.editor.preview') }}</h2>
         <p data-testid="preview-sentence">{{ preview.sentence }}</p>
         <ul v-if="preview.dates && preview.dates.length" class="mt-1 text-sm" data-testid="preview-dates">
           <li v-for="d in preview.dates" :key="d">{{ d }}</li>
@@ -368,30 +382,29 @@ const showHoliday = computed(() => holidayAllowed(form))
       </section>
 
       <div class="grid grid-cols-2 gap-3">
-        <label class="flex flex-col gap-1"><span class="label-text font-medium">Reminder time</span>
+        <label class="flex flex-col gap-1"><span class="label-text font-medium">{{ t('items.editor.remindTime') }}</span>
           <input v-model="form.remindTime" type="time" class="input input-bordered" data-testid="f-remind" /></label>
-        <label class="flex items-end gap-2 pb-3"><input v-model="form.isSensitive" type="checkbox" class="checkbox" data-testid="f-sensitive" /> Sensitive</label>
+        <label class="flex items-end gap-2 pb-3"><input v-model="form.isSensitive" type="checkbox" class="checkbox" data-testid="f-sensitive" /> {{ t('items.editor.sensitive') }}</label>
       </div>
 
       <fieldset v-if="!privacy.redact" class="flex flex-col gap-2">
-        <legend class="label-text font-medium">Category</legend>
+        <legend class="label-text font-medium">{{ t('items.editor.category') }}</legend>
         <select v-model="form.categoryId" class="select select-bordered" data-testid="f-category">
-          <option :value="null">No category</option>
-          <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}{{ c.is_sensitive ? ' (sensitive)' : '' }}</option>
+          <option :value="null">{{ t('items.editor.noCategory') }}</option>
+          <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.is_sensitive ? t('items.editor.catSensitive', { name: c.name }) : c.name }}</option>
         </select>
         <div class="flex flex-wrap items-center gap-2">
-          <input v-model="newCategory" class="input input-bordered input-sm" placeholder="New category" maxlength="200" data-testid="f-new-category" />
-          <label class="flex items-center gap-1 text-sm"><input v-model="newCategorySensitive" type="checkbox" class="checkbox checkbox-sm" /> Sensitive</label>
-          <button type="button" class="btn btn-sm" data-testid="add-category" @click="addCategory">Add</button>
+          <input v-model="newCategory" class="input input-bordered input-sm" :placeholder="t('items.editor.newCategory')" maxlength="200" data-testid="f-new-category" />
+          <label class="flex items-center gap-1 text-sm"><input v-model="newCategorySensitive" type="checkbox" class="checkbox checkbox-sm" /> {{ t('items.editor.sensitive') }}</label>
+          <button type="button" class="btn btn-sm" data-testid="add-category" @click="addCategory">{{ t('common.add') }}</button>
         </div>
       </fieldset>
 
       <section v-if="isEdit" class="flex flex-col gap-2 rounded border border-base-300 p-3">
         <p v-if="ruleWillChange" class="alert alert-info text-sm" role="status" data-testid="rule-warning">
-          Changing the schedule or targets creates a new rule version
-          {{ retro ? `effective ${effectiveFrom || 'from the date below'}` : 'effective today' }}. Earlier days keep the old rule.
+          {{ !retro ? t('items.editor.ruleWarningToday') : effectiveFrom ? t('items.editor.ruleWarningDate', { date: effectiveFrom }) : t('items.editor.ruleWarningBelow') }}
         </p>
-        <label class="flex items-center gap-2 text-sm"><input v-model="retro" type="checkbox" class="checkbox checkbox-sm" data-testid="f-retro" /> Apply from an earlier date</label>
+        <label class="flex items-center gap-2 text-sm"><input v-model="retro" type="checkbox" class="checkbox checkbox-sm" data-testid="f-retro" /> {{ t('items.editor.retro') }}</label>
         <input v-if="retro" v-model="effectiveFrom" type="date" :max="today" class="input input-bordered input-sm w-48" data-testid="f-effective" />
       </section>
 
@@ -401,8 +414,8 @@ const showHoliday = computed(() => holidayAllowed(form))
       <p v-if="submitError" class="alert alert-error text-sm" role="alert" data-testid="submit-error">{{ submitError }}</p>
 
       <div class="flex gap-2">
-        <button type="submit" class="btn btn-primary" :disabled="busy" data-testid="save">{{ isEdit ? 'Save changes' : 'Create item' }}</button>
-        <RouterLink to="/" class="btn btn-ghost">Cancel</RouterLink>
+        <button type="submit" class="btn btn-primary" :disabled="busy" data-testid="save">{{ isEdit ? t('items.editor.saveChanges') : t('items.editor.create') }}</button>
+        <RouterLink to="/" class="btn btn-ghost">{{ t('common.cancel') }}</RouterLink>
       </div>
     </form>
   </section>

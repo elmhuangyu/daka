@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import * as api from '../api'
 import type { Category, ItemDetail } from '../api'
 import { usePrivacyStore } from './privacy'
+import { t } from '../i18n'
 import { monthRange, type CategoryFilter } from '../items/logic'
 
 /**
@@ -42,7 +43,7 @@ export const useItemsStore = defineStore('items', () => {
       if (my !== seq) return
       items.value = it.items ?? []
       categories.value = (cats.categories ?? []).map((c) =>
-        redact && c.is_sensitive ? { ...c, name: 'Private category', icon: '' } : c,
+        redact && c.is_sensitive ? { ...c, name: t('common.privateCategory'), icon: '' } : c,
       )
       error.value = ''
     } catch (e) {

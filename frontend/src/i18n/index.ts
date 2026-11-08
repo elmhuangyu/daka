@@ -117,6 +117,23 @@ export function tn(base: PluralBase, count: number, params?: Params): string {
   return t(has ? specific : (`${base}.other` as MessageKey), { count, ...params })
 }
 
+export type Part = { text: string } | { slot: string }
+
+/**
+ * Splits a message into text and `{slot}` parts so a component can place inputs
+ * inside a sentence ("Every {input} days") while the translation controls the order.
+ */
+export function tParts(key: MessageKey): Part[] {
+  const msg: string = catalogs.get(locale.value)?.[key] ?? en[key] ?? key
+  const out: Part[] = []
+  for (const piece of msg.split(/(\{\w+\})/)) {
+    if (piece === '') continue
+    const m = /^\{(\w+)\}$/.exec(piece)
+    out.push(m ? { slot: m[1]! } : { text: piece })
+  }
+  return out
+}
+
 /** Composable for components. `t` reads the reactive locale, so templates re-render on setLocale. */
 export function useI18n() {
   return {
@@ -128,6 +145,10 @@ export function useI18n() {
     tn: (base: PluralBase, count: number, params?: Params) => {
       void locale.value
       return tn(base, count, params)
+    },
+    tParts: (key: MessageKey) => {
+      void locale.value
+      return tParts(key)
     },
   }
 }

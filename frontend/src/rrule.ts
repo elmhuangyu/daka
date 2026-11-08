@@ -1,3 +1,6 @@
+import { currentLocale, t, tn, type PluralBase } from './i18n'
+import { monthName, weekdayName } from './i18n/format'
+
 export const WEEKDAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const
 export type Weekday = (typeof WEEKDAYS)[number]
 
@@ -13,18 +16,13 @@ export const MAX_RRULE_LEN = 500
 const MAX_INTERVAL = 1000
 
 function checkInterval(n: number): void {
-  if (!Number.isInteger(n) || n < 1) throw new Error('Interval must be a whole number of at least 1')
-  if (n > MAX_INTERVAL) throw new Error(`Interval must be at most ${MAX_INTERVAL}`)
+  if (!Number.isInteger(n) || n < 1) throw new Error(t('rrule.err.interval'))
+  if (n > MAX_INTERVAL) throw new Error(t('rrule.err.intervalMax', { max: MAX_INTERVAL }))
 }
 
 const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-]
-const WEEKDAY_NAMES: Record<Weekday, string> = {
-  MO: 'Monday', TU: 'Tuesday', WE: 'Wednesday', TH: 'Thursday', FR: 'Friday', SA: 'Saturday', SU: 'Sunday',
-}
+// 0 = Sunday .. 6 = Saturday, the numbering used by the format helpers.
+const WEEKDAY_INDEX: Record<Weekday, number> = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 }
 
 /** Builds an RRULE string from a preset; throws an Error with a UI-ready message when invalid. */
 export function buildRRule(p: Preset): string {
@@ -33,7 +31,7 @@ export function buildRRule(p: Preset): string {
       checkInterval(p.interval)
       return p.interval === 1 ? 'FREQ=DAILY' : `FREQ=DAILY;INTERVAL=${p.interval}`
     case 'weekly': {
-      if (p.days.length === 0) throw new Error('Select at least one weekday')
+      if (p.days.length === 0) throw new Error(t('rrule.err.weekday'))
       const sorted = WEEKDAYS.filter((d) => p.days.includes(d))
       const n = p.interval ?? 1
       checkInterval(n)
@@ -41,16 +39,16 @@ export function buildRRule(p: Preset): string {
     }
     case 'monthly': {
       if (!Number.isInteger(p.day) || !((p.day >= 1 && p.day <= 31) || p.day === -1)) {
-        throw new Error('Day of month must be 1 to 31, or the last day')
+        throw new Error(t('rrule.err.monthDay'))
       }
       const n = p.interval ?? 1
       checkInterval(n)
       return `FREQ=MONTHLY${n > 1 ? `;INTERVAL=${n}` : ''};BYMONTHDAY=${p.day}`
     }
     case 'yearly': {
-      if (!Number.isInteger(p.month) || p.month < 1 || p.month > 12) throw new Error('Month must be 1 to 12')
+      if (!Number.isInteger(p.month) || p.month < 1 || p.month > 12) throw new Error(t('rrule.err.month'))
       if (!Number.isInteger(p.day) || p.day < 1 || p.day > DAYS_IN_MONTH[p.month - 1]) {
-        throw new Error('Day is not valid for that month')
+        throw new Error(t('rrule.err.dayInMonth'))
       }
       return `FREQ=YEARLY;BYMONTH=${p.month};BYMONTHDAY=${p.day}`
     }
@@ -71,8 +69,8 @@ function splitParts(s: string): Map<string, string> {
   for (const raw of s.split(';')) {
     const i = raw.indexOf('=')
     const k = (i < 0 ? raw : raw.slice(0, i)).trim().toUpperCase()
-    if (i < 0 || !ALLOWED_PARTS.has(k)) throw new Error(`Unsupported RRULE part "${k}"`)
-    if (parts.has(k)) throw new Error(`Duplicate RRULE part "${k}"`)
+    if (i < 0 || !ALLOWED_PARTS.has(k)) throw new Error(t('rrule.err.unsupportedPart', { part: k }))
+    if (parts.has(k)) throw new Error(t('rrule.err.duplicatePart', { part: k }))
     parts.set(k, raw.slice(i + 1).trim())
   }
   return parts
@@ -82,20 +80,20 @@ function splitParts(s: string): Map<string, string> {
 export function normalizeCustom(input: string): string {
   let s = input.trim()
   if (/^rrule:/i.test(s)) s = s.slice(6).trim()
-  if (s === '') throw new Error('Enter an RRULE')
-  if (s.length > MAX_RRULE_LEN) throw new Error(`RRULE must be at most ${MAX_RRULE_LEN} characters`)
+  if (s === '') throw new Error(t('rrule.err.empty'))
+  if (s.length > MAX_RRULE_LEN) throw new Error(t('rrule.err.tooLong', { max: MAX_RRULE_LEN }))
   const parts = splitParts(s)
   const freq = parts.get('FREQ')?.toUpperCase()
-  if (!freq) throw new Error('RRULE requires FREQ')
-  if (!(FREQS as readonly string[]).includes(freq)) throw new Error('FREQ must be DAILY, WEEKLY, MONTHLY or YEARLY')
+  if (!freq) throw new Error(t('rrule.err.freq'))
+  if (!(FREQS as readonly string[]).includes(freq)) throw new Error(t('rrule.err.freqValue'))
   const iv = parts.get('INTERVAL')
   if (iv !== undefined) checkInterval(Number(iv))
   const count = parts.get('COUNT')
   if (count !== undefined && !(Number.isInteger(Number(count)) && Number(count) >= 1)) {
-    throw new Error('COUNT must be a positive integer')
+    throw new Error(t('rrule.err.count'))
   }
   const until = parts.get('UNTIL')
-  if (until !== undefined && !/^\d{8}/.test(until)) throw new Error('UNTIL must start with YYYYMMDD')
+  if (until !== undefined && !/^\d{8}/.test(until)) throw new Error(t('rrule.err.until'))
   return s
 }
 
@@ -223,32 +221,49 @@ export function nextOccurrences(rrule: string, dtstart: string, from: string, li
 
 // ---- human-readable description ----
 
-function ordinal(n: number): string {
-  const v = n % 100
-  if (v >= 11 && v <= 13) return `${n}th`
-  return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th'}`
+/** "the 1st", "the 22nd" in English (ordinal plural rules); a plain day number elsewhere. */
+function nth(n: number): string {
+  let cat = 'other'
+  try {
+    cat = new Intl.PluralRules(currentLocale(), { type: 'ordinal' }).select(n)
+  } catch {
+    // Unknown locale tag: use the generic form.
+  }
+  const key = cat === 'one' ? 'rrule.nth.one' : cat === 'two' ? 'rrule.nth.two' : cat === 'few' ? 'rrule.nth.few' : 'rrule.nth.other'
+  return t(key, { n })
 }
 
-function every(n: number, unit: string): string {
-  return n === 1 ? `every ${unit}` : `every ${n} ${unit}s`
+const list = (xs: string[]) => (xs.length ? xs.reduce((a, b) => t('rrule.list', { a, b })) : '')
+
+const EVERY: Record<Freq, PluralBase> = {
+  DAILY: 'rrule.every.day',
+  WEEKLY: 'rrule.every.week',
+  MONTHLY: 'rrule.every.month',
+  YEARLY: 'rrule.every.year',
 }
 
-/** One English sentence for an RRULE; a generic label when it cannot be parsed. */
+/**
+ * One sentence for an RRULE, built from per-locale fragment templates (the
+ * RRULE text itself stays language-independent); a generic label when it
+ * cannot be parsed.
+ */
 export function describeRRule(rrule: string): string {
   const r = parseRRule(rrule)
-  if (!r) return 'Custom repeating rule'
-  const days = r.byday.map((d) => WEEKDAY_NAMES[d]).join(', ')
-  const md = r.bymonthday.map((x) => (x === -1 ? 'the last day' : `the ${ordinal(x)}`)).join(', ')
-  let s: string
-  if (r.freq === 'DAILY') s = every(r.interval, 'day')
-  else if (r.freq === 'WEEKLY') s = `${every(r.interval, 'week')}${days ? ` on ${days}` : ''}`
-  else if (r.freq === 'MONTHLY') s = `${every(r.interval, 'month')}${md ? ` on ${md}` : ''}${days ? ` on ${days}` : ''}`
-  else {
-    const months = r.bymonth.map((x) => MONTH_NAMES[x - 1]).join(', ')
-    s = `${every(r.interval, 'year')}${months ? ` in ${months}` : ''}${md ? ` on ${md}` : ''}`
+  if (!r) return t('rrule.custom')
+  const days = list(r.byday.map((d) => weekdayName(WEEKDAY_INDEX[d])))
+  const md = list(r.bymonthday.map((x) => (x === -1 ? t('rrule.lastDay') : nth(x))))
+  let s = tn(EVERY[r.freq], r.interval)
+  if (r.freq === 'WEEKLY') {
+    if (r.byday.length) s = t('rrule.on', { head: s, what: days })
+  } else if (r.freq === 'MONTHLY') {
+    if (r.bymonthday.length) s = t('rrule.on', { head: s, what: md })
+    if (r.byday.length) s = t('rrule.on', { head: s, what: days })
+  } else if (r.freq === 'YEARLY') {
+    if (r.bymonth.length) s = t('rrule.in', { head: s, what: list(r.bymonth.map((x) => monthName(x))) })
+    if (r.bymonthday.length) s = t('rrule.on', { head: s, what: md })
   }
-  if (r.count !== undefined) s += `, ${r.count} time${r.count === 1 ? '' : 's'} in total`
-  if (r.until) s += `, until ${r.until}`
+  if (r.count !== undefined) s = tn('rrule.count', r.count, { head: s })
+  if (r.until) s = t('rrule.until', { head: s, date: r.until })
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 

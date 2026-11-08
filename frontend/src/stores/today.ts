@@ -4,6 +4,7 @@ import * as api from '../api'
 import type { Category, CheckinInput, CheckinLog, ItemDetail, TodayView } from '../api'
 import { useOfflineStore } from './offline'
 import { usePrivacyStore } from './privacy'
+import { t } from '../i18n'
 import { matchesFilter, needsAttention, ringStats, type CardVM, type CategoryFilter } from '../today/logic'
 
 /**
@@ -55,7 +56,7 @@ export const useTodayStore = defineStore('today', () => {
       items.value = it.items ?? []
       // The categories endpoint has no redact flag: mask sensitive ones here.
       categories.value = (cats.categories ?? []).map((c) =>
-        redact && c.is_sensitive ? { ...c, name: 'Private category', icon: '' } : c,
+        redact && c.is_sensitive ? { ...c, name: t('common.privateCategory'), icon: '' } : c,
       )
       logs.value = ls
       error.value = ''

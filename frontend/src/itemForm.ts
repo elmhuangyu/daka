@@ -1,4 +1,6 @@
 import { ApiError, describeError, type ItemDto } from './api'
+import { t, tn, type MessageKey, type PluralBase } from './i18n'
+import { errorKeyForCode } from './i18n/errors'
 import { buildRRule, describeRRule, nextOccurrences, presetFromRRule, WEEKDAYS, type Preset, type Weekday } from './rrule'
 
 export type TrackerType = 'boolean' | 'counter' | 'metric' | 'maintenance'
@@ -150,36 +152,36 @@ export function formRRule(f: ItemForm): { rrule: string } | { error: string } {
   }
 }
 
-/** Client-side validation; the server stays authoritative. Returns English messages. */
+/** Client-side validation; the server stays authoritative. Returns messages in the active locale. */
 export function validateForm(f: ItemForm): string[] {
   const errs: string[] = []
   const bad = (s: string) => Number.isNaN(num(s))
-  if (f.name.trim() === '') errs.push('Name is required')
-  if (f.remindTime !== '' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(f.remindTime)) errs.push('Reminder time must be HH:MM')
+  if (f.name.trim() === '') errs.push(t('errors.nameRequired'))
+  if (f.remindTime !== '' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(f.remindTime)) errs.push(t('errors.invalidRemindTime'))
   if (f.scheduleType === 'fixed_rrule') {
     const r = formRRule(f)
     if ('error' in r) errs.push(r.error)
-    if (f.until !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(f.until)) errs.push('End date must be YYYY-MM-DD')
+    if (f.until !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(f.until)) errs.push(t('items.err.endDate'))
   }
   if (f.scheduleType === 'rolling') {
     const n = Number(f.rollingInterval)
-    if (!Number.isInteger(n) || n < 1) errs.push('Rolling interval must be a whole number of at least 1')
+    if (!Number.isInteger(n) || n < 1) errs.push(t('items.err.rolling'))
   }
   if (f.scheduleType === 'quota') {
     const c = Number(f.quotaCount)
-    if (!(c > 0) || !Number.isFinite(c)) errs.push('Quota count must be greater than 0')
-    if (quotaNeedsOption(f) && f.quotaOption === null) errs.push('Choose which option the quota counts (units differ)')
+    if (!(c > 0) || !Number.isFinite(c)) errs.push(t('items.err.quotaCount'))
+    if (quotaNeedsOption(f) && f.quotaOption === null) errs.push(t('items.err.quotaOption'))
   }
   if ([f.step, f.minVal, f.maxVal, f.target, f.warningDays, f.staleAfterDays, f.completionN].some(bad)) {
-    errs.push('Numeric fields must be valid numbers')
+    errs.push(t('items.err.numeric'))
   }
   for (const o of f.options) {
-    if (o.name.trim() === '') errs.push('Every option needs a name')
-    if (bad(o.step) || bad(o.target)) errs.push('Option step and target must be valid numbers')
+    if (o.name.trim() === '') errs.push(t('items.err.optionName'))
+    if (bad(o.step) || bad(o.target)) errs.push(t('items.err.optionNumbers'))
   }
   if (f.options.length > 0 && f.completionRule === 'at_least_n') {
     const n = Number(f.completionN)
-    if (!Number.isInteger(n) || n < 1 || n > f.options.length) errs.push('Required option count must be between 1 and the number of options')
+    if (!Number.isInteger(n) || n < 1 || n > f.options.length) errs.push(t('items.err.completionN'))
   }
   return errs
 }
@@ -410,46 +412,47 @@ export interface RulePreview {
   note: string
 }
 
-const UNIT = { day: 'day', month: 'month', year: 'year' } as const
-const PERIOD_WORD = { week: 'week', month: 'month', year: 'year' } as const
-
-function plural(n: number, w: string): string {
-  return `${n} ${w}${n === 1 ? '' : 's'}`
+const SPAN: Record<ItemForm['rollingUnit'], PluralBase> = {
+  day: 'items.span.day',
+  month: 'items.span.month',
+  year: 'items.span.year',
 }
+const PERIOD_KEY = { week: 'today.quota.week', month: 'today.quota.month', year: 'today.quota.year' } as const
 
 export function previewRule(f: ItemForm, today: string, dtstart?: string): RulePreview {
   switch (f.scheduleType) {
     case 'none':
-      return { sentence: 'Not scheduled: log it whenever it happens.', dates: [], note: '' }
+      return { sentence: t('items.preview.none'), dates: [], note: '' }
     case 'rolling': {
       const n = Number(f.rollingInterval)
-      const what = f.trackerType === 'maintenance' ? 'Due' : 'Due again'
+      const key = f.trackerType === 'maintenance' ? 'items.preview.dueAfter' : 'items.preview.dueAgainAfter'
       return {
-        sentence: Number.isInteger(n) && n > 0 ? `${what} ${plural(n, UNIT[f.rollingUnit])} after the last completion.` : 'Enter a valid interval.',
-        dates: null, note: 'The next date depends on your last completion.',
+        sentence: Number.isInteger(n) && n > 0 ? t(key, { span: tn(SPAN[f.rollingUnit], n) }) : t('items.preview.invalidInterval'),
+        dates: null, note: t('items.preview.rollingNote'),
       }
     }
     case 'quota': {
       const c = Number(f.quotaCount)
-      const cmp = f.quotaComparator === 'at_least' ? 'At least' : 'At most'
-      const unit = f.quotaMeasure === 'sum' ? 'in total' : f.quotaMeasure === 'days' ? 'day(s)' : 'time(s)'
-      const win = f.quotaWindow === 'calendar' ? `per calendar ${PERIOD_WORD[f.quotaPeriod]}` : `in any rolling ${PERIOD_WORD[f.quotaPeriod]}`
+      const cmp = t(f.quotaComparator === 'at_least' ? 'items.preview.atLeast' : 'items.preview.atMost')
+      const unit = t(f.quotaMeasure === 'sum' ? 'items.preview.unitSum' : f.quotaMeasure === 'days' ? 'items.preview.unitDays' : 'items.preview.unitTimes', { count: c })
+      const period = t(PERIOD_KEY[f.quotaPeriod])
+      const window = t(f.quotaWindow === 'calendar' ? 'items.preview.windowCalendar' : 'items.preview.windowRolling', { period })
       return {
-        sentence: c > 0 ? `${cmp} ${c} ${unit} ${win}.` : 'Enter a quota greater than 0.',
-        dates: null, note: 'Quota items are never "due" on a fixed day; progress is tracked against the window.',
+        sentence: c > 0 ? t('items.preview.quota', { cmp, unit, window }) : t('items.preview.invalidQuota'),
+        dates: null, note: t('items.preview.quotaNote'),
       }
     }
     case 'fixed_rrule': {
       const r = formRRule(f)
       if ('error' in r) return { sentence: r.error, dates: null, note: '' }
       let sentence = describeRRule(r.rrule)
-      if (f.until !== '' && !/until/.test(sentence)) sentence += `, until ${f.until}`
-      sentence += '.'
+      if (f.until !== '' && !r.rrule.includes('UNTIL=')) sentence = t('rrule.until', { head: sentence, date: f.until })
+      sentence += t('common.sentenceEnd')
       const dates = nextOccurrences(r.rrule, dtstart || today, today, 5)
       const note =
-        f.holidayMode === 'skip_holidays' ? 'Dates are shown before the holiday policy is applied; statutory holidays are skipped.'
-        : f.holidayMode === 'workdays_only' ? 'Dates are shown before the holiday policy is applied; non-workdays move to the next workday.'
-        : dates === null ? 'Preview is not available for this custom rule; the server will still evaluate it.' : ''
+        f.holidayMode === 'skip_holidays' ? t('items.preview.holidaySkip')
+        : f.holidayMode === 'workdays_only' ? t('items.preview.holidayWorkdays')
+        : dates === null ? t('items.preview.customUnavailable') : ''
       return { sentence, dates, note }
     }
   }
@@ -457,50 +460,45 @@ export function previewRule(f: ItemForm, today: string, dtstart?: string): RuleP
 
 // ---- backend reason codes ----
 
-const REASONS: Record<string, string> = {
-  unknown_tracker_type: 'Unknown tracker type',
-  unknown_kind: 'Unknown item kind',
-  unknown_polarity: 'Unknown polarity',
-  unknown_schedule_type: 'Unknown schedule type',
-  schedule_not_allowed_for_tracker: 'This tracker type cannot use that schedule',
-  negative_tracker_not_allowed: 'Negative items must be yes/no or metric trackers',
-  negative_schedule_not_allowed: 'Negative items can only use a quota or no schedule',
-  invalid_rule: 'The schedule is not valid',
-  foreign_rrule_fields: 'Repeat settings only apply to repeating schedules',
-  foreign_rolling_fields: 'Rolling settings only apply to rolling schedules',
-  foreign_quota_fields: 'Quota settings only apply to quota schedules',
-  holiday_mode_not_allowed: 'Holiday policy only applies to repeating schedules',
-  invalid_quota: 'The quota is not valid (check comparator, count, period and window)',
-  invalid_quota_measure: 'That quota measure is not allowed for this item',
-  quota_option_required: 'Choose which option the quota counts, because the units differ',
-  quota_option_unknown: 'The chosen quota option does not exist',
-  quota_option_not_applicable: 'A quota option only applies to the "sum" measure',
-  invalid_stale_after_days: 'Stale-after days must be 0 or more and only apply to unscheduled items',
-  invalid_target_value: 'Target must be a number of 0 or more',
-  target_not_applicable: 'A single target only applies to counters and metrics without options',
-  options_not_allowed: 'Options only apply to counters and metrics',
-  invalid_option: 'An option is not valid (name required, at most 50 options)',
-  invalid_option_targets: 'An option target is not valid',
-  invalid_completion_rule: 'The completion rule is not valid',
-  completion_rule_not_applicable: 'A completion rule needs at least one option',
-  invalid_warning_days: 'Warning days must be 0 or more and only apply to maintenance items',
-  invalid_numeric_field: 'A unit, step, min, max or aggregate value is not valid',
-}
+const REASON_KEYS = {
+  unknown_tracker_type: 'items.reason.unknown_tracker_type',
+  unknown_kind: 'items.reason.unknown_kind',
+  unknown_polarity: 'items.reason.unknown_polarity',
+  unknown_schedule_type: 'items.reason.unknown_schedule_type',
+  schedule_not_allowed_for_tracker: 'items.reason.schedule_not_allowed_for_tracker',
+  negative_tracker_not_allowed: 'items.reason.negative_tracker_not_allowed',
+  negative_schedule_not_allowed: 'items.reason.negative_schedule_not_allowed',
+  invalid_rule: 'items.reason.invalid_rule',
+  foreign_rrule_fields: 'items.reason.foreign_rrule_fields',
+  foreign_rolling_fields: 'items.reason.foreign_rolling_fields',
+  foreign_quota_fields: 'items.reason.foreign_quota_fields',
+  holiday_mode_not_allowed: 'items.reason.holiday_mode_not_allowed',
+  invalid_quota: 'items.reason.invalid_quota',
+  invalid_quota_measure: 'items.reason.invalid_quota_measure',
+  quota_option_required: 'items.reason.quota_option_required',
+  quota_option_unknown: 'items.reason.quota_option_unknown',
+  quota_option_not_applicable: 'items.reason.quota_option_not_applicable',
+  invalid_stale_after_days: 'items.reason.invalid_stale_after_days',
+  invalid_target_value: 'items.reason.invalid_target_value',
+  target_not_applicable: 'items.reason.target_not_applicable',
+  options_not_allowed: 'items.reason.options_not_allowed',
+  invalid_option: 'items.reason.invalid_option',
+  invalid_option_targets: 'items.reason.invalid_option_targets',
+  invalid_completion_rule: 'items.reason.invalid_completion_rule',
+  completion_rule_not_applicable: 'items.reason.completion_rule_not_applicable',
+  invalid_warning_days: 'items.reason.invalid_warning_days',
+  invalid_numeric_field: 'items.reason.invalid_numeric_field',
+} as const satisfies Record<string, MessageKey>
 
-/** English message for any error from the item endpoints. */
+/** Localized message for any error from the item endpoints. */
 export function describeItemError(e: unknown): string {
-  if (e instanceof ApiError && e.reason) return REASONS[e.reason] ?? `The combination is not valid (${e.reason})`
-  if (e instanceof ApiError && e.status === 400) {
-    const m: Record<string, string> = {
-      'name is required': 'Name is required',
-      'name too long': 'Name is too long',
-      'invalid category': 'That category no longer exists',
-      'remind_time must be HH:MM': 'Reminder time must be HH:MM',
-      'effective_from must be YYYY-MM-DD': 'Effective date must be YYYY-MM-DD',
-    }
-    return m[e.message] ?? 'The server rejected the request'
+  if (e instanceof ApiError && e.reason) {
+    const key = Object.prototype.hasOwnProperty.call(REASON_KEYS, e.reason) ? REASON_KEYS[e.reason as keyof typeof REASON_KEYS] : null
+    return key ? t(key) : t('items.reason.unknown', { reason: e.reason })
   }
-  if (e instanceof ApiError && e.status === 404) return 'Item not found'
+  if (e instanceof ApiError && e.status === 400) {
+    return errorKeyForCode(e.code) ? describeError(e) : t('items.err.rejected')
+  }
   return describeError(e)
 }
 

@@ -1,4 +1,6 @@
 import type { Category, ItemDetail } from '../api'
+import { t, tn, type PluralBase } from '../i18n'
+import { describeRRule } from '../rrule'
 
 export type CategoryFilter = 'all' | 'none' | number
 
@@ -14,7 +16,7 @@ export function groupItems(items: ItemDetail[], categories: Category[], filter: 
   const shown = items.filter((i) => filter === 'all' || (filter === 'none' ? i.category_id === null : i.category_id === filter))
   const groups: PanelGroup[] = []
   const pinned = shown.filter((i) => i.pinned)
-  if (pinned.length) groups.push({ key: 'pinned', title: 'Pinned', sensitive: false, items: pinned })
+  if (pinned.length) groups.push({ key: 'pinned', title: t('items.pinned'), sensitive: false, items: pinned })
   const rest = shown.filter((i) => !i.pinned)
   for (const c of categories) {
     const its = rest.filter((i) => i.category_id === c.id)
@@ -22,7 +24,7 @@ export function groupItems(items: ItemDetail[], categories: Category[], filter: 
   }
   const known = new Set(categories.map((c) => c.id))
   const other = rest.filter((i) => i.category_id === null || !known.has(i.category_id))
-  if (other.length) groups.push({ key: 'none', title: 'Uncategorized', sensitive: false, items: other })
+  if (other.length) groups.push({ key: 'none', title: t('items.uncategorized'), sensitive: false, items: other })
   return groups
 }
 
@@ -43,8 +45,8 @@ export function badgesOf(d: ItemDetail): Badge[] {
     out.push({ text: `${fmt(q.used)}/${fmt(q.limit)}`, tone })
   }
   const m = d.stats?.maintenance
-  if (m?.state === 'overdue') out.push({ text: `overdue ${m.overdue_days}d`, tone: 'bad' })
-  else if (m?.state === 'warning') out.push({ text: `due in ${m.days_until_due}d`, tone: 'warn' })
+  if (m?.state === 'overdue') out.push({ text: t('items.badge.overdue', { days: m.overdue_days }), tone: 'bad' })
+  else if (m?.state === 'warning') out.push({ text: t('items.badge.due', { days: m.days_until_due }), tone: 'warn' })
   return out
 }
 
@@ -82,16 +84,25 @@ export interface RuleLike {
   rolling_unit?: string
 }
 
+const SPAN: Record<string, PluralBase> = { day: 'items.span.day', month: 'items.span.month', year: 'items.span.year' }
+
 export function describeRule(r: RuleLike): string {
-  const since = r.effective_from ? ` (since ${r.effective_from})` : ''
+  const since = r.effective_from ? ' ' + t('items.rule.since', { date: r.effective_from }) : ''
   switch (r.schedule_type) {
     case 'fixed_rrule':
-      return `Schedule rule ${r.rrule_string ?? ''}${since}`
-    case 'rolling':
-      return `Every ${r.rolling_interval ?? '?'} ${r.rolling_unit ?? 'days'}${since}`
-    case 'quota':
-      return `Quota: ${r.quota_comparator === 'at_most' ? 'at most' : 'at least'} ${r.quota_count ?? '?'} per ${r.quota_period ?? 'period'}${since}`
+      return t('items.rule.fixed', { rule: describeRRule(r.rrule_string ?? ''), since })
+    case 'rolling': {
+      const n = r.rolling_interval ?? 0
+      const span = tn(SPAN[r.rolling_unit ?? 'day'] ?? 'items.span.day', n)
+      return t('items.rule.rolling', { span, since })
+    }
+    case 'quota': {
+      const cmp = t(r.quota_comparator === 'at_most' ? 'today.quota.atMost' : 'today.quota.atLeast')
+      const p = r.quota_period
+      const period = p === 'week' || p === 'month' || p === 'year' ? t(`today.quota.${p}`) : t('items.rule.period')
+      return t('items.rule.quota', { cmp, count: r.quota_count ?? '?', period, since })
+    }
     default:
-      return `No schedule${since}`
+      return t('items.rule.none', { since })
   }
 }
