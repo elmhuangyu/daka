@@ -9,6 +9,7 @@ declare module 'vue-router' {
   }
 }
 
+// meta.title is not rendered anywhere (kept as route metadata only, so it is not translated).
 export function makeRouter(history: RouterHistory = createWebHistory()) {
   const router = createRouter({
     history,

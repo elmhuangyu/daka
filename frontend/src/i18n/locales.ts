@@ -16,6 +16,8 @@ export function isSupportedLocale(code: unknown): code is LocaleCode {
 /** Maps a BCP 47 tag from navigator.languages to a supported locale, or null. */
 export function matchLocale(tag: string): LocaleCode | null {
   const lower = tag.toLowerCase()
+  // zh-Hant / zh-TW / zh-HK also land on zh-CN until a Traditional locale exists;
+  // a future zh-TW locale must branch on Hant (and TW/HK/MO) before this check.
   if (lower === 'zh' || lower.startsWith('zh-')) return 'zh-CN'
   if (lower === 'en' || lower.startsWith('en-')) return 'en'
   return null

@@ -28,9 +28,9 @@ describe('GeneralSection language picker', () => {
     expect(w.text()).toContain('Time zone')
 
     await picker.setValue('zh-CN')
+    await vi.waitFor(() => expect(currentLocale()).toBe('zh-CN'))
     await flushPromises()
 
-    expect(currentLocale()).toBe('zh-CN')
     expect(w.text()).toContain('时区')
     expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('zh-CN')
     w.unmount()

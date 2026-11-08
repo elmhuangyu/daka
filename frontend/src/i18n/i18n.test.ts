@@ -143,6 +143,16 @@ describe('setLocale', () => {
     expect(document.documentElement.lang).toBe('en')
   })
 
+  it('ignores a stale load that finishes after a newer choice', async () => {
+    const { data } = mockStorage()
+    const slow = setLocale('zh-CN', { persist: true })
+    const fast = setLocale('en', { persist: true })
+    await Promise.all([slow, fast])
+    expect(currentLocale()).toBe('en')
+    expect(document.documentElement.lang).toBe('en')
+    expect(data.get(LOCALE_STORAGE_KEY)).toBe('en')
+  })
+
   it('does not persist unless asked', async () => {
     const { store } = mockStorage()
     await setLocale('zh-CN')

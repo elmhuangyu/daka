@@ -25,6 +25,7 @@ const loaders: Record<Exclude<LocaleCode, 'en'>, () => Promise<{ default: Messag
 }
 const catalogs = new Map<string, Messages>([['en', en]])
 const locale = ref<string>(DEFAULT_LOCALE)
+let epoch = 0
 
 export function registerLocale(code: string, messages: Messages): void {
   catalogs.set(code, messages)
@@ -73,6 +74,8 @@ export function detectLocale(): LocaleCode {
  * locale that is active afterwards.
  */
 export async function setLocale(code: string, opts: { persist?: boolean } = {}): Promise<string> {
+  // A newer call supersedes this one: a slow chunk load must not overwrite a later choice.
+  const my = ++epoch
   if (!catalogs.has(code)) {
     if (!isSupportedLocale(code) || code === 'en') return locale.value
     try {
@@ -80,6 +83,7 @@ export async function setLocale(code: string, opts: { persist?: boolean } = {}):
     } catch {
       return locale.value
     }
+    if (my !== epoch) return locale.value
   }
   locale.value = code
   if (typeof document !== 'undefined') document.documentElement.lang = code

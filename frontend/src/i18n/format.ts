@@ -48,7 +48,3 @@ export function formatMonthYear(iso: string): string {
   return fmt({ year: 'numeric', month: 'long' }).format(isoToDate(iso))
 }
 
-/** For example "Mar 3". */
-export function formatShortDate(iso: string): string {
-  return fmt({ month: 'short', day: 'numeric' }).format(isoToDate(iso))
-}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatLongDate, formatMonthYear, formatShortDate, monthName, weekdayName } from './format'
+import { formatLongDate, formatMonthYear, monthName, weekdayName } from './format'
 import { setLocale } from './index'
 import { describeRRule } from '../rrule'
 import { describeRule } from '../items/logic'
@@ -20,7 +20,6 @@ describe('format helpers (en)', () => {
   it('formats date-only strings without a timezone shift', () => {
     expect(formatLongDate('2026-11-08')).toBe('Sunday, November 8, 2026')
     expect(formatMonthYear('2026-11-08')).toBe('November 2026')
-    expect(formatShortDate('2026-03-03')).toBe('Mar 3')
   })
 })
 

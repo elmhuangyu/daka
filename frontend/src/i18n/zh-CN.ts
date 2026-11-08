@@ -187,7 +187,7 @@ const zhCN: Record<MessageKey, string> = {
   'today.maint.dueIn': '{days}后到期',
   'today.maint.line': '{last}，{state}',
   'today.quota.text': '{used} / {limit}（每{period}{cmp}）',
-  'today.quota.atMost': '最多',
+  'today.quota.atMost': '至多',
   'today.quota.atLeast': '至少',
   'today.quota.week': '周',
   'today.quota.month': '月',
