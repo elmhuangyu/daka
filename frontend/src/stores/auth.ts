@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import * as api from '../api'
+import { useOfflineStore } from './offline'
 
 export const useAuthStore = defineStore('auth', () => {
   const ready = ref(false)
@@ -21,6 +22,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const me = await api.getMe()
       user.value = { id: me.id, name: me.name, email: me.email }
+      void useOfflineStore().bindUser(me.id)
     } catch {
       user.value = null
     }
@@ -62,6 +64,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout() {
     try {
+      await useOfflineStore().clear()
       await api.logout()
     } finally {
       authenticated.value = false

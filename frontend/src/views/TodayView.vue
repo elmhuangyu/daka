@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useOfflineStore } from '../stores/offline'
 import { usePrivacyStore } from '../stores/privacy'
 import { useTodayStore } from '../stores/today'
 import { findCategory, type CardVM } from '../today/logic'
@@ -14,6 +15,7 @@ const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', '
 
 const privacy = usePrivacyStore()
 const store = useTodayStore()
+const offline = useOfflineStore()
 
 const sections = computed(() =>
   [
@@ -34,6 +36,8 @@ const log = (input: CheckinInput) => store.submit(input)
 onMounted(store.refresh)
 // The store clears all plaintext synchronously when redact turns on; refetch afterwards.
 watch(() => privacy.redact, () => store.refresh())
+// Queued offline actions were confirmed: reload the server state.
+watch(() => offline.syncedTick, () => store.refresh())
 </script>
 
 <template>
@@ -75,7 +79,7 @@ watch(() => privacy.redact, () => store.refresh())
           <ul class="space-y-2" :data-testid="`${s.id}-list`">
             <li v-for="c in s.cards" :key="c.detail.id">
               <ItemCard
-                :vm="c" :category="cat(c)" :variant="s.variant" :busy="store.busy.includes(c.detail.id)"
+                :vm="c" :category="cat(c)" :variant="s.variant" :busy="store.busy.includes(c.detail.id)" :pending="offline.pendingItems.includes(c.detail.id)"
                 @log="log" @remove="store.remove(c.detail.id, $event)"
               />
             </li>
@@ -88,7 +92,7 @@ watch(() => privacy.redact, () => store.refresh())
         <ul class="space-y-2" data-testid="done-list">
           <li v-for="c in store.doneCards" :key="c.detail.id">
             <ItemCard
-              :vm="c" :category="cat(c)" variant="done" :busy="store.busy.includes(c.detail.id)"
+              :vm="c" :category="cat(c)" variant="done" :busy="store.busy.includes(c.detail.id)" :pending="offline.pendingItems.includes(c.detail.id)"
               @log="log" @remove="store.remove(c.detail.id, $event)"
             />
           </li>

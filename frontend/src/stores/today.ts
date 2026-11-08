@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import * as api from '../api'
 import type { Category, CheckinInput, CheckinLog, ItemDetail, TodayView } from '../api'
+import { useOfflineStore } from './offline'
 import { usePrivacyStore } from './privacy'
 import { matchesFilter, needsAttention, ringStats, type CardVM, type CategoryFilter } from '../today/logic'
 
@@ -116,8 +117,10 @@ export const useTodayStore = defineStore('today', () => {
     if (busy.value.includes(id)) return
     busy.value.push(id)
     try {
-      await fn()
+      const r = await fn()
       error.value = ''
+      // A queued (offline) action is not applied yet: keep the server state, show it as pending.
+      if ((r as { queued?: boolean } | undefined)?.queued) return
       await refresh()
     } catch (e) {
       error.value = api.describeError(e)
@@ -129,7 +132,7 @@ export const useTodayStore = defineStore('today', () => {
   /** One user action = one Idempotency-Key. */
   function submit(input: CheckinInput) {
     const key = api.newIdempotencyKey()
-    return guarded(input.item_id, () => api.postCheckin(input, key))
+    return guarded(input.item_id, () => useOfflineStore().checkin(input, key))
   }
 
   function remove(itemId: number, logId: number) {

@@ -9,6 +9,8 @@ const props = defineProps<{
   category: Category | null
   variant: 'todo' | 'done' | 'maintenance' | 'quota'
   busy: boolean
+  /** An offline check-in for this item is queued and not yet confirmed. */
+  pending?: boolean
 }>()
 const emit = defineEmits<{ log: [CheckinInput]; remove: [number] }>()
 
@@ -131,6 +133,9 @@ function addAdhoc() {
     <div class="card-body gap-3 p-3 sm:p-4">
       <header class="flex flex-wrap items-center justify-between gap-2">
         <h3 class="name text-base font-semibold" :class="{ sensitive: d.effective_sensitive }">{{ d.name }}</h3>
+        <span v-if="pending" class="badge badge-warning badge-sm" data-testid="pending-badge">
+          <Icon icon="lucide:cloud-off" aria-hidden="true" /> Pending sync
+        </span>
         <span v-if="category" class="badge badge-outline" :style="category.color ? { borderColor: category.color } : {}">
           <Icon v-if="category.is_sensitive" icon="lucide:lock" aria-hidden="true" />
           {{ category.name }}

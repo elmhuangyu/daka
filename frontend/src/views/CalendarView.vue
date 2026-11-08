@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
 import { addDays, periodTitle, weekdayHeaders, type CalendarMode } from '../calendar/logic'
+import { useOfflineStore } from '../stores/offline'
 import { usePrivacyStore } from '../stores/privacy'
 import { useCalendarStore } from '../stores/calendar'
 import DayCell from '../components/calendar/DayCell.vue'
@@ -81,6 +82,10 @@ onMounted(() => {
   })
 })
 // The store drops all plaintext synchronously when redact turns on; refetch afterwards.
+watch(() => useOfflineStore().syncedTick, () => {
+  void store.refresh()
+  void store.loadPanel()
+})
 watch(() => privacy.redact, () => {
   void store.refresh()
   void store.loadPanel()

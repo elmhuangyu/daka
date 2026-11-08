@@ -30,9 +30,27 @@ func StaticHandler(dir string) http.Handler {
 			}
 			name = "index.html"
 		}
-		if name == "index.html" {
-			w.Header().Set("Cache-Control", "no-cache")
-		}
+		setStaticHeaders(w, name)
 		http.ServeFileFS(w, r, fsys, name)
 	})
+}
+
+// setStaticHeaders sets cache headers. Hashed build assets are immutable; the
+// entry points that must stay fresh (index.html, the service worker and the
+// manifest) are always revalidated so a new deploy is picked up at once.
+func setStaticHeaders(w http.ResponseWriter, name string) {
+	h := w.Header()
+	switch {
+	case strings.HasPrefix(name, "assets/"):
+		h.Set("Cache-Control", "public, max-age=31536000, immutable")
+	case name == "sw.js":
+		h.Set("Cache-Control", "no-cache, max-age=0")
+		h.Set("Content-Type", "text/javascript; charset=utf-8")
+		h.Set("Service-Worker-Allowed", "/")
+	case name == "manifest.webmanifest":
+		h.Set("Cache-Control", "no-cache")
+		h.Set("Content-Type", "application/manifest+json")
+	default:
+		h.Set("Cache-Control", "no-cache")
+	}
 }

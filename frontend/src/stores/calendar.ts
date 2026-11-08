@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import * as api from '../api'
 import type { CalendarDay, CalendarViewData, CheckinInput, CheckinLog, ExternalEvent, ItemDetail } from '../api'
 import { eventDates, gridRange, shiftAnchor, type CalendarMode } from '../calendar/logic'
+import { useOfflineStore } from './offline'
 import { usePrivacyStore } from './privacy'
 
 export interface ExternalLayer {
@@ -198,8 +199,9 @@ export const useCalendarStore = defineStore('calendar', () => {
     if (busy.value.includes(id)) return
     busy.value.push(id)
     try {
-      await fn()
+      const r = await fn()
       panelError.value = ''
+      if ((r as { queued?: boolean } | undefined)?.queued) return // pending, not applied yet
       await Promise.all([refresh(false), loadPanel()])
     } catch (e) {
       panelError.value = api.describeError(e)
@@ -213,7 +215,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     const date = selected.value
     if (!date) return
     const key = api.newIdempotencyKey()
-    return guarded(input.item_id, () => api.postCheckin({ ...input, date }, key))
+    return guarded(input.item_id, () => useOfflineStore().checkin({ ...input, date }, key))
   }
 
   function removeLog(itemId: number, logId: number) {

@@ -2,6 +2,7 @@
 import { Icon } from '@iconify/vue'
 import { NAV_ITEMS } from '../nav'
 import { usePrivacyStore } from '../stores/privacy'
+import OfflineBanner from './OfflineBanner.vue'
 import AvatarMenu from './AvatarMenu.vue'
 import PrivacyToggle from './PrivacyToggle.vue'
 
@@ -34,6 +35,7 @@ const privacy = usePrivacyStore()
           <AvatarMenu />
         </div>
       </header>
+      <OfflineBanner />
       <div class="flex-1 pb-20 md:pb-0">
         <slot />
       </div>

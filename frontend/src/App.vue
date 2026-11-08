@@ -5,10 +5,12 @@ import './icons'
 import AppLayout from './components/AppLayout.vue'
 import ReauthModal from './components/ReauthModal.vue'
 import { useAuthStore } from './stores/auth'
+import { useOfflineStore } from './stores/offline'
 import { usePrivacyStore } from './stores/privacy'
 
 const auth = useAuthStore()
 const privacy = usePrivacyStore()
+const offline = useOfflineStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -27,7 +29,11 @@ function onKey(e: KeyboardEvent) {
   }
 }
 
-onMounted(() => window.addEventListener('keydown', onKey))
+onMounted(() => {
+  window.addEventListener('keydown', onKey)
+  offline.listen()
+  void offline.start()
+})
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 

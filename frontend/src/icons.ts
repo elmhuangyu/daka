@@ -9,6 +9,7 @@ const ICONS: Record<string, string> = {
   'lucide:calendar-check': wrap(
     '<path d="M8 2v4M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18m-11 6 2 2 4-4"/>',
   ),
+  'lucide:cloud-off': wrap('<path d="m2 2 20 20M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7 7 0 0 0 8.1 4.1"/>'),
   'lucide:calendar': wrap('<path d="M8 2v4m8-4v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>'),
   'lucide:list-checks': wrap('<path d="m3 17 2 2 4-4M3 7l2 2 4-4M13 6h8M13 12h8M13 18h8"/>'),
   'lucide:settings': wrap(
