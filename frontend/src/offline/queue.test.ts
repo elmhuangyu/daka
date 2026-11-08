@@ -7,7 +7,7 @@ function make(send: (i: CheckinInput, k: string) => Promise<unknown>, before = (
   const store = memoryStore()
   const q = new OfflineQueue(store, send, before, (fn) => {
     timers.push(fn)
-    return 0 as unknown as ReturnType<typeof setTimeout>
+    return timers.length as unknown as ReturnType<typeof setTimeout>
   })
   return { q, store, timers }
 }
@@ -136,5 +136,22 @@ describe('OfflineQueue', () => {
     await run
     expect(send).toHaveBeenCalledTimes(1)
     expect(await store.all()).toEqual([])
+  })
+
+  it('refuses ad-hoc entries (their note is plaintext)', async () => {
+    const { q, store } = make(async () => undefined)
+    await expect(q.enqueue({ item_id: 1, mode: 'append', adhoc: true, note: 'Name' }, 'a')).rejects.toThrow()
+    expect(await store.all()).toEqual([])
+  })
+
+  it('scheduleRetry arms a single timer that replays', async () => {
+    const send = vi.fn(async () => undefined)
+    const { q, timers } = make(send)
+    await q.enqueue({ item_id: 1, mode: 'set' }, 'a')
+    q.scheduleRetry()
+    q.scheduleRetry()
+    expect(timers).toHaveLength(1)
+    timers[0]()
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
   })
 })

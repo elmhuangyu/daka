@@ -3,7 +3,9 @@ import { ApiError, type CheckinInput } from '../api'
 /**
  * Offline check-in queue (DESIGN 7.3). An entry holds only what the POST
  * /api/checkins request needs: ids, mode, value, date and note. Item names
- * are never stored. Each entry keeps the Idempotency-Key of the original user
+ * are never stored. Ad-hoc check-ins are refused here (their note is the
+ * option name, i.e. plaintext), and the offline store also refuses notes for
+ * sensitive or unknown items, so IndexedDB never holds sensitive free text. Each entry keeps the Idempotency-Key of the original user
  * action, so a replay after a lost response cannot double-apply it.
  */
 export interface QueuedCheckin {
@@ -32,6 +34,15 @@ export interface QueueFailure {
 export type PauseReason = '' | 'unauthorized' | 'reauth_required'
 
 export type Sender = (input: CheckinInput, key: string) => Promise<unknown>
+
+/** YYYY-MM-DD of now in an IANA timezone (browser-local when absent or invalid). */
+export function dateIn(tz?: string, now: Date = new Date()): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: tz || undefined, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+  } catch {
+    return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+  }
+}
 
 export function memoryStore(): QueueStore {
   let rows: QueuedCheckin[] = []
@@ -125,10 +136,17 @@ export class OfflineQueue {
   }
 
   async enqueue(input: CheckinInput, key: string): Promise<void> {
+    if (input.adhoc) throw new Error('One-off options need a connection')
     const e: Omit<QueuedCheckin, 'seq'> = { key, input: pickInput(input), createdAt: Date.now(), attempts: 0 }
     const seq = await this.store.add(e)
     this.pending = [...this.pending, { ...e, seq }]
     this.onChange()
+  }
+
+  /** Schedules a replay attempt (used when the browser claims to be online but the request failed). */
+  scheduleRetry(ms = 2000): void {
+    if (this.timer || this.paused) return
+    this.timer = this.schedule(() => void this.replay(), ms)
   }
 
   /** Item ids with a queued, not yet confirmed action. */

@@ -1,7 +1,7 @@
 // Daka service worker: caches the app shell only. It never touches /api and
 // never handles non-GET requests, so no user data is stored by the worker.
 // The offline check-in queue lives in the page (IndexedDB), not here.
-const CACHE = 'daka-shell-v1'
+const CACHE = 'daka-shell-v2'
 const SHELL = '/index.html'
 
 self.addEventListener('install', (event) => {
@@ -23,7 +23,8 @@ self.addEventListener('activate', (event) => {
 })
 
 function cacheable(url) {
-  return url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/') || url.pathname === '/manifest.webmanifest'
+  // Only content-hashed build output is safe to serve cache-first.
+  return url.pathname.startsWith('/assets/')
 }
 
 self.addEventListener('fetch', (event) => {
@@ -50,7 +51,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (cacheable(url)) {
-    // Hashed assets are immutable: cache-first. Icons and the manifest share the path.
+    // Hashed assets are immutable: cache-first. 
     event.respondWith(
       caches.match(req).then(
         (hit) =>

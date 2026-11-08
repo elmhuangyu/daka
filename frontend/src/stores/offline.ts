@@ -2,7 +2,10 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import * as api from '../api'
 import type { CheckinInput } from '../api'
-import { idbStore, OfflineQueue, type PauseReason, type QueueFailure } from '../offline/queue'
+import { useAuthStore } from './auth'
+import { useCalendarStore } from './calendar'
+import { useTodayStore } from './today'
+import { dateIn, idbStore, OfflineQueue, type PauseReason, type QueueFailure } from '../offline/queue'
 
 const USER_KEY = 'daka.offline.user'
 
@@ -22,10 +25,12 @@ export const useOfflineStore = defineStore('offline', () => {
   const replaying = ref(false)
   /** Bumped after a replay that confirmed at least one action, so views can refresh. */
   const syncedTick = ref(0)
+  /** Identity bound (queue cleared on account mismatch); nothing replays before this. */
+  const bound = ref(false)
 
   function q(): OfflineQueue {
     if (!queue) {
-      queue = new OfflineQueue(idbStore(), api.postCheckin, api.resetCsrf)
+      queue = new OfflineQueue(idbStore(), (i, k) => api.postCheckin(i, k), () => api.resetCsrf())
       queue.onChange = sync
     }
     return queue
@@ -44,12 +49,15 @@ export const useOfflineStore = defineStore('offline', () => {
 
   /** Loads persisted entries and replays them (app start). */
   async function start() {
+    // Wait for auth status and the user binding (which clears a foreign queue) first.
+    await useAuthStore().init()
     await q().load()
     sync()
     if (pendingCount.value > 0) void replay()
   }
 
   async function replay() {
+    if (!bound.value) return // unknown identity: never replay
     replaying.value = true
     try {
       await q().replay()
@@ -60,6 +68,7 @@ export const useOfflineStore = defineStore('offline', () => {
   }
 
   async function retry() {
+    if (!bound.value) return
     replaying.value = true
     try {
       await q().retry()
@@ -79,12 +88,24 @@ export const useOfflineStore = defineStore('offline', () => {
       return { queued: false }
     } catch (e) {
       if (e instanceof api.ApiError && e.status === 0) {
-        await q().enqueue(input, key)
+        if (input.adhoc || (input.note && isPrivateOrUnknown(input.item_id))) {
+          throw new Error('This check-in needs a connection (notes on private or one-off entries are not saved offline)')
+        }
+        // Stamp the day now: a replay after midnight must not land on the wrong day.
+        const tz = useTodayStore().view?.timezone
+        await q().enqueue(input.date ? input : { ...input, date: dateIn(tz) }, key)
+        if (typeof navigator !== 'undefined' && navigator.onLine) q().scheduleRetry()
         sync()
         return { queued: true }
       }
       throw e
     }
+  }
+
+  /** True unless the item is known to be non-sensitive (privacy mode drops item data, so unknown counts as private). */
+  function isPrivateOrUnknown(itemId: number): boolean {
+    const d = [...useTodayStore().items, ...useCalendarStore().items].find((i) => i.id === itemId)
+    return !d || d.effective_sensitive
   }
 
   function dismissFailure(key: string) {
@@ -94,6 +115,7 @@ export const useOfflineStore = defineStore('offline', () => {
 
   /** Logout: nothing queued may outlive the session that created it. */
   async function clear() {
+    bound.value = false
     await q().clear()
     sync()
     try {
@@ -113,6 +135,10 @@ export const useOfflineStore = defineStore('offline', () => {
       // storage unavailable
     }
     if (prev !== null && prev !== id) await clear().then(() => bindUserStore(id))
+    bound.value = true
+    await q().load()
+    sync()
+    if (pendingCount.value > 0) void replay()
   }
 
   function bindUserStore(id: string) {
@@ -139,7 +165,7 @@ export const useOfflineStore = defineStore('offline', () => {
   const visible = computed(() => !online.value || pendingCount.value > 0 || failures.value.length > 0)
 
   return {
-    online, pendingCount, pendingItems, failures, paused, stalled, replaying, syncedTick, visible,
+    online, pendingCount, pendingItems, failures, paused, stalled, replaying, syncedTick, visible, bound,
     start, replay, retry, checkin, dismissFailure, clear, bindUser, listen,
   }
 })

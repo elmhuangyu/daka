@@ -22,7 +22,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const me = await api.getMe()
       user.value = { id: me.id, name: me.name, email: me.email }
-      void useOfflineStore().bindUser(me.id)
+      await useOfflineStore().bindUser(me.id)
     } catch {
       user.value = null
     }
