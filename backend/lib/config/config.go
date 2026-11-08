@@ -53,16 +53,25 @@ func (s Secret) mask() string {
 
 // Config is the complete application configuration.
 type Config struct {
-	Server  ServerConfig  `yaml:"server" json:"server"`
-	DB      DBConfig      `yaml:"db" json:"db"`
-	Auth    AuthConfig    `yaml:"auth" json:"auth"`
-	Secrets SecretsConfig `yaml:"-" json:"secrets"`
+	// Timezone is the IANA timezone of the bootstrapped single-user account
+	// (only used when that account is first created).
+	Timezone string        `yaml:"timezone" json:"timezone"`
+	Server   ServerConfig  `yaml:"server" json:"server"`
+	DB       DBConfig      `yaml:"db" json:"db"`
+	Auth     AuthConfig    `yaml:"auth" json:"auth"`
+	Secrets  SecretsConfig `yaml:"-" json:"secrets"`
 }
 
 // ServerConfig configures the HTTP listener.
 type ServerConfig struct {
 	Listen string `yaml:"listen" json:"listen"`
+	// StaticDir, when set, is a directory with the built frontend served at
+	// "/" (SPA fallback to index.html).
+	StaticDir string `yaml:"static_dir" json:"static_dir"`
 }
+
+// DefaultTimezone is the timezone given to the bootstrapped default user.
+const DefaultTimezone = "UTC"
 
 // DBConfig selects and locates the database. DSN is a file path for sqlite
 // and a connection string for postgres; it may embed credentials and is
@@ -92,9 +101,10 @@ type SecretsConfig struct {
 // Default returns the configuration used when nothing is specified.
 func Default() Config {
 	return Config{
-		Server: ServerConfig{Listen: DefaultListen},
-		DB:     DBConfig{Driver: DriverSQLite, DSN: "daka.db"},
-		Auth:   AuthConfig{SecureCookie: true},
+		Timezone: DefaultTimezone,
+		Server:   ServerConfig{Listen: DefaultListen},
+		DB:       DBConfig{Driver: DriverSQLite, DSN: "daka.db"},
+		Auth:     AuthConfig{SecureCookie: true},
 	}
 }
 
@@ -170,6 +180,8 @@ func applyEnv(c *Config, getenv func(string) string) error {
 	}
 
 	str("DAKA_LISTEN", &c.Server.Listen)
+	str("DAKA_STATIC_DIR", &c.Server.StaticDir)
+	str("DAKA_TIMEZONE", &c.Timezone)
 	str("DAKA_DB_DRIVER", &c.DB.Driver)
 	secret("DAKA_DB_DSN", &c.DB.DSN)
 	str("DAKA_AUTH_ISSUER", &c.Auth.Issuer)

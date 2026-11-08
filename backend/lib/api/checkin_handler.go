@@ -13,6 +13,7 @@ import (
 
 	"github.com/elmhuangyu/daka/backend/lib/auth"
 	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
+	"github.com/elmhuangyu/daka/backend/lib/schedule"
 )
 
 const (
@@ -122,24 +123,28 @@ func (s *server) execute(userID, key string, req checkinRequest) (result, error)
 	return res, err
 }
 
-// userToday returns the user's local date (YYYY-MM-DD) in UserSettings.timezone.
-func (s *server) userToday(tx *gorm.DB, userID string) (string, error) {
-	tz := "UTC"
+// userTimezone returns the IANA timezone name of the user (default UTC).
+func userTimezone(tx *gorm.DB, userID string) (string, error) {
 	var st dbmodels.UserSettings
 	err := tx.Where("user_id = ?", userID).Take(&st).Error
 	switch {
 	case err == nil:
 		if st.Timezone != "" {
-			tz = st.Timezone
+			return st.Timezone, nil
 		}
 	case !errors.Is(err, gorm.ErrRecordNotFound):
 		return "", err
 	}
-	loc, err := time.LoadLocation(tz)
+	return "UTC", nil
+}
+
+// userToday returns the user's local date (YYYY-MM-DD) in UserSettings.timezone.
+func (s *server) userToday(tx *gorm.DB, userID string) (string, error) {
+	tz, err := userTimezone(tx, userID)
 	if err != nil {
 		return "", err
 	}
-	return s.now().In(loc).Format(dbmodels.DateLayout), nil
+	return schedule.Today(s.now(), tz)
 }
 
 // applyCheckin validates and applies one request. Business failures are

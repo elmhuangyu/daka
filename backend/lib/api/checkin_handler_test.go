@@ -161,7 +161,7 @@ func TestRejections(t *testing.T) {
 		{"trailing garbage", `{"item_id":1,"mode":"set"} x`, 400},
 		{"note too long", m{"item_id": good, "mode": "set", "note": strings.Repeat("a", 2001)}, 400},
 		{"leap day invalid year", m{"item_id": good, "mode": "set", "date": "2027-02-29"}, 400},
-		{"future date",m{"item_id": good, "mode": "set", "date": "2026-11-08"}, 400},
+		{"future date", m{"item_id": good, "mode": "set", "date": "2026-11-08"}, 400},
 		{"future date unset", m{"item_id": good, "mode": "unset", "date": "2026-11-08"}, 400},
 		{"missing item", m{"item_id": 9999, "mode": "set"}, 404},
 		{"zero item", m{"mode": "set"}, 404},

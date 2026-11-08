@@ -32,6 +32,11 @@ func NewRouter(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/checkins", s.postCheckin)
 	mux.HandleFunc("DELETE /api/checkins/{id}", s.deleteCheckin)
+	mux.HandleFunc("POST /api/items", s.postItem)
+	mux.HandleFunc("GET /api/view/today", s.getToday)
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
+		errResult(http.StatusNotFound, "not found").write(w)
+	})
 	var h http.Handler = mux
 	if d.Auth != nil {
 		h = d.Auth(h)

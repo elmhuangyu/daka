@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/netip"
 	"strings"
+	"time"
 )
 
 // IsLoopbackListen reports whether the listen address (host:port) binds only to
@@ -30,6 +31,9 @@ func IsLoopbackListen(listen string) (bool, error) {
 // auth.issuer) a non-loopback listen address requires both
 // auth.allow_insecure_public and auth.shared_secret (DESIGN 8).
 func (c *Config) Validate() error {
+	if _, err := time.LoadLocation(c.Timezone); err != nil || c.Timezone == "" {
+		return fmt.Errorf("invalid timezone %q (want an IANA name such as \"UTC\" or \"Asia/Shanghai\")", c.Timezone)
+	}
 	if c.DB.Driver == DriverSQLite {
 		dsn := c.DB.DSN.Reveal()
 		switch {

@@ -29,7 +29,7 @@ func TestRun(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := run(nil, func(k string) string { return tt.env[k] }, io.Discard)
+			_, err := loadConfig(nil, func(k string) string { return tt.env[k] }, io.Discard)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 				return

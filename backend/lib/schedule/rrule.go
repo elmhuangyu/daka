@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,7 +32,30 @@ func parseDate(field, s string) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, invalidf("%s %q is not a YYYY-MM-DD date", field, s)
 	}
+	if t.Before(minDate) {
+		return time.Time{}, invalidf("%s %q is before 1900-01-01", field, s)
+	}
 	return t, nil
+}
+
+// minDate is the earliest accepted date: rrule-go cost grows with the years
+// since dtstart and very old dates evaluate incorrectly.
+var minDate = time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
+
+// CurrentVersion returns the version governing date: the greatest
+// effective_from <= date, ties broken by the highest id. Nil when none.
+func CurrentVersion(versions []dbmodels.ItemRuleVersion, date string) *dbmodels.ItemRuleVersion {
+	var cur *dbmodels.ItemRuleVersion
+	for i := range versions {
+		v := &versions[i]
+		if v.EffectiveFrom > date {
+			continue
+		}
+		if cur == nil || v.EffectiveFrom > cur.EffectiveFrom || (v.EffectiveFrom == cur.EffectiveFrom && v.ID > cur.ID) {
+			cur = v
+		}
+	}
+	return cur
 }
 
 // Today returns the current local calendar date ("YYYY-MM-DD") in the given
@@ -76,6 +100,9 @@ func buildRule(v dbmodels.ItemRuleVersion) (*rrule.RRule, time.Time, *time.Time,
 	if s == "" {
 		return nil, time.Time{}, nil, invalidf("empty rrule_string")
 	}
+	if err := checkRuleString(s, start); err != nil {
+		return nil, time.Time{}, nil, err
+	}
 	opt, err := rrule.StrToROption(s)
 	if err != nil {
 		return nil, time.Time{}, nil, invalidf("rrule %q: %v", v.RRuleString, err)
@@ -92,6 +119,72 @@ func buildRule(v dbmodels.ItemRuleVersion) (*rrule.RRule, time.Time, *time.Time,
 		return nil, time.Time{}, nil, invalidf("rrule %q: %v", v.RRuleString, err)
 	}
 	return r, start, until, nil
+}
+
+// MaxRRuleLen caps rrule_string length (user input).
+const MaxRRuleLen = 500
+
+const maxInterval = 1000
+
+// allowedParts are the RRULE parts a user rule may use. Sub-day parts
+// (BYHOUR, BYMINUTE, BYSECOND) and embedded DTSTART/TZID are rejected: rules
+// are date-only and sub-day parts multiply the expansion cost (CPU DoS, G10).
+var allowedParts = map[string]bool{
+	"FREQ": true, "INTERVAL": true, "COUNT": true, "UNTIL": true, "WKST": true,
+	"BYDAY": true, "BYMONTHDAY": true, "BYMONTH": true, "BYYEARDAY": true,
+	"BYWEEKNO": true, "BYSETPOS": true,
+}
+
+var allowedFreqs = map[string]bool{"DAILY": true, "WEEKLY": true, "MONTHLY": true, "YEARLY": true}
+
+// checkRuleString applies the user-input hardening checks (findings G10) to
+// an RRULE body (without the "RRULE:" prefix) before it reaches rrule-go.
+func checkRuleString(s string, start time.Time) error {
+	if len(s) > MaxRRuleLen {
+		return invalidf("rrule_string longer than %d characters", MaxRRuleLen)
+	}
+	seen := map[string]bool{}
+	for _, part := range strings.Split(s, ";") {
+		k, val, ok := strings.Cut(part, "=")
+		k = strings.ToUpper(strings.TrimSpace(k))
+		if !ok || !allowedParts[k] {
+			return invalidf("unsupported rrule part %q", k)
+		}
+		if seen[k] {
+			return invalidf("duplicate rrule part %q", k)
+		}
+		seen[k] = true
+		val = strings.TrimSpace(val)
+		switch k {
+		case "FREQ":
+			if !allowedFreqs[strings.ToUpper(val)] {
+				return invalidf("FREQ must be DAILY, WEEKLY, MONTHLY or YEARLY")
+			}
+		case "INTERVAL":
+			if n, err := strconv.Atoi(val); err != nil || n < 1 || n > maxInterval {
+				return invalidf("INTERVAL must be between 1 and %d", maxInterval)
+			}
+		case "COUNT":
+			if n, err := strconv.Atoi(val); err != nil || n < 1 {
+				return invalidf("COUNT must be a positive integer")
+			}
+		case "UNTIL":
+			if len(val) < 8 {
+				return invalidf("invalid UNTIL")
+			}
+			u, err := time.Parse("20060102", val[:8])
+			if err != nil {
+				return invalidf("invalid UNTIL")
+			}
+			if u.Before(start) {
+				return invalidf("UNTIL is before dtstart")
+			}
+		}
+	}
+	if !seen["FREQ"] {
+		return invalidf("rrule requires FREQ")
+	}
+	return nil
 }
 
 // ValidateRule checks a rule version at creation time. Only fixed_rrule
