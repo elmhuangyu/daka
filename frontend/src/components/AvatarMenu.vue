@@ -1,14 +1,28 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
 const open = ref(false)
 const root = ref<HTMLElement | null>(null)
 const trigger = ref<HTMLButtonElement | null>(null)
+const imgFailed = ref(false)
+
+// Reset image failure flag when the user or avatar_url changes.
+watch(
+  () => auth.user?.avatar_url,
+  () => {
+    imgFailed.value = false
+  },
+)
 
 const initial = computed(() => (auth.user?.name ?? '?').trim().charAt(0).toUpperCase() || '?')
+const showImage = computed(() => !!auth.user?.avatar_url && !imgFailed.value)
+
+function onImgError() {
+  imgFailed.value = true
+}
 
 function onDocClick(e: MouseEvent) {
   if (open.value && root.value && !root.value.contains(e.target as Node)) open.value = false
@@ -43,14 +57,22 @@ async function signOut() {
     <button
       ref="trigger"
       type="button"
-      class="btn btn-circle btn-sm btn-primary"
+      class="btn btn-circle btn-sm btn-primary overflow-hidden p-0"
       aria-haspopup="menu"
       :aria-expanded="open"
       aria-label="Account menu"
       data-testid="avatar-button"
       @click="open = !open"
     >
-      {{ initial }}
+      <img
+        v-if="showImage"
+        :src="auth.user!.avatar_url"
+        :alt="auth.user!.name"
+        class="h-full w-full object-cover"
+        data-testid="avatar-image"
+        @error="onImgError"
+      />
+      <span v-else data-testid="avatar-initial">{{ initial }}</span>
     </button>
     <div
       v-if="open"
@@ -58,7 +80,21 @@ async function signOut() {
       role="menu"
       data-testid="avatar-menu"
     >
-      <p v-if="auth.user" class="px-3 py-2 text-sm font-semibold" data-testid="avatar-name">{{ auth.user.name }}</p>
+      <div v-if="auth.user" class="flex items-center gap-2.5 px-3 py-2" data-testid="avatar-header">
+        <div class="size-8 shrink-0 overflow-hidden rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-xs">
+          <img
+            v-if="showImage"
+            :src="auth.user.avatar_url"
+            :alt="auth.user.name"
+            class="h-full w-full object-cover"
+          />
+          <span v-else>{{ initial }}</span>
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-sm font-semibold" data-testid="avatar-name">{{ auth.user.name }}</p>
+          <p v-if="auth.user.email" class="truncate text-xs opacity-70">{{ auth.user.email }}</p>
+        </div>
+      </div>
       <button v-if="auth.loginRequired" type="button" role="menuitem" class="btn btn-ghost btn-sm justify-start" data-testid="logout" @click="signOut">
         <Icon icon="lucide:log-out" aria-hidden="true" /> Sign out
       </button>

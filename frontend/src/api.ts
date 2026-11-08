@@ -139,6 +139,7 @@ export interface Me {
   id: string
   name: string
   email?: string
+  avatar_url?: string
   csrf_token?: string
 }
 

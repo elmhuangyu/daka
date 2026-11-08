@@ -101,6 +101,29 @@ describe('layout', () => {
     w.unmount()
   })
 
+  it('avatar button and menu display avatar image when avatar_url is provided, falling back to initial on error', async () => {
+    fetchMock = vi.fn(async (url: string) => {
+      if (url === '/api/auth/status') return jsonRes(status)
+      if (url === '/api/auth/me') return jsonRes({ id: 'u', name: 'Alice', email: 'alice@example.com', avatar_url: 'https://example.com/pic.png', csrf_token: 't' })
+      if (url.startsWith('/api/view/today'))
+        return jsonRes({ date: '2026-11-07', weekday: 6, timezone: 'UTC', progress: { done: 0, total: 0 }, items: [] })
+      return jsonRes({})
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { w } = await mountAt('/')
+    const img = w.find('[data-testid=avatar-image]')
+    expect(img.exists()).toBe(true)
+    expect(img.attributes('src')).toBe('https://example.com/pic.png')
+
+    // Simulate image loading error: falls back to initial
+    await img.trigger('error')
+    expect(w.find('[data-testid=avatar-image]').exists()).toBe(false)
+    expect(w.get('[data-testid=avatar-initial]').text()).toBe('A')
+
+    w.unmount()
+  })
+
   it('single-user mode has no sign-out entry', async () => {
     status = { oidc_enabled: false, login_required: false, authenticated: true }
     const { w } = await mountAt('/')

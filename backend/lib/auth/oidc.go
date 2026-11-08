@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -51,6 +53,7 @@ type OIDC struct {
 	pending *pendingStore
 
 	mu       sync.Mutex
+	provider *oidc.Provider
 	oauth    *oauth2.Config
 	verifier *oidc.IDTokenVerifier
 }
@@ -75,29 +78,30 @@ func (o *OIDC) ctx(ctx context.Context) context.Context {
 	return oidc.ClientContext(ctx, o.client)
 }
 
-func (o *OIDC) ensure(ctx context.Context) (*oauth2.Config, *oidc.IDTokenVerifier, error) {
+func (o *OIDC) ensure(ctx context.Context) (*oidc.Provider, *oauth2.Config, *oidc.IDTokenVerifier, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if o.oauth != nil {
-		return o.oauth, o.verifier, nil
+		return o.provider, o.oauth, o.verifier, nil
 	}
 	// The provider keeps its context for later JWKS fetches, so it must not be
 	// the request context; carry only the HTTP client.
 	p, err := oidc.NewProvider(o.ctx(context.Background()), o.cfg.Issuer)
 	if err != nil {
-		return nil, nil, fmt.Errorf("oidc discovery: %w", err)
+		return nil, nil, nil, fmt.Errorf("oidc discovery: %w", err)
 	}
 	scopes := o.cfg.Scopes
 	if len(scopes) == 0 {
 		scopes = []string{"profile", "email"}
 	}
 	scopes = append([]string{oidc.ScopeOpenID}, withoutOpenID(scopes)...)
+	o.provider = p
 	o.oauth = &oauth2.Config{
 		ClientID: o.cfg.ClientID, ClientSecret: o.cfg.ClientSecret,
 		Endpoint: p.Endpoint(), RedirectURL: o.cfg.RedirectURL, Scopes: scopes,
 	}
 	o.verifier = p.VerifierContext(o.ctx(context.Background()), &oidc.Config{ClientID: o.cfg.ClientID, Now: o.now})
-	return o.oauth, o.verifier, nil
+	return o.provider, o.oauth, o.verifier, nil
 }
 
 func withoutOpenID(in []string) []string {
@@ -114,6 +118,7 @@ func withoutOpenID(in []string) []string {
 type Identity struct {
 	Issuer, Subject string
 	Name, Email     string
+	AvatarURL       string
 	AuthTime        time.Time // zero when the IdP omitted auth_time
 	Reauth          bool      // the login was started as a reauth
 }
@@ -125,7 +130,7 @@ func (i Identity) UserID() string { return OIDCUserID(i.Issuer, i.Subject) }
 // and returns the IdP URL. With reauth, the IdP is forced to re-prompt
 // (prompt=login, max_age=0).
 func (o *OIDC) Begin(ctx context.Context, w http.ResponseWriter, secure, reauth bool) (string, error) {
-	oc, _, err := o.ensure(ctx)
+	_, oc, _, err := o.ensure(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -183,7 +188,7 @@ func (o *OIDC) Complete(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	if code == "" {
 		return Identity{}, reject("missing code")
 	}
-	oc, verifier, err := o.ensure(ctx)
+	provider, oc, verifier, err := o.ensure(ctx)
 	if err != nil {
 		return Identity{}, err
 	}
@@ -206,6 +211,7 @@ func (o *OIDC) Complete(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		Name     string `json:"name"`
 		Username string `json:"preferred_username"`
 		Email    string `json:"email"`
+		Picture  string `json:"picture"`
 		AuthTime int64  `json:"auth_time"`
 	}
 	if err := idt.Claims(&claims); err != nil {
@@ -214,8 +220,38 @@ func (o *OIDC) Complete(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	if idt.Subject == "" {
 		return Identity{}, reject("empty sub")
 	}
-	id := Identity{Issuer: idt.Issuer, Subject: idt.Subject, Email: claims.Email, Reauth: p.reauth}
+	id := Identity{
+		Issuer:    idt.Issuer,
+		Subject:   idt.Subject,
+		Email:     claims.Email,
+		AvatarURL: sanitizeAvatarURL(claims.Picture),
+		Reauth:    p.reauth,
+	}
 	id.Name = firstNonEmpty(claims.Name, claims.Username, claims.Email, "user")
+
+	// If Picture was not present in the ID token, query the UserInfo endpoint if available.
+	if id.AvatarURL == "" && provider != nil {
+		if uInfo, err := provider.UserInfo(o.ctx(ctx), oauth2.StaticTokenSource(tok)); err == nil {
+			var uClaims struct {
+				Name     string `json:"name"`
+				Username string `json:"preferred_username"`
+				Email    string `json:"email"`
+				Picture  string `json:"picture"`
+			}
+			if err := uInfo.Claims(&uClaims); err == nil {
+				if id.AvatarURL == "" {
+					id.AvatarURL = sanitizeAvatarURL(uClaims.Picture)
+				}
+				if id.Name == "user" || id.Name == "" {
+					id.Name = firstNonEmpty(uClaims.Name, uClaims.Username, uClaims.Email, "user")
+				}
+				if id.Email == "" {
+					id.Email = uClaims.Email
+				}
+			}
+		}
+	}
+
 	now := o.now()
 	if claims.AuthTime > 0 {
 		id.AuthTime = time.Unix(claims.AuthTime, 0)
@@ -238,6 +274,21 @@ func firstNonEmpty(ss ...string) string {
 		}
 	}
 	return ""
+}
+
+func sanitizeAvatarURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || len(raw) > 1024 {
+		return ""
+	}
+	u, err := url.ParseRequestURI(raw)
+	if err != nil {
+		return ""
+	}
+	if u.Scheme != "https" && u.Scheme != "http" {
+		return ""
+	}
+	return raw
 }
 
 type pendingLogin struct {

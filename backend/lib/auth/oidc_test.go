@@ -40,6 +40,9 @@ type fakeIdP struct {
 	expiresIn time.Duration
 	authTime  func() time.Time
 	nonceOver string // overrides the nonce claim
+	picture   string // picture in ID token
+	name      string // name in ID token
+	userInfo  map[string]any
 	lastAuth  url.Values
 }
 
@@ -58,7 +61,8 @@ func newFakeIdP(t *testing.T, clk *clock) *fakeIdP {
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"issuer": f.srv.URL, "authorization_endpoint": f.srv.URL + "/authorize",
-			"token_endpoint": f.srv.URL + "/token", "jwks_uri": f.srv.URL + "/jwks",
+			"token_endpoint": f.srv.URL + "/token", "userinfo_endpoint": f.srv.URL + "/userinfo",
+			"jwks_uri": f.srv.URL + "/jwks",
 			"id_token_signing_alg_values_supported": []string{"RS256"},
 		})
 	})
@@ -66,7 +70,19 @@ func newFakeIdP(t *testing.T, clk *clock) *fakeIdP {
 		_ = json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: &key.PublicKey, KeyID: "k1", Algorithm: "RS256", Use: "sig"}}})
 	})
 	mux.HandleFunc("/token", f.token)
+	mux.HandleFunc("/userinfo", f.handleUserInfo)
 	return f
+}
+
+func (f *fakeIdP) handleUserInfo(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.userInfo != nil {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(f.userInfo)
+		return
+	}
+	w.WriteHeader(http.StatusNotFound)
 }
 
 // authorize plays the user agent at the IdP: given the Location of
@@ -106,9 +122,13 @@ func (f *fakeIdP) token(w http.ResponseWriter, r *http.Request) {
 	}
 	now := f.clk.Now()
 	f.mu.Lock()
+	tokName := "Alice"
+	if f.name != "" {
+		tokName = f.name
+	}
 	claims := map[string]any{
 		"iss": f.srv.URL, "sub": f.sub, "aud": f.audience, "iat": now.Unix(), "exp": now.Add(f.expiresIn).Unix(),
-		"nonce": rec.nonce, "name": "Alice", "email": "alice@example.com",
+		"nonce": rec.nonce, "name": tokName, "email": "alice@example.com",
 	}
 	if f.issuer != "" {
 		claims["iss"] = f.issuer
@@ -118,6 +138,9 @@ func (f *fakeIdP) token(w http.ResponseWriter, r *http.Request) {
 	}
 	if f.authTime != nil {
 		claims["auth_time"] = f.authTime().Unix()
+	}
+	if f.picture != "" {
+		claims["picture"] = f.picture
 	}
 	f.mu.Unlock()
 	payload, _ := json.Marshal(claims)
@@ -174,7 +197,7 @@ func (e *oidcEnv) login(t *testing.T) *http.Cookie {
 	t.Helper()
 	oc, cb := e.start(t, "/api/auth/oidc/login")
 	rec := call(e.h, "GET", cb, "", nil, oc)
-	require.Equal(t, http.StatusFound, rec.Code, rec.Body.String())
+	require.Equal(t, http.StatusFound, rec.Code, "callback response: code %d body %s", rec.Code, rec.Body.String())
 	sc := cookieNamed(rec, SessionCookieName)
 	require.NotNil(t, sc)
 	return sc
@@ -418,4 +441,68 @@ func TestOIDCDiscoveryFailureIsRetried(t *testing.T) {
 func TestNewOIDCValidates(t *testing.T) {
 	_, err := NewOIDC(OIDCConfig{Issuer: "https://x"})
 	require.Error(t, err)
+}
+
+func TestOIDCAvatarURLFromIDTokenAndUserInfo(t *testing.T) {
+	e := newOIDCEnv(t, false)
+
+	// 1. Picture in ID token is extracted and stored
+	e.idp.picture = "https://example.com/avatar1.png"
+	sc := e.login(t)
+	wantID := OIDCUserID(e.idp.srv.URL, "sub-1")
+
+	var u dbmodels.User
+	require.NoError(t, e.m.db.First(&u, "id = ?", wantID).Error)
+	require.Equal(t, "https://example.com/avatar1.png", u.AvatarURL)
+
+	rec := call(e.h, "GET", "/api/auth/me", "", nil, sc)
+	require.Equal(t, 200, rec.Code)
+	var me map[string]string
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &me))
+	require.Equal(t, "https://example.com/avatar1.png", me["avatar_url"])
+
+	// 2. Picture missing from ID token falls back to UserInfo endpoint
+	e.idp.mu.Lock()
+	e.idp.sub = "sub-2"
+	e.idp.name = "Bob"
+	e.idp.picture = ""
+	e.idp.userInfo = map[string]any{
+		"sub":     "sub-2",
+		"name":    "Bob",
+		"email":   "bob@example.com",
+		"picture": "https://example.com/avatar2.png",
+	}
+	e.idp.mu.Unlock()
+
+	sc2 := e.login(t)
+	wantID2 := OIDCUserID(e.idp.srv.URL, "sub-2")
+	var u2 dbmodels.User
+	require.NoError(t, e.m.db.First(&u2, "id = ?", wantID2).Error)
+	require.Equal(t, "https://example.com/avatar2.png", u2.AvatarURL)
+	require.Equal(t, "Bob", u2.Name)
+
+	rec2 := call(e.h, "GET", "/api/auth/me", "", nil, sc2)
+	require.Equal(t, 200, rec2.Code)
+	var me2 map[string]string
+	require.NoError(t, json.Unmarshal(rec2.Body.Bytes(), &me2))
+	require.Equal(t, "https://example.com/avatar2.png", me2["avatar_url"])
+
+	// 3. Dangerous scheme in picture (e.g. javascript:) is discarded by sanitizeAvatarURL
+	e.idp.sub = "sub-3"
+	e.idp.picture = "javascript:alert(1)"
+	e.idp.mu.Lock()
+	e.idp.userInfo = nil
+	e.idp.mu.Unlock()
+
+	sc3 := e.login(t)
+	wantID3 := OIDCUserID(e.idp.srv.URL, "sub-3")
+	var u3 dbmodels.User
+	require.NoError(t, e.m.db.First(&u3, "id = ?", wantID3).Error)
+	require.Empty(t, u3.AvatarURL)
+
+	rec3 := call(e.h, "GET", "/api/auth/me", "", nil, sc3)
+	require.Equal(t, 200, rec3.Code)
+	var me3 map[string]string
+	require.NoError(t, json.Unmarshal(rec3.Body.Bytes(), &me3))
+	require.NotContains(t, me3, "avatar_url")
 }

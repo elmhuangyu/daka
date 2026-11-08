@@ -10,7 +10,7 @@ export const useAuthStore = defineStore('auth', () => {
   /** False in single-user mode without a shared secret: there is no login at all. */
   const loginRequired = ref(false)
   const authenticated = ref(false)
-  const user = ref<{ id: string; name: string; email?: string } | null>(null)
+  const user = ref<{ id: string; name: string; email?: string; avatar_url?: string } | null>(null)
 
   // Reauth modal state. Concurrent requests share one prompt.
   const reauthOpen = ref(false)
@@ -21,7 +21,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function loadUser() {
     try {
       const me = await api.getMe()
-      user.value = { id: me.id, name: me.name, email: me.email }
+      user.value = { id: me.id, name: me.name, email: me.email, avatar_url: me.avatar_url }
       await useOfflineStore().bindUser(me.id)
     } catch {
       user.value = null

@@ -42,7 +42,22 @@ async function logout() {
   <section class="card bg-base-200" data-testid="section-account">
     <div class="card-body gap-3">
       <h2 class="card-title">Account</h2>
-      <p v-if="auth.user">Signed in as {{ auth.user.name }}<template v-if="auth.user.email"> ({{ auth.user.email }})</template>.</p>
+      <div v-if="auth.user" class="flex items-center gap-3">
+        <div class="size-12 shrink-0 overflow-hidden rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-base">
+          <img
+            v-if="auth.user.avatar_url"
+            :src="auth.user.avatar_url"
+            :alt="auth.user.name"
+            class="h-full w-full object-cover"
+            data-testid="account-avatar-image"
+          />
+          <span v-else data-testid="account-avatar-initial">{{ (auth.user.name ?? '?').trim().charAt(0).toUpperCase() || '?' }}</span>
+        </div>
+        <div>
+          <p class="font-semibold">{{ auth.user.name }}</p>
+          <p v-if="auth.user.email" class="text-sm opacity-80">{{ auth.user.email }}</p>
+        </div>
+      </div>
       <p v-if="!auth.loginRequired" class="text-sm opacity-80" data-testid="claim-hint">
         This instance has no login configured, so anyone who can reach it has access. Set a shared secret or OIDC
         before exposing it beyond localhost.

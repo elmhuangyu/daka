@@ -121,6 +121,9 @@ func (h *handler) me(w http.ResponseWriter, r *http.Request) {
 	if u.Email != "" {
 		resp["email"] = u.Email
 	}
+	if u.AvatarURL != "" {
+		resp["avatar_url"] = u.AvatarURL
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -309,12 +312,18 @@ func trunc(s string, n int) string {
 }
 
 // upsertUser creates the user and default settings, or refreshes the purely
-// informational name / email of an existing user.
+// informational name / email / avatar of an existing user.
 func (h *handler) upsertUser(userID string, id Identity) error {
 	return h.DB.Transaction(func(tx *gorm.DB) error {
-		u := dbmodels.User{ID: userID, Name: trunc(id.Name, 255), Email: trunc(id.Email, 255)}
+		u := dbmodels.User{
+			ID:        userID,
+			Name:      trunc(id.Name, 255),
+			Email:     trunc(id.Email, 255),
+			AvatarURL: trunc(id.AvatarURL, 1024),
+		}
 		if err := tx.Clauses(clause.OnConflict{
-			Columns: []clause.Column{{Name: "id"}}, DoUpdates: clause.AssignmentColumns([]string{"name", "email"}),
+			Columns:   []clause.Column{{Name: "id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"name", "email", "avatar_url"}),
 		}).Create(&u).Error; err != nil {
 			return err
 		}
