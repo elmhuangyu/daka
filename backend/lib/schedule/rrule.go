@@ -193,6 +193,9 @@ func ValidateRule(v dbmodels.ItemRuleVersion) error {
 	if _, err := parseDate("effective_from", v.EffectiveFrom); err != nil {
 		return err
 	}
+	if !validHolidayMode(v.HolidayMode) {
+		return invalidf("holiday_mode %q must be none, skip_holidays or workdays_only", v.HolidayMode)
+	}
 	switch v.ScheduleType {
 	case dbmodels.ScheduleFixedRRule:
 		_, _, _, err := buildRule(v)
@@ -253,6 +256,17 @@ func governing(versions []dbmodels.ItemRuleVersion) ([]span, error) {
 // rolling or quota version in the window yields ErrUnsupported; schedule type
 // none has no due dates.
 func DueDates(versions []dbmodels.ItemRuleVersion, from, to string) ([]string, error) {
+	return DueDatesWith(versions, from, to, nil)
+}
+
+// DueDatesWith is DueDates with holiday_mode evaluation (DESIGN 3.4): the
+// RRULE is expanded first, then filtered or postponed by each version's
+// holiday_mode using cal, so INTERVAL phase never changes. A nil cal makes
+// every mode behave as none. A workdays_only postponement of a monthly or
+// yearly occurrence is dropped if it would land after the version's UNTIL or
+// after the version's span end (the next version governs those days), or more
+// than 60 days after the original date.
+func DueDatesWith(versions []dbmodels.ItemRuleVersion, from, to string, cal DayCalendar) ([]string, error) {
 	lo, err := parseDate("from", from)
 	if err != nil {
 		return nil, err
@@ -300,9 +314,13 @@ func DueDates(versions []dbmodels.ItemRuleVersion, from, to string) ([]string, e
 		if a.After(b) {
 			continue
 		}
-		for _, t := range r.Between(a, b, true) {
-			out = append(out, t.Format(dbmodels.DateLayout))
+		// Expand a margin before a so occurrences postponed into the window
+		// are found; never before dtstart.
+		ra := a.AddDate(0, 0, -maxPostpone)
+		if ra.Before(start) {
+			ra = start
 		}
+		out = append(out, applyHolidayMode(sp.v, cal, r, r.Between(ra, b, true), a, b)...)
 	}
 	sort.Strings(out)
 	return dedupe(out), nil
@@ -321,7 +339,12 @@ func dedupe(s []string) []string {
 
 // IsDue reports whether date is a due date under the given versions.
 func IsDue(versions []dbmodels.ItemRuleVersion, date string) (bool, error) {
-	ds, err := DueDates(versions, date, date)
+	return IsDueWith(versions, date, nil)
+}
+
+// IsDueWith is IsDue with holiday_mode evaluation (see DueDatesWith).
+func IsDueWith(versions []dbmodels.ItemRuleVersion, date string, cal DayCalendar) (bool, error) {
+	ds, err := DueDatesWith(versions, date, date, cal)
 	if err != nil {
 		return false, err
 	}

@@ -121,3 +121,9 @@ func (c *Calendar) YearInfo(year int) YearData {
 func isWeekend(t time.Time) bool {
 	return t.Weekday() == time.Saturday || t.Weekday() == time.Sunday
 }
+
+// IsMakeupWorkday reports whether the date is a makeup working day: a day
+// the data source lists as working (isOffDay=false), normally a weekend.
+func (c *Calendar) IsMakeupWorkday(date string) bool {
+	return c.Day(date).Kind == Workday
+}
