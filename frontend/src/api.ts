@@ -468,6 +468,79 @@ export function createCategory(name: string, isSensitive: boolean): Promise<Cate
   return request<CategoryDto>('/api/categories', jsonInit('POST', { name, is_sensitive: isSensitive }))
 }
 
+// ---- Calendar view (GET /api/view/calendar, /api/settings/calendar, /api/calendar/external) ----
+
+export type CalItemStatus = 'done' | 'partial' | 'missed' | 'frozen' | 'pending' | 'upcoming' | 'extra'
+export type CalDayStatus = 'none' | 'complete' | 'partial' | 'incomplete' | 'pending' | 'upcoming' | 'frozen'
+
+export interface CalendarDayItem {
+  item_id: number
+  name: string
+  category_id: number | null
+  tracker_type: string
+  is_sensitive: boolean
+  due: boolean
+  status: CalItemStatus
+  done: boolean
+  log_count: number
+  has_supplement: boolean
+  forecast: boolean
+  overdue: boolean
+}
+
+export interface CalendarDay {
+  date: string
+  weekday: number
+  day_type: 'normal' | 'holiday' | 'workday' | string
+  holiday_name?: string
+  is_off_day: boolean
+  makeup_workday: boolean
+  frozen: boolean
+  status: CalDayStatus
+  due_count: number
+  done_count: number
+  partial_count: number
+  has_overdue: boolean
+  items: CalendarDayItem[]
+}
+
+export interface CalendarViewData {
+  start: string
+  end: string
+  timezone: string
+  today: string
+  week_start: number
+  holiday_region: string
+  holiday_published: boolean
+  freezes: { id: number; start_date: string; end_date: string; reason: string }[]
+  days: CalendarDay[]
+}
+
+export function getCalendarView(start: string, end: string, redact: boolean): Promise<CalendarViewData> {
+  return request(`/api/view/calendar?start=${start}&end=${end}${redact ? '&redact=1' : ''}`)
+}
+
+export interface ExternalEvent {
+  title: string
+  /** YYYY-MM-DD for all-day events (end inclusive), RFC 3339 otherwise. */
+  start: string
+  end: string
+  all_day?: boolean
+}
+
+export interface ExternalSource {
+  id: string
+  name: string
+  ok: boolean
+  error?: string
+  events: ExternalEvent[]
+  truncated?: boolean
+}
+
+export function getExternalCalendar(start: string, end: string, sourceId: string): Promise<{ sources: ExternalSource[] }> {
+  return request(`/api/calendar/external?start=${start}&end=${end}&source_id=${encodeURIComponent(sourceId)}`)
+}
+
 export function createItem(item: NewItem): Promise<unknown> {
   return request(
     '/api/items',

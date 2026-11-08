@@ -16,7 +16,7 @@ export function makeRouter(history: RouterHistory = createWebHistory()) {
     routes: [
       { path: '/login', name: 'login', component: () => import('./views/LoginView.vue'), meta: { public: true } },
       { path: '/', name: 'today', component: () => import('./views/TodayView.vue'), meta: { title: 'Today' } },
-      { path: '/calendar', name: 'calendar', component: placeholder, meta: { title: 'Calendar' } },
+      { path: '/calendar', name: 'calendar', component: () => import('./views/CalendarView.vue'), meta: { title: 'Calendar' } },
       {
         path: '/items', component: () => import('./views/ItemsView.vue'), meta: { title: 'Items' },
         children: [

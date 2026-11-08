@@ -57,7 +57,7 @@ describe('layout', () => {
     w.unmount()
   })
 
-  it.each(['calendar', 'items', 'settings'])('placeholder route /%s renders', async (name) => {
+  it.each(['items', 'settings'])('placeholder route /%s renders', async (name) => {
     const { w } = await mountAt(`/${name}`)
     expect(w.get('h1').text().toLowerCase()).toBe(name)
     w.unmount()
