@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -62,6 +63,18 @@ func TestServeRejectsBadStaticDir(t *testing.T) {
 	cfg.Server.StaticDir = filepath.Join(t.TempDir(), "missing")
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	err = serve(context.Background(), &cfg, ln, zerolog.Nop())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	err = serve(ctx, &cfg, ln, zerolog.Nop())
 	require.ErrorContains(t, err, "static_dir")
+}
+
+func TestStaticDirWithoutIndexWarnsAndServes(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "other.txt"), []byte("OTHER"), 0o644))
+	ts := startServer(t, func(c *config.Config) { c.Server.StaticDir = dir })
+	resp, err := http.Get(ts.base + "/other.txt")
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, 200, resp.StatusCode)
 }

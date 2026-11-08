@@ -1,6 +1,7 @@
 {
   "name": "daka-frontend",
   "private": true,
+  "packageManager": "pnpm@12.17.0",
   "version": "0.0.0",
   "type": "module",
   "scripts": {

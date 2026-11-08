@@ -2,8 +2,13 @@
 .claude
 tmp
 **/node_modules
-frontend/dist
-*.db*
-.env*
+**/dist
+**/*.db
+**/*.db-*
+**/*.db.*
+**/*.sqlite*
+**/.env*
+**/*.pem
+**/*.key
 Dockerfile
 .dockerignore

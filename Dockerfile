@@ -19,7 +19,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/daka ./cmd/daka
 
 # Stage 3: minimal runtime image, non-root.
 FROM alpine:3.22
-RUN apk add --no-cache ca-certificates tzdata \
+RUN apk add --no-cache ca-certificates \
  && adduser -D -u 10001 daka \
  && mkdir /data && chown daka /data
 COPY --from=server /out/daka /app/daka
