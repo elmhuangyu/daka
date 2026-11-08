@@ -74,6 +74,57 @@ export function setAuthHooks(h: AuthHooks): void {
   hooks = h
 }
 
+function getBroadcastChannelCtor(): typeof BroadcastChannel | undefined {
+  if (typeof BroadcastChannel !== 'undefined') {
+    return BroadcastChannel
+  }
+  return (globalThis as unknown as { BroadcastChannel?: typeof BroadcastChannel }).BroadcastChannel
+}
+
+const AUTH_CHANNEL_NAME = 'daka_auth_channel'
+
+export type AuthChannelMessage =
+  | { type: 'logged_in' }
+  | { type: 'logged_out' }
+  | { type: 'session_expired' }
+
+export function broadcastAuthEvent(msg: AuthChannelMessage): void {
+  try {
+    const Channel = getBroadcastChannelCtor()
+    if (Channel) {
+      const channel = new Channel(AUTH_CHANNEL_NAME)
+      channel.postMessage(msg)
+      channel.close()
+    }
+  } catch {
+    /* BroadcastChannel not available or failed */
+  }
+}
+
+export function onAuthBroadcast(handler: (msg: AuthChannelMessage) => void): () => void {
+  try {
+    const Channel = getBroadcastChannelCtor()
+    if (Channel) {
+      const channel = new Channel(AUTH_CHANNEL_NAME)
+      channel.onmessage = (event: MessageEvent<AuthChannelMessage>) => {
+        if (event.data && typeof event.data.type === 'string') {
+          handler(event.data)
+        }
+      }
+      return () => {
+        try {
+          channel.close()
+        } catch {
+          /* ignore close failure */
+        }
+      }
+    }
+  } catch {
+    /* BroadcastChannel not available */
+  }
+  return () => {}
+}
+
 export function newIdempotencyKey(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
   // crypto.randomUUID is unavailable in insecure contexts (plain http); build a v4 UUID.
@@ -142,6 +193,7 @@ export function getAuthStatus(): Promise<AuthStatus> {
 export async function login(secret: string): Promise<void> {
   await request('/api/auth/login', jsonInit('POST', { secret }))
   resetCsrf()
+  broadcastAuthEvent({ type: 'logged_in' })
 }
 
 export async function logout(): Promise<void> {
@@ -149,6 +201,7 @@ export async function logout(): Promise<void> {
     await request('/api/auth/logout', { method: 'POST' })
   } finally {
     resetCsrf()
+    broadcastAuthEvent({ type: 'logged_out' })
   }
 }
 
@@ -213,7 +266,10 @@ async function request<T>(
     if (res.status === 403 && code === 'reauth_required' && !retry.reauth && hooks.onReauthRequired) {
       if (await hooks.onReauthRequired()) return request<T>(path, init, { ...retry, reauth: true }, as)
     }
-    if (res.status === 401 && code === 'unauthorized' && path !== '/api/auth/me') hooks.onUnauthorized?.()
+    if (res.status === 401 && code === 'unauthorized' && path !== '/api/auth/me') {
+      broadcastAuthEvent({ type: 'session_expired' })
+      hooks.onUnauthorized?.()
+    }
     throw err
   }
   if (res.status === 204) return undefined as T

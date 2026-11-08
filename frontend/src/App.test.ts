@@ -40,4 +40,58 @@ describe('App', () => {
     expect(document.title).toBe('Daka')
     expect(indexHtml).toContain('<title>Daka</title>')
   })
+
+  it('does not redirect hidden tab immediately on unauthenticated, but rechecks status when visible', async () => {
+    let authAuthenticated = true
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url === '/api/auth/status'
+          ? jsonRes({ oidc_enabled: false, login_required: true, authenticated: authAuthenticated })
+          : url === '/api/auth/me'
+            ? jsonRes({ id: '1', name: 'user' })
+            : String(url).startsWith('/api/view/today')
+              ? jsonRes({ date: '2026-11-07', weekday: 6, timezone: 'UTC', progress: { done: 0, total: 0 }, items: [] })
+              : jsonRes({}),
+      ),
+    )
+
+    // Simulate tab in background (hidden)
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = makeRouter(createMemoryHistory())
+    await router.push('/')
+    await router.isReady()
+    mount(App, { global: { plugins: [pinia, router] } })
+    await flushPromises()
+
+    const authStore = (await import('./stores/auth')).useAuthStore()
+    expect(router.currentRoute.value.name).toBe('today')
+
+    // Session invalidated while tab is hidden
+    authStore.markUnauthenticated()
+    await flushPromises()
+
+    // Must NOT have redirected to login yet because tab is hidden
+    expect(router.currentRoute.value.name).toBe('today')
+
+    // Another tab re-authenticated in the meantime
+    authAuthenticated = true
+
+    // Tab becomes visible
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flushPromises()
+
+    // Should stay on today and not bounce to login since session was restored
+    expect(authStore.authenticated).toBe(true)
+    expect(router.currentRoute.value.name).toBe('today')
+
+    // If session is indeed expired when becoming visible, it redirects
+    authAuthenticated = false
+    authStore.markUnauthenticated()
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('login'))
+  })
 })

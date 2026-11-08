@@ -14,11 +14,40 @@ const offline = useOfflineStore()
 const router = useRouter()
 const route = useRoute()
 
+let activationListenerInstalled = false
+
+function handleUnauthenticatedRedirect() {
+  if (!auth.loginRequired) return
+
+  // If running in a background tab (hidden), do not immediately bounce the user
+  // to /login. Wait until the user focuses/activates this tab, and re-verify
+  // auth status first (in case another tab logged back in or refreshed).
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+    if (activationListenerInstalled) return
+    activationListenerInstalled = true
+
+    const onVisible = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        activationListenerInstalled = false
+        document.removeEventListener('visibilitychange', onVisible)
+        await auth.refreshStatus()
+        if (!auth.authenticated && auth.loginRequired) {
+          void router.replace({ name: 'login' })
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return
+  }
+
+  void router.replace({ name: 'login' })
+}
+
 // A 401 mid-session flips `authenticated`; send the user to the login page.
 watch(
   () => auth.authenticated,
   (ok) => {
-    if (!ok && auth.loginRequired) void router.replace({ name: 'login' })
+    if (!ok) handleUnauthenticatedRedirect()
   },
 )
 
@@ -31,6 +60,7 @@ function onKey(e: KeyboardEvent) {
 
 onMounted(() => {
   window.addEventListener('keydown', onKey)
+  auth.listenBroadcast()
   offline.listen()
   void offline.start()
 })

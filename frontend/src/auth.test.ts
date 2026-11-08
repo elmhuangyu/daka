@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { ApiError, describeError, getAuthStatus, logout, resetCsrf, setCheckin, setAuthHooks } from './api'
+import {
+  ApiError, describeError, getAuthStatus, logout, resetCsrf, setCheckin, setAuthHooks,
+  broadcastAuthEvent,
+} from './api'
 import { useAuthStore } from './stores/auth'
 import ReauthModal from './components/ReauthModal.vue'
 
@@ -142,6 +145,31 @@ describe('auth store', () => {
     routes['/api/checkins'] = () => jsonRes({ error: 'unauthorized' }, 401)
     await expect(setCheckin(1, true)).rejects.toThrow()
     expect(auth.authenticated).toBe(false)
+  })
+
+  it('syncs authentication across tabs via broadcast channel', async () => {
+    let currentAuth = false
+    let currentName = ''
+    routes['/api/auth/status'] = () =>
+      jsonRes({ oidc_enabled: false, login_required: true, authenticated: currentAuth })
+    routes['/api/auth/me'] = () => jsonRes({ id: '1', name: currentName })
+
+    const auth = useAuthStore()
+    await auth.init()
+    auth.listenBroadcast()
+    expect(auth.authenticated).toBe(false)
+
+    // Simulate tab 2 logging in and broadcasting 'logged_in'
+    currentAuth = true
+    currentName = 'Other Tab'
+    broadcastAuthEvent({ type: 'logged_in' })
+    await vi.waitFor(() => expect(auth.authenticated).toBe(true))
+    expect(auth.user?.name).toBe('Other Tab')
+
+    // Simulate tab 2 logging out and broadcasting 'logged_out'
+    broadcastAuthEvent({ type: 'logged_out' })
+    await vi.waitFor(() => expect(auth.authenticated).toBe(false))
+    expect(auth.user).toBeNull()
   })
 
   it('reauth modal (secret mode) calls the reauth endpoint and unblocks the request', async () => {

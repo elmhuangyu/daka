@@ -105,8 +105,21 @@ export const useAuthStore = defineStore('auth', () => {
 
   api.setAuthHooks({ onUnauthorized: markUnauthenticated, onReauthRequired: requestReauth })
 
+  let unsubscribeBroadcast: (() => void) | null = null
+  function listenBroadcast() {
+    if (unsubscribeBroadcast || typeof window === 'undefined') return
+    unsubscribeBroadcast = api.onAuthBroadcast(async (msg) => {
+      if (msg.type === 'logged_in') {
+        await refreshStatus()
+      } else if (msg.type === 'logged_out' || msg.type === 'session_expired') {
+        markUnauthenticated()
+      }
+    })
+  }
+
   return {
     ready, initError, oidcEnabled, loginRequired, authenticated, user, reauthOpen,
     init, refreshStatus, markUnauthenticated, loginWithSecret, logout, requestReauth, settleReauth, reauthWithSecret, reauthWithOidc,
+    listenBroadcast,
   }
 })
