@@ -96,6 +96,7 @@ func (s *server) listOptions(w http.ResponseWriter, r *http.Request) {
 		out[i] = newOptionResponse(o, targets)
 		if hide {
 			out[i].Name = "Option " + strconv.Itoa(i+1)
+			out[i].Unit = ""
 		}
 	}
 	jsonResult(http.StatusOK, map[string]any{"options": out}).write(w)

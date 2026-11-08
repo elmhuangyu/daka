@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
 )
@@ -121,6 +122,16 @@ func loadOwnedCategory(tx *gorm.DB, userID string, id uint) (dbmodels.Category, 
 	return c, err == nil, err
 }
 
+// lockCategoryItems takes row locks on the items of category id (ordered, so
+// concurrent category operations cannot deadlock) before they are frozen or
+// moved. PATCH /api/items locks its item row first and then only reads the
+// category, so both paths serialize on the item rows.
+func lockCategoryItems(tx *gorm.DB, userID string, id uint) error {
+	var ids []uint
+	return tx.Clauses(clause.Locking{Strength: "UPDATE"}).Model(&dbmodels.Item{}).
+		Where("user_id = ? AND category_id = ?", userID, id).Order("id").Pluck("id", &ids).Error
+}
+
 // freezeCategoryItems applies DESIGN 4.1 rule 3 to the items of category id
 // that are not yet flagged themselves and returns how many there are. Without
 // confirm they are flagged sensitive, so they stay protected after the category
@@ -168,6 +179,9 @@ func (s *server) putCategory(w http.ResponseWriter, r *http.Request) {
 		}
 		var affected *int64
 		if req.IsSensitive != nil && c.IsSensitive && !*req.IsSensitive {
+			if err := lockCategoryItems(tx, userID, id); err != nil {
+				return result{}, err
+			}
 			n, err := freezeCategoryItems(tx, userID, id, confirm)
 			if err != nil {
 				return result{}, err
@@ -244,6 +258,9 @@ func (s *server) deleteCategory(w http.ResponseWriter, r *http.Request) {
 				return errResult(http.StatusBadRequest, "invalid move_to"), nil
 			}
 			target = t
+		}
+		if err := lockCategoryItems(tx, userID, id); err != nil {
+			return result{}, err
 		}
 		var items int64
 		if err := tx.Model(&dbmodels.Item{}).Where("user_id = ? AND category_id = ?", userID, id).Count(&items).Error; err != nil {

@@ -76,6 +76,7 @@ func (s *server) itemStats(userID string, itemID uint, redact bool) (result, err
 			if o.OptionID != nil {
 				o.Name = fmt.Sprintf("Option %d", i+1)
 			}
+			o.Unit = ""
 			opts[i] = o
 		}
 		resp.Options = opts

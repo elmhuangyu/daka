@@ -90,7 +90,7 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /api/categories", s.listCategories)
 	mux.HandleFunc("POST /api/categories", s.postCategory)
 	mux.HandleFunc("PUT /api/categories/{id}", s.putCategory)
-	mux.HandleFunc("DELETE /api/categories/{id}", s.deleteCategory)
+	mux.Handle("DELETE /api/categories/{id}", reauth(http.HandlerFunc(s.deleteCategory)))
 	mux.HandleFunc("GET /api/freezes", s.listFreezes)
 	mux.HandleFunc("POST /api/freezes", s.postFreeze)
 	mux.HandleFunc("DELETE /api/freezes/{id}", s.deleteFreeze)

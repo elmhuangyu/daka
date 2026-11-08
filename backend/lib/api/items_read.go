@@ -183,8 +183,10 @@ func buildItemResponses(db *gorm.DB, items []dbmodels.Item, today string) ([]ite
 func redactItem(resp *itemResponse) {
 	resp.Name = privateItemName
 	resp.Description = ""
+	resp.Unit = ""
 	for i := range resp.Options {
 		resp.Options[i].Name = "Option " + strconv.Itoa(i+1)
+		resp.Options[i].Unit = ""
 	}
 }
 

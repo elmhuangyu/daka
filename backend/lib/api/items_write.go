@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
 	"github.com/elmhuangyu/daka/backend/lib/schedule"
@@ -283,7 +284,9 @@ func (s *server) patchItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRequest) (result, error) {
-	item, found, err := loadOwnedItem(tx, userID, id)
+	// Row lock (PostgreSQL; SQLite serializes writers anyway) so a concurrent
+	// category freeze cannot be overwritten by this read-modify-write.
+	item, found, err := loadOwnedItem(tx.Clauses(clause.Locking{Strength: "UPDATE"}), userID, id)
 	if err != nil {
 		return result{}, err
 	}
@@ -441,7 +444,9 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 		}
 	}
 
-	if err := tx.Save(&item).Error; err != nil {
+	if err := tx.Model(&dbmodels.Item{}).Where("id = ?", item.ID).Select(
+		"Name", "Description", "CategoryID", "IsSensitive", "Pinned", "SortOrder", "Archived", "RemindTime",
+		"Unit", "Step", "MinVal", "MaxVal", "Aggregate", "WarningDays").Updates(&item).Error; err != nil {
 		return result{}, err
 	}
 	if newVer != nil {

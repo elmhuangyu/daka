@@ -146,3 +146,71 @@ func TestRedactEverywhere(t *testing.T) {
 		require.NotContains(t, w.Body.String(), "Hidden Note", p)
 	}
 }
+
+// Both orders of a category freeze and an item PATCH must end protected.
+func TestFreezeAndPatchOrderings(t *testing.T) {
+	e := newEnv(t)
+	// Freeze first, then an unrelated PATCH (must not clobber is_sensitive).
+	c1 := e.category("u1", true)
+	id1 := e.dailyItem("u1", func(it *dbmodels.Item) { it.CategoryID = &c1 })
+	require.Equal(t, 200, e.do("PUT", fmt.Sprintf("/api/categories/%d", c1), "", "", m{"is_sensitive": false}).Code)
+	require.Equal(t, 200, e.do("PATCH", itemPath(id1), "", "", m{"pinned": true}).Code)
+	require.True(t, e.rawItem(id1).IsSensitive)
+
+	// PATCH first (rename), then the delete freeze.
+	c2 := e.category("u1", true)
+	id2 := e.dailyItem("u1", func(it *dbmodels.Item) { it.CategoryID = &c2 })
+	require.Equal(t, 200, e.do("PATCH", itemPath(id2), "", "", m{"name": "Renamed"}).Code)
+	require.Equal(t, 200, e.do("DELETE", fmt.Sprintf("/api/categories/%d?uncategorize=1", c2), "", "", nil).Code)
+	got := e.rawItem(id2)
+	require.True(t, got.IsSensitive)
+	require.Equal(t, "Renamed", got.Name)
+
+	// PATCH after the category is gone must keep the frozen flag.
+	require.Equal(t, 200, e.do("PATCH", itemPath(id2), "", "", m{"category_id": nil, "pinned": true}).Code)
+	require.True(t, e.rawItem(id2).IsSensitive)
+}
+
+func TestDeleteCategoryMoveToPlain(t *testing.T) {
+	e := newEnv(t)
+	a := e.category("u1", true)
+	b := e.category("u1", false)
+	id := e.dailyItem("u1", func(it *dbmodels.Item) { it.CategoryID = &a })
+	w := e.do("DELETE", fmt.Sprintf("/api/categories/%d?move_to=%d", a, b), "", "", nil)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	got := e.rawItem(id)
+	require.Equal(t, b, *got.CategoryID)
+	require.True(t, got.IsSensitive) // frozen when landing in a plain category
+}
+
+func TestDeleteCategoryForeignMoveTo(t *testing.T) {
+	e := newEnv(t)
+	a := e.category("u1", true)
+	foreign := e.category("u2", false)
+	id := e.dailyItem("u1", func(it *dbmodels.Item) { it.CategoryID = &a })
+	w := e.do("DELETE", fmt.Sprintf("/api/categories/%d?move_to=%d", a, foreign), "", "", nil)
+	require.Equal(t, 400, w.Code)
+	require.Equal(t, a, *e.rawItem(id).CategoryID)
+	var n int64
+	require.NoError(t, e.db.Write().Model(&dbmodels.Category{}).Where("id = ?", a).Count(&n).Error)
+	require.EqualValues(t, 1, n)
+}
+
+func TestRedactHidesUnits(t *testing.T) {
+	e := newEnv(t)
+	w := e.do("POST", "/api/items", "", "", m{
+		"name": "Hidden Thing", "tracker_type": "counter", "is_sensitive": true, "unit": "secretunit",
+		"options": []m{{"name": "o1", "unit": "secretunit"}},
+		"rule":    m{"schedule_type": "fixed_rrule", "rrule_string": "FREQ=DAILY"},
+	})
+	require.Equal(t, 201, w.Code, w.Body.String())
+	it := decode[itemResponse](t, w)
+	for _, p := range []string{
+		"/api/items?redact=1", fmt.Sprintf("/api/items/%d?redact=1", it.ID),
+		fmt.Sprintf("/api/items/%d/options?redact=1", it.ID), fmt.Sprintf("/api/items/%d/stats?redact=1", it.ID),
+	} {
+		w := e.do("GET", p, "", "", nil)
+		require.Equal(t, 200, w.Code, p)
+		require.NotContains(t, w.Body.String(), "secretunit", p)
+	}
+}
