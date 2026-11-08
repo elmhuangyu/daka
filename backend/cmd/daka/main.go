@@ -85,7 +85,6 @@ func loadConfig(args []string, getenv func(string) string, stderr io.Writer) (*c
 }
 
 const (
-	defaultUserName = "default_user"
 	purgeInterval   = 24 * time.Hour
 	shutdownTimeout = 10 * time.Second
 )

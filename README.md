@@ -6,7 +6,9 @@ A habit tracker with a Go backend and a Vue frontend.
 
 - `backend/cmd/daka` - program entry point
 - `backend/e2e` - end-to-end tests over the real HTTP stack (`just e2e`)
-- `backend/lib/{config,auth,db,dbmodels,holiday,schedule,notify,api}` - backend packages
+- `backend/lib/{app,config,auth,db,dbmodels,holiday,schedule,stats,extcal,notify,ratelimit,secret,api}` - backend packages
+- `frontend` - Vue 3 SPA (`just fe-install`, `fe-lint`, `fe-test`, `fe-build`)
+- `skills/daka` - Claude skill for the read-only AI API
 
 ## Development
 
@@ -17,6 +19,13 @@ Requires Go and [just](https://github.com/casey/just).
 - `just lint` - golangci-lint if installed, else `go vet` and a gofmt check
 - `just fmt` - format code
 - `just run` - run the backend
+
+## Deployment and security
+
+- The server binds to `127.0.0.1:8080` by default and runs in single-user mode (no login). Binding a non-loopback address requires `server.allow_insecure_public: true` and an `auth.shared_secret` of at least 16 characters, or OIDC login. Put it behind TLS (and set `DAKA_AUTH_SECURE_COOKIE=1`).
+- Behind a reverse proxy, set `server.allowed_hosts` (DNS-rebinding guard) and configure trusted proxies for client IPs. Make the proxy redact the `token=` query parameter from access logs (ICS feed URLs).
+- Secrets are read from the environment only and are never stored in the database or config files: `DAKA_SECRET_KEY` (encrypts external calendar URLs; rotate with `DAKA_SECRET_KEY_OLD`) and `DAKA_TELEGRAM_BOT_TOKEN` (enables Telegram reminders, long polling, notify-only).
+- API tokens are read-only (`feed:read` for the ICS feed, `read` for the AI API) and sensitive items are never exposed through them.
 
 ## Manual verification
 
