@@ -11,7 +11,7 @@ export interface TodayItem {
 
 export interface TodayView {
   date: string
-  weekday: string
+  weekday: number // 0 = Sunday .. 6 = Saturday
   timezone: string
   progress: { done: number; total: number }
   items: TodayItem[]

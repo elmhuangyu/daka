@@ -3,6 +3,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { createItem, getToday, setCheckin, type TodayView } from './api'
 import { buildRRule, WEEKDAYS, type Weekday } from './rrule'
 
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
 const props = defineProps<{ redact: boolean }>()
 
 const view = ref<TodayView | null>(null)
@@ -89,7 +91,7 @@ watch(
 <template>
   <section>
     <header v-if="view">
-      <h1>Today {{ view.date }} <small>{{ view.weekday }}</small></h1>
+      <h1>Today {{ view.date }} <small>{{ WEEKDAY_NAMES[view.weekday] ?? '' }}</small></h1>
       <span data-testid="progress">{{ view.progress.done }}/{{ view.progress.total }}</span>
     </header>
 

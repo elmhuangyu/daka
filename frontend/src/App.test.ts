@@ -4,7 +4,7 @@ import indexHtml from '../index.html?raw'
 import App from './App.vue'
 
 function today(items: object[] = []) {
-  return { date: '2026-11-07', weekday: 'Saturday', timezone: 'UTC', progress: { done: 1, total: 3 }, items }
+  return { date: '2026-11-07', weekday: 6, timezone: 'UTC', progress: { done: 1, total: 3 }, items }
 }
 const A = { id: 1, name: 'Read', category_id: null, tracker_type: 'boolean', is_sensitive: false, due: true, done: false, log_ids: [] }
 const B = { id: 2, name: 'Water', category_id: null, tracker_type: 'boolean', is_sensitive: false, due: true, done: true, log_ids: [9] }
