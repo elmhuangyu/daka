@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/oauth2"
 )
 
@@ -27,6 +28,8 @@ const (
 	reauthMaxAge = 120 * time.Second
 	// authTimeSkew tolerates IdP clock drift for auth_time in the future.
 	authTimeSkew = 60 * time.Second
+	// userInfoTimeout bounds the fallback call to the IdP UserInfo endpoint.
+	userInfoTimeout = 5 * time.Second
 )
 
 // OIDCConfig configures the Authorization Code + PKCE client. The BFF keeps no
@@ -227,22 +230,33 @@ func (o *OIDC) Complete(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		AvatarURL: sanitizeAvatarURL(claims.Picture),
 		Reauth:    p.reauth,
 	}
+	hasExplicitName := claims.Name != "" || claims.Username != "" || claims.Email != ""
 	id.Name = firstNonEmpty(claims.Name, claims.Username, claims.Email, "user")
 
 	// If Picture was not present in the ID token, query the UserInfo endpoint if available.
-	if id.AvatarURL == "" && provider != nil {
-		if uInfo, err := provider.UserInfo(o.ctx(ctx), oauth2.StaticTokenSource(tok)); err == nil {
+	if id.AvatarURL == "" {
+		uCtx, cancel := context.WithTimeout(o.ctx(ctx), userInfoTimeout)
+		defer cancel()
+		uInfo, err := provider.UserInfo(uCtx, oauth2.StaticTokenSource(tok))
+		if err != nil {
+			log.Warn().Err(err).Msg("oidc userinfo endpoint call failed")
+		} else if uInfo.Subject != idt.Subject {
+			// OIDC Core §5.3.2: The sub Claim in the UserInfo Response MUST match the
+			// sub Claim in the ID Token; if they do not match, the Claims MUST NOT be used.
+			log.Warn().Str("id_token_sub", idt.Subject).Str("userinfo_sub", uInfo.Subject).
+				Msg("oidc userinfo subject mismatch; discarding userinfo claims")
+		} else {
 			var uClaims struct {
 				Name     string `json:"name"`
 				Username string `json:"preferred_username"`
 				Email    string `json:"email"`
 				Picture  string `json:"picture"`
 			}
-			if err := uInfo.Claims(&uClaims); err == nil {
-				if id.AvatarURL == "" {
-					id.AvatarURL = sanitizeAvatarURL(uClaims.Picture)
-				}
-				if id.Name == "user" || id.Name == "" {
+			if err := uInfo.Claims(&uClaims); err != nil {
+				log.Warn().Err(err).Msg("failed to parse oidc userinfo claims")
+			} else {
+				id.AvatarURL = sanitizeAvatarURL(uClaims.Picture)
+				if !hasExplicitName {
 					id.Name = firstNonEmpty(uClaims.Name, uClaims.Username, uClaims.Email, "user")
 				}
 				if id.Email == "" {

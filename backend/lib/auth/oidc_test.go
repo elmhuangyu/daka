@@ -488,9 +488,9 @@ func TestOIDCAvatarURLFromIDTokenAndUserInfo(t *testing.T) {
 	require.Equal(t, "https://example.com/avatar2.png", me2["avatar_url"])
 
 	// 3. Dangerous scheme in picture (e.g. javascript:) is discarded by sanitizeAvatarURL
+	e.idp.mu.Lock()
 	e.idp.sub = "sub-3"
 	e.idp.picture = "javascript:alert(1)"
-	e.idp.mu.Lock()
 	e.idp.userInfo = nil
 	e.idp.mu.Unlock()
 
@@ -505,4 +505,29 @@ func TestOIDCAvatarURLFromIDTokenAndUserInfo(t *testing.T) {
 	var me3 map[string]string
 	require.NoError(t, json.Unmarshal(rec3.Body.Bytes(), &me3))
 	require.NotContains(t, me3, "avatar_url")
+
+	// 4. UserInfo sub mismatch: discarded per OIDC Core §5.3.2
+	e.idp.mu.Lock()
+	e.idp.sub = "sub-4"
+	e.idp.picture = ""
+	e.idp.userInfo = map[string]any{
+		"sub":     "impostor-sub",
+		"name":    "Impostor",
+		"email":   "impostor@example.com",
+		"picture": "https://example.com/impostor.png",
+	}
+	e.idp.mu.Unlock()
+
+	sc4 := e.login(t)
+	wantID4 := OIDCUserID(e.idp.srv.URL, "sub-4")
+	var u4 dbmodels.User
+	require.NoError(t, e.m.db.First(&u4, "id = ?", wantID4).Error)
+	require.Empty(t, u4.AvatarURL, "claims from mismatched userinfo sub must not be adopted")
+	require.NotEqual(t, "Impostor", u4.Name)
+
+	rec4 := call(e.h, "GET", "/api/auth/me", "", nil, sc4)
+	require.Equal(t, 200, rec4.Code)
+	var me4 map[string]string
+	require.NoError(t, json.Unmarshal(rec4.Body.Bytes(), &me4))
+	require.NotContains(t, me4, "avatar_url")
 }

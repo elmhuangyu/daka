@@ -15,6 +15,7 @@ const router = useRouter()
 const route = useRoute()
 
 let activationListenerInstalled = false
+let removeActivationListener: (() => void) | null = null
 
 function handleUnauthenticatedRedirect() {
   if (!auth.loginRequired) return
@@ -29,12 +30,17 @@ function handleUnauthenticatedRedirect() {
     const onVisible = async () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         activationListenerInstalled = false
+        removeActivationListener = null
         document.removeEventListener('visibilitychange', onVisible)
         await auth.refreshStatus()
         if (!auth.authenticated && auth.loginRequired) {
           void router.replace({ name: 'login' })
         }
       }
+    }
+    removeActivationListener = () => {
+      activationListenerInstalled = false
+      document.removeEventListener('visibilitychange', onVisible)
     }
     document.addEventListener('visibilitychange', onVisible)
     return
@@ -64,7 +70,13 @@ onMounted(() => {
   offline.listen()
   void offline.start()
 })
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  if (removeActivationListener) {
+    removeActivationListener()
+    removeActivationListener = null
+  }
+})
 </script>
 
 <template>

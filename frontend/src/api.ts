@@ -78,7 +78,7 @@ function getBroadcastChannelCtor(): typeof BroadcastChannel | undefined {
   if (typeof BroadcastChannel !== 'undefined') {
     return BroadcastChannel
   }
-  return (globalThis as unknown as { BroadcastChannel?: typeof BroadcastChannel }).BroadcastChannel
+  return undefined
 }
 
 const AUTH_CHANNEL_NAME = 'daka_auth_channel'
@@ -93,6 +93,9 @@ export function broadcastAuthEvent(msg: AuthChannelMessage): void {
     const Channel = getBroadcastChannelCtor()
     if (Channel) {
       const channel = new Channel(AUTH_CHANNEL_NAME)
+      // postMessage queues the message on the channel. Per HTML BroadcastChannel
+      // specification, close() only stops receiving new messages on this instance;
+      // queued outgoing messages are dispatched to peer tabs.
       channel.postMessage(msg)
       channel.close()
     }
