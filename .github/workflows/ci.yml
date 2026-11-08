@@ -17,6 +17,7 @@ jobs:
       # golangci-lint is not installed here, so `just lint` uses its
       # go vet + gofmt fallback.
       - run: just test
+      - run: just e2e
       - run: just lint
       - uses: pnpm/action-setup@v4
         with:

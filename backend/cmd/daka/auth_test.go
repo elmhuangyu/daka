@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"github.com/elmhuangyu/daka/backend/lib/app"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -104,7 +105,7 @@ func TestUserClaimCLI(t *testing.T) {
 	d, err := db.Open(config.DBConfig{Driver: config.DriverSQLite, DSN: config.Secret(dsn)})
 	require.NoError(t, err)
 	require.NoError(t, dbmodels.AutoMigrate(d.Write()))
-	require.NoError(t, bootstrapDefaultUser(d.Write(), "UTC"))
+	require.NoError(t, app.BootstrapDefaultUser(d.Write(), "UTC"))
 	target := auth.OIDCUserID("https://idp.example", "sub-9")
 	require.NoError(t, d.Write().Create(&dbmodels.User{ID: target, Name: "o"}).Error)
 	require.NoError(t, d.Write().Create(&dbmodels.UserSettings{UserID: target, Timezone: "UTC", WeekStart: 1}).Error)

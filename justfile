@@ -6,6 +6,10 @@ default:
 test:
     cd backend && go test ./...
 
+# Run the end-to-end tests (real HTTP stack, temp SQLite DB, injected clock)
+e2e:
+    cd backend && go test ./e2e/...
+
 # Lint: golangci-lint if installed, otherwise go vet + gofmt check
 lint:
     #!/usr/bin/env bash

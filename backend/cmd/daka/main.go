@@ -19,19 +19,15 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	"github.com/elmhuangyu/daka/backend/lib/api"
+	"github.com/elmhuangyu/daka/backend/lib/app"
 	"github.com/elmhuangyu/daka/backend/lib/auth"
 	"github.com/elmhuangyu/daka/backend/lib/config"
 	"github.com/elmhuangyu/daka/backend/lib/db"
 	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
-	"github.com/elmhuangyu/daka/backend/lib/extcal"
 	"github.com/elmhuangyu/daka/backend/lib/holiday"
 	"github.com/elmhuangyu/daka/backend/lib/notify"
-	"github.com/elmhuangyu/daka/backend/lib/ratelimit"
-	"github.com/elmhuangyu/daka/backend/lib/schedule"
 	"github.com/elmhuangyu/daka/backend/lib/secret"
 )
 
@@ -94,85 +90,6 @@ const (
 	shutdownTimeout = 10 * time.Second
 )
 
-// bootstrapDefaultUser idempotently creates the single-user account and its
-// settings. Existing rows are never modified.
-func bootstrapDefaultUser(g *gorm.DB, timezone string) error {
-	return g.Transaction(func(tx *gorm.DB) error {
-		u := dbmodels.User{ID: auth.DefaultUserID, Name: defaultUserName}
-		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&u).Error; err != nil {
-			return err
-		}
-		st := dbmodels.UserSettings{UserID: auth.DefaultUserID, Timezone: timezone, WeekStart: 1}
-		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&st).Error
-	})
-}
-
-// newHandler wires authentication and the API. Login is required (cookie
-// sessions) when OIDC or auth.shared_secret is configured; otherwise every
-// request is default_user (loopback single-user mode). It returns the session
-// manager (nil without login) so the caller can purge expired sessions.
-func newHandler(cfg *config.Config, d *db.DB, hp *holiday.Provider, tg *notify.Service) (http.Handler, *auth.Manager, error) {
-	proxies, err := config.ParseTrustedProxies(cfg.Server.TrustedProxies)
-	if err != nil {
-		return nil, nil, err
-	}
-	var limiter *ratelimit.Limiter
-	if rl := cfg.Server.RateLimit; !rl.Disabled {
-		limiter = ratelimit.NewLimiter(ratelimit.LimiterConfig{RPS: rl.RPS, Burst: rl.Burst})
-	}
-	clientIP := ratelimit.ClientIPResolver{Trusted: proxies}
-	var (
-		manager  *auth.Manager
-		verifier auth.SessionVerifier // stays a nil interface without login
-		oidc     *auth.OIDC
-	)
-	loginRequired := cfg.Auth.Issuer != "" || cfg.Auth.SharedSecret != ""
-	if loginRequired {
-		manager = auth.NewManager(d.Write(), auth.ManagerOptions{SecureCookie: cfg.Auth.SecureCookie})
-		verifier = manager
-	}
-	if cfg.Auth.Issuer != "" {
-		oidc, err = auth.NewOIDC(auth.OIDCConfig{
-			Issuer: cfg.Auth.Issuer, ClientID: cfg.Auth.ClientID, ClientSecret: cfg.Auth.ClientSecret.Reveal(),
-			RedirectURL: cfg.Auth.RedirectURL, Scopes: cfg.Auth.Scopes,
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	authFail := ratelimit.NewAuthFailureLimiter(ratelimit.AuthFailureConfig{})
-	authHandler := auth.NewHandler(auth.HandlerOptions{
-		DB: d.Write(), Manager: manager, SharedSecret: cfg.Auth.SharedSecret.Reveal(), OIDC: oidc,
-		Timezone: cfg.Timezone, SecureCookie: cfg.Auth.SecureCookie,
-		Limiter: authFail, ClientIP: clientIP.ClientIP,
-	})
-	var keys *secret.Keyring // nil without DAKA_SECRET_KEY: saving external URLs answers 503
-	if cfg.Secrets.SecretKey.Reveal() != "" {
-		if keys, err = secret.ParseKeyring(cfg.Secrets.SecretKey.Reveal(), cfg.Secrets.SecretKeyOld.Reveal()); err != nil {
-			return nil, nil, err
-		}
-	}
-	extCal := extcal.NewService(extcal.ServiceOptions{Keys: keys, AllowHTTP: cfg.ExternalCalendar.AllowHTTP})
-	apiHandler := api.NewRouter(api.Deps{DB: d, Auth: auth.Middleware(verifier), Limiter: limiter, ClientIP: clientIP, ExtCal: extCal, Reauth: auth.RequireReauth(nil),
-		Calendar: holidayCalendars(hp), Telegram: tg, SecureCookie: cfg.Auth.SecureCookie})
-	mux := http.NewServeMux()
-	// Public auth endpoints authenticate themselves; they share the global
-	// per-IP rate limit (this covers GET /api/auth/oidc/login too).
-	mux.Handle("/api/auth/", ratelimit.Middleware(limiter, clientIP)(authHandler))
-	mux.Handle("/api/", apiHandler)
-	if cfg.Server.StaticDir != "" {
-		mux.Handle("/", api.StaticHandler(cfg.Server.StaticDir))
-	}
-	var h http.Handler = mux
-	// DNS-rebinding defence: without login the only protection is the loopback
-	// bind, so unknown Host headers are refused. With login (possibly on a LAN
-	// address) the check applies only when server.allowed_hosts is configured.
-	if !loginRequired || len(cfg.Server.AllowedHosts) > 0 {
-		h = auth.HostGuard(auth.NewHostAllowlist(cfg.Server.Listen, cfg.Server.AllowedHosts))(h)
-	}
-	return h, manager, nil
-}
-
 // serve runs the server on ln until ctx is cancelled, then shuts down gracefully.
 func serve(ctx context.Context, cfg *config.Config, ln net.Listener, logger zerolog.Logger) error {
 	defer func() { _ = ln.Close() }()
@@ -184,7 +101,7 @@ func serve(ctx context.Context, cfg *config.Config, ln net.Listener, logger zero
 	if err := dbmodels.AutoMigrate(d.Write()); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
-	if err := bootstrapDefaultUser(d.Write(), cfg.Timezone); err != nil {
+	if err := app.BootstrapDefaultUser(d.Write(), cfg.Timezone); err != nil {
 		return fmt.Errorf("bootstrap default user: %w", err)
 	}
 
@@ -192,8 +109,8 @@ func serve(ctx context.Context, cfg *config.Config, ln net.Listener, logger zero
 	if err != nil {
 		return fmt.Errorf("holiday data: %w", err)
 	}
-	tg := notify.New(notify.Options{DB: d.Write(), Token: cfg.Secrets.TelegramBotToken.Reveal(), Calendar: holidayCalendars(hp)})
-	handler, sessions, err := newHandler(cfg, d, hp, tg)
+	tg := notify.New(notify.Options{DB: d.Write(), Token: cfg.Secrets.TelegramBotToken.Reveal(), Calendar: app.HolidayCalendars(hp)})
+	handler, sessions, err := app.NewHandler(cfg, d, hp, tg)
 	if err != nil {
 		return fmt.Errorf("build handler: %w", err)
 	}
@@ -322,19 +239,4 @@ func newHolidayProvider(c config.HolidayConfig) (*holiday.Provider, error) {
 		opts = append(opts, holiday.WithURLTemplate(c.URLTemplate))
 	}
 	return holiday.NewProvider(opts...)
-}
-
-// holidayCalendars maps UserSettings.holiday_region to a calendar: CN has
-// data, every other region (and a disabled provider) has none.
-func holidayCalendars(hp *holiday.Provider) func(dbmodels.HolidayRegion) schedule.DayCalendar {
-	if hp == nil {
-		return nil
-	}
-	cn := holiday.NewCalendar(hp, holiday.RegionCN)
-	return func(r dbmodels.HolidayRegion) schedule.DayCalendar {
-		if string(r) == holiday.RegionCN {
-			return cn
-		}
-		return nil
-	}
 }
