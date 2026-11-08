@@ -193,11 +193,20 @@ func ValidateRule(v dbmodels.ItemRuleVersion) error {
 	if _, err := parseDate("effective_from", v.EffectiveFrom); err != nil {
 		return err
 	}
-	if v.ScheduleType != dbmodels.ScheduleFixedRRule {
-		return nil
+	switch v.ScheduleType {
+	case dbmodels.ScheduleFixedRRule:
+		_, _, _, err := buildRule(v)
+		return err
+	case dbmodels.ScheduleRolling:
+		if err := ValidateRolling(v); err != nil {
+			return err
+		}
+		if v.DtStart != "" {
+			_, err := parseDate("dtstart", v.DtStart)
+			return err
+		}
 	}
-	_, _, _, err := buildRule(v)
-	return err
+	return nil
 }
 
 // span is a version together with the inclusive date range it governs.
