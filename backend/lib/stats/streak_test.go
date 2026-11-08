@@ -179,7 +179,7 @@ func TestStreakCompletionRuleAllAny(t *testing.T) {
 			CheckinTime: time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)}
 	}
 	logs := []dbmodels.CheckinLog{
-		lg(1, "2026-11-01", &one, 10), // a met only
+		lg(1, "2026-11-01", &one, 10),                               // a met only
 		lg(2, "2026-11-02", &one, 10), lg(3, "2026-11-02", &two, 5), // both met
 		lg(4, "2026-11-03", &one, 4), lg(5, "2026-11-03", &two, 5), // b met only
 	}
