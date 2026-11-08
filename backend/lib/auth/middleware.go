@@ -112,14 +112,13 @@ func SameOrigin(r *http.Request) bool {
 	return false
 }
 
-// TODO(P1-9, P1-12): RequireReauth must be applied by the routes that create
-// API tokens, delete items and delete the account; it is not wired anywhere yet.
-//
 // RequireReauth rejects requests whose session has no re-authentication within
-// the last 5 minutes with 403 {"error":"reauth_required"}. Apply it (after
-// Middleware) to dangerous routes: DELETE /api/account, DELETE /api/items/{id},
-// API token creation. Without a cookie session (single-user mode without
-// shared_secret) there is nothing to re-authenticate against and requests pass.
+// the last 5 minutes with 403 {"error":"reauth_required"}. It is applied to
+// DELETE /api/items/{id}, DELETE /api/categories/{id} and API token creation
+// and revocation (DELETE /api/account is not implemented yet). API tokens never
+// reach this middleware: they are refused on every route except the ICS feed.
+// Without a cookie session (single-user mode without shared_secret) there is
+// nothing to re-authenticate against and requests pass.
 func RequireReauth(now func() time.Time) func(http.Handler) http.Handler {
 	if now == nil {
 		now = time.Now

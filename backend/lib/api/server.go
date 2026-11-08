@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/elmhuangyu/daka/backend/lib/db"
@@ -41,6 +42,11 @@ type Deps struct {
 	// ExtCal serves external calendar settings and overlay data. Nil means a
 	// service without an encryption key (saving URLs answers 503).
 	ExtCal *extcal.Service
+	// FeedFailures tracks feed token failures per (client IP, token prefix);
+	// FeedIPFailures is the per-IP aggregate (prefix-independent) cap. Nil
+	// creates defaults (5 failures per pair, 20 per IP, exponential lockout).
+	FeedFailures   *ratelimit.AuthFailureLimiter
+	FeedIPFailures *ratelimit.AuthFailureLimiter
 }
 
 type server struct {
@@ -50,12 +56,17 @@ type server struct {
 	versions *stats.Versions
 	cache    *stats.Cache
 	ext      *extcal.Service
+
+	clientIP   ratelimit.ClientIPResolver
+	feedFail   *ratelimit.AuthFailureLimiter
+	feedIPFail *ratelimit.AuthFailureLimiter
 }
 
 // NewRouter builds the API router. Only /api/ is rate limited (via Deps.Limiter);
 // static frontend files are served outside this router and are not limited.
 func NewRouter(d Deps) http.Handler {
-	s := &server{db: d.DB, now: d.Now, calendar: d.Calendar, versions: d.Versions, cache: d.StatsCache, ext: d.ExtCal}
+	s := &server{db: d.DB, now: d.Now, calendar: d.Calendar, versions: d.Versions, cache: d.StatsCache, ext: d.ExtCal,
+		clientIP: d.ClientIP, feedFail: d.FeedFailures, feedIPFail: d.FeedIPFailures}
 	if s.versions == nil {
 		s.versions = stats.NewVersions()
 	}
@@ -64,6 +75,12 @@ func NewRouter(d Deps) http.Handler {
 	}
 	if s.ext == nil {
 		s.ext = extcal.NewService(extcal.ServiceOptions{})
+	}
+	if s.feedFail == nil {
+		s.feedFail = ratelimit.NewAuthFailureLimiter(ratelimit.AuthFailureConfig{})
+	}
+	if s.feedIPFail == nil {
+		s.feedIPFail = ratelimit.NewAuthFailureLimiter(ratelimit.AuthFailureConfig{Threshold: 20})
 	}
 	if s.now == nil {
 		s.now = time.Now
@@ -99,6 +116,9 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /api/calendar/external", s.getExternalCalendar)
 	mux.HandleFunc("GET /api/view/calendar", s.getCalendarView)
 	mux.HandleFunc("GET /api/calendar/holidays", s.getHolidays)
+	mux.HandleFunc("GET /api/tokens", s.listTokens)
+	mux.Handle("POST /api/tokens", reauth(http.HandlerFunc(s.postToken)))
+	mux.Handle("DELETE /api/tokens/{id}", reauth(http.HandlerFunc(s.deleteToken)))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		errResult(http.StatusNotFound, "not found").write(w)
 	})
@@ -106,7 +126,13 @@ func NewRouter(d Deps) http.Handler {
 	if d.Auth != nil {
 		h = d.Auth(h)
 	}
-	return ratelimit.Middleware(d.Limiter, d.ClientIP)(h)
+	h = rejectAPITokenEarly(h)
+	// The feed authenticates by its own feed:read token and is the only route
+	// outside Auth; every other path, token-bearing or not, goes through Auth.
+	top := http.NewServeMux()
+	top.HandleFunc(feedPath, s.getFeed)
+	top.Handle("/", h)
+	return ratelimit.Middleware(d.Limiter, d.ClientIP)(top)
 }
 
 // result is a fully rendered JSON response.
@@ -132,4 +158,24 @@ func (r result) write(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(r.status)
 	_, _ = w.Write(r.body)
+}
+
+// rejectAPITokenEarly refuses API tokens (Authorization: Bearer dk_...) on
+// every route except the feed, before Auth runs, so a token can never act as a
+// credential even where Auth is permissive (single-user mode without login).
+func rejectAPITokenEarly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if tok := presentedBearer(r); strings.HasPrefix(tok, apiTokenPrefix) {
+			errResult(http.StatusUnauthorized, "api token not accepted here").write(w)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func presentedBearer(r *http.Request) string {
+	if h := r.Header.Get("Authorization"); len(h) > 7 && strings.EqualFold(h[:7], "bearer ") {
+		return strings.TrimSpace(h[7:])
+	}
+	return ""
 }
