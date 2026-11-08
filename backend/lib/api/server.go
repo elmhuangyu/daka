@@ -7,6 +7,7 @@ import (
 
 	"github.com/elmhuangyu/daka/backend/lib/db"
 	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
+	"github.com/elmhuangyu/daka/backend/lib/extcal"
 	"github.com/elmhuangyu/daka/backend/lib/ratelimit"
 	"github.com/elmhuangyu/daka/backend/lib/schedule"
 	"github.com/elmhuangyu/daka/backend/lib/stats"
@@ -34,6 +35,9 @@ type Deps struct {
 	Versions *stats.Versions
 	// StatsCache caches GET /api/items/{id}/stats; nil creates a default one.
 	StatsCache *stats.Cache
+	// ExtCal serves external calendar settings and overlay data. Nil means a
+	// service without an encryption key (saving URLs answers 503).
+	ExtCal *extcal.Service
 }
 
 type server struct {
@@ -42,17 +46,21 @@ type server struct {
 	calendar func(region dbmodels.HolidayRegion) schedule.DayCalendar
 	versions *stats.Versions
 	cache    *stats.Cache
+	ext      *extcal.Service
 }
 
 // NewRouter builds the API router. Only /api/ is rate limited (via Deps.Limiter);
 // static frontend files are served outside this router and are not limited.
 func NewRouter(d Deps) http.Handler {
-	s := &server{db: d.DB, now: d.Now, calendar: d.Calendar, versions: d.Versions, cache: d.StatsCache}
+	s := &server{db: d.DB, now: d.Now, calendar: d.Calendar, versions: d.Versions, cache: d.StatsCache, ext: d.ExtCal}
 	if s.versions == nil {
 		s.versions = stats.NewVersions()
 	}
 	if s.cache == nil {
 		s.cache = stats.NewCache(stats.DefaultCacheSize)
+	}
+	if s.ext == nil {
+		s.ext = extcal.NewService(extcal.ServiceOptions{})
 	}
 	if s.now == nil {
 		s.now = time.Now
@@ -66,6 +74,9 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /api/freezes", s.listFreezes)
 	mux.HandleFunc("POST /api/freezes", s.postFreeze)
 	mux.HandleFunc("DELETE /api/freezes/{id}", s.deleteFreeze)
+	mux.HandleFunc("GET /api/settings/calendar", s.getCalendarSettings)
+	mux.HandleFunc("PUT /api/settings/calendar", s.putCalendarSettings)
+	mux.HandleFunc("GET /api/calendar/external", s.getExternalCalendar)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		errResult(http.StatusNotFound, "not found").write(w)
 	})

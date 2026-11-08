@@ -62,7 +62,16 @@ type Config struct {
 	DB       DBConfig      `yaml:"db" json:"db"`
 	Auth     AuthConfig    `yaml:"auth" json:"auth"`
 	Holiday  HolidayConfig `yaml:"holiday" json:"holiday"`
-	Secrets  SecretsConfig `yaml:"-" json:"secrets"`
+	// ExternalCalendar configures the external calendar overlay fetcher.
+	ExternalCalendar ExternalCalendarConfig `yaml:"external_calendar" json:"external_calendar"`
+	Secrets          SecretsConfig          `yaml:"-" json:"secrets"`
+}
+
+// ExternalCalendarConfig configures fetching of external iCalendar feeds.
+type ExternalCalendarConfig struct {
+	// AllowHTTP permits plain http:// feed URLs. Only for tests / development;
+	// the private-address (SSRF) checks stay active regardless.
+	AllowHTTP bool `yaml:"allow_http" json:"allow_http"`
 }
 
 // ServerConfig configures the HTTP listener.
@@ -230,6 +239,9 @@ func applyEnv(c *Config, getenv func(string) string) error {
 		return nil
 	}
 
+	if err := boolean("DAKA_EXTERNAL_CALENDAR_ALLOW_HTTP", &c.ExternalCalendar.AllowHTTP); err != nil {
+		return err
+	}
 	str("DAKA_LISTEN", &c.Server.Listen)
 	str("DAKA_STATIC_DIR", &c.Server.StaticDir)
 	str("DAKA_TIMEZONE", &c.Timezone)

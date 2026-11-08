@@ -286,7 +286,9 @@ func TestFreezeEndpoints(t *testing.T) {
 }
 
 func TestTodayUsesDayCompletionAndCalendar(t *testing.T) {
-	cal := func(dbmodels.HolidayRegion) schedule.DayCalendar { return fakeCal{holidays: map[string]bool{"2026-11-07": true}} }
+	cal := func(dbmodels.HolidayRegion) schedule.DayCalendar {
+		return fakeCal{holidays: map[string]bool{"2026-11-07": true}}
+	}
 	e, _ := statsEnv(t, cal)
 	// workdays_only daily-ish rule: 2026-11-07 (Saturday, holiday) is skipped.
 	id := e.item("u1", nil)

@@ -80,3 +80,14 @@ func TestSecurityEnvOverrides(t *testing.T) {
 	require.NoError(t, err)
 	require.ErrorContains(t, c.Validate(), "trusted_proxies")
 }
+
+func TestExternalCalendarAllowHTTP(t *testing.T) {
+	c, err := Load("", envFrom(nil))
+	require.NoError(t, err)
+	require.False(t, c.ExternalCalendar.AllowHTTP)
+	c, err = Load("", envFrom(map[string]string{"DAKA_EXTERNAL_CALENDAR_ALLOW_HTTP": "true"}))
+	require.NoError(t, err)
+	require.True(t, c.ExternalCalendar.AllowHTTP)
+	_, err = Load("", envFrom(map[string]string{"DAKA_EXTERNAL_CALENDAR_ALLOW_HTTP": "maybe"}))
+	require.Error(t, err)
+}

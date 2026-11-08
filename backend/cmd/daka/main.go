@@ -27,6 +27,7 @@ import (
 	"github.com/elmhuangyu/daka/backend/lib/config"
 	"github.com/elmhuangyu/daka/backend/lib/db"
 	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
+	"github.com/elmhuangyu/daka/backend/lib/extcal"
 	"github.com/elmhuangyu/daka/backend/lib/holiday"
 	"github.com/elmhuangyu/daka/backend/lib/ratelimit"
 	"github.com/elmhuangyu/daka/backend/lib/schedule"
@@ -144,7 +145,14 @@ func newHandler(cfg *config.Config, d *db.DB, hp *holiday.Provider) (http.Handle
 		Timezone: cfg.Timezone, SecureCookie: cfg.Auth.SecureCookie,
 		Limiter: authFail, ClientIP: clientIP.ClientIP,
 	})
-	apiHandler := api.NewRouter(api.Deps{DB: d, Auth: auth.Middleware(verifier), Limiter: limiter, ClientIP: clientIP,
+	var keys *secret.Keyring // nil without DAKA_SECRET_KEY: saving external URLs answers 503
+	if cfg.Secrets.SecretKey.Reveal() != "" {
+		if keys, err = secret.ParseKeyring(cfg.Secrets.SecretKey.Reveal(), cfg.Secrets.SecretKeyOld.Reveal()); err != nil {
+			return nil, nil, err
+		}
+	}
+	extCal := extcal.NewService(extcal.ServiceOptions{Keys: keys, AllowHTTP: cfg.ExternalCalendar.AllowHTTP})
+	apiHandler := api.NewRouter(api.Deps{DB: d, Auth: auth.Middleware(verifier), Limiter: limiter, ClientIP: clientIP, ExtCal: extCal,
 		Calendar: holidayCalendars(hp)})
 	mux := http.NewServeMux()
 	// Public auth endpoints authenticate themselves; they share the global
