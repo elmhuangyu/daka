@@ -18,6 +18,11 @@ export function makeRouter(history: RouterHistory = createWebHistory()) {
       { path: '/', name: 'today', component: () => import('./views/TodayView.vue'), meta: { title: 'Today' } },
       { path: '/calendar', name: 'calendar', component: placeholder, meta: { title: 'Calendar' } },
       { path: '/items', name: 'items', component: placeholder, meta: { title: 'Items' } },
+      { path: '/items/new', name: 'item-new', component: () => import('./views/ItemEditorView.vue'), meta: { title: 'New item' } },
+      {
+        path: '/items/:id(\\d+)/edit', name: 'item-edit',
+        component: () => import('./views/ItemEditorView.vue'), meta: { title: 'Edit item' },
+      },
       { path: '/settings', name: 'settings', component: placeholder, meta: { title: 'Settings' } },
       { path: '/:pathMatch(.*)*', redirect: '/' },
     ],

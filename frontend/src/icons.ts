@@ -20,6 +20,10 @@ const ICONS: Record<string, string> = {
   'lucide:eye-off': wrap(
     '<path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61M2 2l20 20"/>',
   ),
+  'lucide:plus': wrap('<path d="M5 12h14m-7-7v14"/>'),
+  'lucide:trash-2': wrap(
+    '<path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2m-6 5v6m4-6v6"/>',
+  ),
   'lucide:log-out': wrap('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/>'),
   'lucide:plus': wrap('<path d="M5 12h14m-7-7v14"/>'),
   'lucide:minus': wrap('<path d="M5 12h14"/>'),

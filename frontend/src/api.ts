@@ -28,6 +28,8 @@ export class ApiError extends Error {
   code: string
   /** Seconds from a Retry-After header (HTTP 429), when present. */
   retryAfter?: number
+  /** Stable reason code of a 400 "invalid combination" answer, when present. */
+  reason = ''
   constructor(message: string, status: number, code = '') {
     super(message)
     this.name = 'ApiError'
@@ -189,13 +191,16 @@ async function request<T>(path: string, init: RequestInit = {}, retry: Retry = {
   if (!res.ok) {
     let msg = `Request failed (${res.status})`
     let code = ''
+    let reason = ''
     try {
-      const body = (await res.json()) as { error?: string }
+      const body = (await res.json()) as { error?: string; reason?: string }
       if (body && typeof body.error === 'string') msg = code = body.error
+      if (body && typeof body.reason === 'string') reason = body.reason
     } catch {
       // keep the default message
     }
     const err = new ApiError(msg, res.status, code)
+    err.reason = reason
     const ra = Number(res.headers.get('Retry-After'))
     if (ra > 0) err.retryAfter = ra
     if (res.status === 401 || (res.status === 403 && code === 'csrf')) resetCsrf()
@@ -360,6 +365,103 @@ export function deleteCheckin(id: number): Promise<unknown> {
 
 export function setCheckin(itemId: number, done: boolean): Promise<unknown> {
   return postCheckin({ item_id: itemId, mode: done ? 'set' : 'unset' })
+}
+
+// ---- Item editor (POST/PATCH /api/items, options, categories) ----
+
+export interface ItemOptionDto {
+  id: number
+  name: string
+  unit: string
+  step: number
+  min_val: number | null
+  max_val: number | null
+  aggregate: string
+  sort_order: number
+  target_value: number | null
+}
+
+export interface ItemRuleDto {
+  schedule_type: string
+  rrule_string: string
+  dtstart: string
+  until: string | null
+  holiday_mode: string
+  effective_from: string
+  rolling_interval?: number
+  rolling_unit?: string
+  quota_comparator?: string
+  quota_count?: number
+  quota_period?: string
+  quota_window?: string
+  quota_measure?: string
+  quota_option_id?: number
+  target_value?: number
+  completion_rule?: string
+  completion_n?: number
+  stale_after_days?: number
+  option_targets: Record<string, number>
+}
+
+export interface ItemDto {
+  id: number
+  name: string
+  description: string
+  remind_time: string | null
+  tracker_type: string
+  kind: string
+  polarity: string
+  category_id: number | null
+  is_sensitive: boolean
+  effective_sensitive: boolean
+  unit?: string
+  step?: number
+  min_val?: number | null
+  max_val?: number | null
+  aggregate?: string
+  warning_days?: number
+  options: ItemOptionDto[]
+  current_rule: ItemRuleDto
+}
+
+export interface CategoryDto {
+  id: number
+  name: string
+  color: string
+  icon: string
+  is_sensitive: boolean
+}
+
+export function getItem(id: number): Promise<ItemDto> {
+  return request<ItemDto>(`/api/items/${id}`)
+}
+
+export function postItem(body: unknown): Promise<ItemDto> {
+  return request<ItemDto>('/api/items', jsonInit('POST', body))
+}
+
+export function patchItem(id: number, body: unknown): Promise<ItemDto> {
+  return request<ItemDto>(`/api/items/${id}`, jsonInit('PATCH', body))
+}
+
+export function postOption(itemId: number, body: unknown): Promise<ItemOptionDto> {
+  return request<ItemOptionDto>(`/api/items/${itemId}/options`, jsonInit('POST', body))
+}
+
+export function putOption(itemId: number, optionId: number, body: unknown): Promise<ItemOptionDto> {
+  return request<ItemOptionDto>(`/api/items/${itemId}/options/${optionId}`, jsonInit('PUT', body))
+}
+
+export function deleteOption(itemId: number, optionId: number): Promise<unknown> {
+  return request(`/api/items/${itemId}/options/${optionId}`, { method: 'DELETE' })
+}
+
+export async function listCategories(): Promise<CategoryDto[]> {
+  return (await request<{ categories: CategoryDto[] }>('/api/categories')).categories
+}
+
+export function createCategory(name: string, isSensitive: boolean): Promise<CategoryDto> {
+  return request<CategoryDto>('/api/categories', jsonInit('POST', { name, is_sensitive: isSensitive }))
 }
 
 export function createItem(item: NewItem): Promise<unknown> {
