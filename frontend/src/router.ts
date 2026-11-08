@@ -1,12 +1,24 @@
 import { createRouter, createWebHistory, type RouterHistory } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    /** Reachable without a session; rendered without the app layout. */
+    public?: boolean
+    title?: string
+  }
+}
+
 export function makeRouter(history: RouterHistory = createWebHistory()) {
+  const placeholder = () => import('./views/PlaceholderView.vue')
   const router = createRouter({
     history,
     routes: [
       { path: '/login', name: 'login', component: () => import('./views/LoginView.vue'), meta: { public: true } },
-      { path: '/', name: 'today', component: () => import('./TodayView.vue') },
+      { path: '/', name: 'today', component: () => import('./TodayView.vue'), meta: { title: 'Today' } },
+      { path: '/calendar', name: 'calendar', component: placeholder, meta: { title: 'Calendar' } },
+      { path: '/items', name: 'items', component: placeholder, meta: { title: 'Items' } },
+      { path: '/settings', name: 'settings', component: placeholder, meta: { title: 'Settings' } },
       { path: '/:pathMatch(.*)*', redirect: '/' },
     ],
   })

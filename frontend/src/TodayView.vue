@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { createItem, getToday, setCheckin, type TodayView } from './api'
+import { usePrivacyStore } from './stores/privacy'
 import { buildRRule, WEEKDAYS, type Weekday } from './rrule'
 
 const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
-const props = defineProps<{ redact: boolean }>()
+const privacy = usePrivacyStore()
 
 const view = ref<TodayView | null>(null)
 const error = ref('')
@@ -19,7 +20,7 @@ let refreshSeq = 0
 async function refresh() {
   const seq = ++refreshSeq
   try {
-    const v = await getToday(props.redact)
+    const v = await getToday(privacy.redact)
     if (seq !== refreshSeq) return
     view.value = v
     error.value = ''
@@ -79,7 +80,7 @@ async function submit() {
 
 onMounted(refresh)
 watch(
-  () => props.redact,
+  () => privacy.redact,
   (on) => {
     // Drop any plaintext immediately; it stays cleared if the refetch fails.
     if (on) view.value = null
@@ -89,34 +90,34 @@ watch(
 </script>
 
 <template>
-  <section>
-    <header v-if="view">
-      <h1>Today {{ view.date }} <small>{{ WEEKDAY_NAMES[view.weekday] ?? '' }}</small></h1>
+  <section class="mx-auto max-w-2xl p-4">
+    <header v-if="view" class="flex items-baseline justify-between">
+      <h1 class="text-2xl font-bold">Today {{ view.date }} <small>{{ WEEKDAY_NAMES[view.weekday] ?? '' }}</small></h1>
       <span data-testid="progress">{{ view.progress.done }}/{{ view.progress.total }}</span>
     </header>
 
-    <p v-if="error" class="error" role="alert" data-testid="error">{{ error }}</p>
+    <p v-if="error" class="error my-2" role="alert" data-testid="error">{{ error }}</p>
 
-    <h2>To do ({{ dueItems.length }})</h2>
-    <ul data-testid="due-list">
-      <li v-for="item in dueItems" :key="item.id">
-        <span class="name">{{ item.name }}</span>
-        <button type="button" :disabled="busy.includes(item.id)" @click="toggle(item.id, true)">Check</button>
+    <h2 class="mt-4 text-lg font-semibold">To do ({{ dueItems.length }})</h2>
+    <ul data-testid="due-list" class="space-y-2">
+      <li v-for="item in dueItems" :key="item.id" class="flex items-center justify-between rounded-box border border-base-300 bg-base-100 p-2">
+        <span class="name" :class="{ sensitive: item.is_sensitive }">{{ item.name }}</span>
+        <button type="button" class="btn btn-sm" :disabled="busy.includes(item.id)" @click="toggle(item.id, true)">Check</button>
       </li>
     </ul>
 
-    <h2>Done ({{ doneItems.length }})</h2>
-    <ul data-testid="done-list">
-      <li v-for="item in doneItems" :key="item.id" class="done">
-        <span class="name">{{ item.name }}</span>
-        <button type="button" :disabled="busy.includes(item.id)" @click="toggle(item.id, false)">Undo</button>
+    <h2 class="mt-4 text-lg font-semibold">Done ({{ doneItems.length }})</h2>
+    <ul data-testid="done-list" class="space-y-2">
+      <li v-for="item in doneItems" :key="item.id" class="done flex items-center justify-between rounded-box border border-base-300 bg-base-100 p-2">
+        <span class="name" :class="{ sensitive: item.is_sensitive }">{{ item.name }}</span>
+        <button type="button" class="btn btn-sm" :disabled="busy.includes(item.id)" @click="toggle(item.id, false)">Undo</button>
       </li>
     </ul>
 
-    <h2>New item</h2>
-    <form @submit.prevent="submit">
-      <input v-model="name" aria-label="Name" placeholder="Name" />
-      <select v-model="presetKind" aria-label="Repeat">
+    <h2 class="mt-4 text-lg font-semibold">New item</h2>
+    <form class="flex flex-wrap items-center gap-2" @submit.prevent="submit">
+      <input v-model="name" class="input input-sm input-bordered" aria-label="Name" placeholder="Name" />
+      <select v-model="presetKind" class="select select-sm select-bordered" aria-label="Repeat">
         <option value="days">Every N days</option>
         <option value="weekly">Weekly on</option>
       </select>
@@ -124,6 +125,7 @@ watch(
         v-if="presetKind === 'days'"
         v-model.number="interval"
         type="number"
+        class="input input-sm input-bordered w-20"
         min="1"
         aria-label="Interval in days"
       />
@@ -132,7 +134,7 @@ watch(
           <input v-model="days" type="checkbox" :value="d" /> {{ d }}
         </label>
       </fieldset>
-      <button type="submit">Create</button>
+      <button type="submit" class="btn btn-sm btn-primary">Create</button>
     </form>
   </section>
 </template>
