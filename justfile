@@ -31,3 +31,23 @@ fmt:
 # Run the backend
 run:
     cd backend && go run ./cmd/daka
+
+# Install frontend dependencies
+fe-install:
+    cd frontend && pnpm install
+
+# Run frontend tests
+fe-test:
+    cd frontend && pnpm test
+
+# Type-check (vue-tsc) and lint (eslint) the frontend
+fe-lint:
+    cd frontend && pnpm lint
+
+# Build the frontend into frontend/dist
+fe-build:
+    cd frontend && pnpm build
+
+# Run the frontend dev server (proxies /api to 127.0.0.1:8080)
+fe-dev:
+    cd frontend && pnpm dev

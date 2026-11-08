@@ -1,2 +1,5 @@
 tmp/
 *.db*
+node_modules/
+frontend/dist/
+.claude/worktrees/
