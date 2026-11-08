@@ -150,8 +150,15 @@ func TestValidateItemRuleEdges(t *testing.T) {
 		{"sum same units no option", metric, sumRule(nil), sameUnit, ""},
 		{"sum unknown option", metric, sumRule(uptr(9)), two, ReasonQuotaOptionUnknown},
 		{"sum option without options", metric, sumRule(uptr(1)), nil, ReasonQuotaOptionUnknown},
-		{"days measure with valid option id", metric, quota(func(v *dbmodels.ItemRuleVersion) { v.QuotaOptionID = uptr(1) }), two, ""},
-		{"days measure with unknown option id", metric, quota(func(v *dbmodels.ItemRuleVersion) { v.QuotaOptionID = uptr(7) }), two, ReasonQuotaOptionUnknown},
+		{"days measure with option id rejected", metric, quota(func(v *dbmodels.ItemRuleVersion) { v.QuotaOptionID = uptr(1) }), two, ReasonQuotaOptionNotApplic},
+		{"sum measure with valid option id", metric, quota(func(v *dbmodels.ItemRuleVersion) {
+			v.QuotaMeasure = dbmodels.QuotaMeasureSum
+			v.QuotaOptionID = uptr(1)
+		}), two, ""},
+		{"sum measure with unknown option id", metric, quota(func(v *dbmodels.ItemRuleVersion) {
+			v.QuotaMeasure = dbmodels.QuotaMeasureSum
+			v.QuotaOptionID = uptr(7)
+		}), two, ReasonQuotaOptionUnknown},
 		{"options on boolean", boolean, none(nil), two, ReasonOptionsNotAllowed},
 		{"options on maintenance", maint, none(nil), two, ReasonOptionsNotAllowed},
 		{"options on counter", counter, none(nil), two, ""},

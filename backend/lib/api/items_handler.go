@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -84,6 +83,7 @@ type optionResponse struct {
 	Aggregate   string   `json:"aggregate"`
 	SortOrder   int      `json:"sort_order"`
 	TargetValue *float64 `json:"target_value"`
+	Archived    bool     `json:"archived,omitempty"`
 }
 
 type ruleResponse struct {
@@ -114,6 +114,11 @@ type ruleResponse struct {
 type itemResponse struct {
 	ID          uint             `json:"id"`
 	Name        string           `json:"name"`
+	Description string           `json:"description"`
+	Pinned      bool             `json:"pinned"`
+	SortOrder   int              `json:"sort_order"`
+	Archived    bool             `json:"archived"`
+	RemindTime  *string          `json:"remind_time"`
 	TrackerType string           `json:"tracker_type"`
 	Kind        string           `json:"kind"`
 	Polarity    string           `json:"polarity"`
@@ -127,6 +132,8 @@ type itemResponse struct {
 	WarningDays int              `json:"warning_days,omitempty"`
 	Options     []optionResponse `json:"options"`
 	CurrentRule ruleResponse     `json:"current_rule"`
+	// Stats is only set by GET /api/items?include=stats.
+	Stats *itemStatsSummary `json:"stats,omitempty"`
 }
 
 func newRuleResponse(ver dbmodels.ItemRuleVersion) ruleResponse {
@@ -164,13 +171,7 @@ func (s *server) postItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req createItemRequest
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes))
-	if err := dec.Decode(&req); err != nil {
-		errResult(http.StatusBadRequest, "invalid JSON body").write(w)
-		return
-	}
-	if _, err := dec.Token(); err != io.EOF {
-		errResult(http.StatusBadRequest, "invalid JSON body").write(w)
+	if !decodeStrict(w, r, &req) {
 		return
 	}
 	res, err := s.createItem(u.ID, req)
@@ -324,8 +325,8 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 				realTargets[strconv.FormatUint(uint64(opts[i].ID), 10)] = *o.TargetValue
 			}
 		}
-		if ver.QuotaOptionID != nil {
-			id := opts[*req.Rule.QuotaOptionIndex].ID
+		if idx := req.Rule.QuotaOptionIndex; idx != nil && *idx >= 0 && *idx < len(opts) {
+			id := opts[*idx].ID
 			ver.QuotaOptionID = &id
 		}
 		ver.OptionTargets = ""

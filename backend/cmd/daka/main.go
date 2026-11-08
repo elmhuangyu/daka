@@ -152,7 +152,7 @@ func newHandler(cfg *config.Config, d *db.DB, hp *holiday.Provider) (http.Handle
 		}
 	}
 	extCal := extcal.NewService(extcal.ServiceOptions{Keys: keys, AllowHTTP: cfg.ExternalCalendar.AllowHTTP})
-	apiHandler := api.NewRouter(api.Deps{DB: d, Auth: auth.Middleware(verifier), Limiter: limiter, ClientIP: clientIP, ExtCal: extCal,
+	apiHandler := api.NewRouter(api.Deps{DB: d, Auth: auth.Middleware(verifier), Limiter: limiter, ClientIP: clientIP, ExtCal: extCal, Reauth: auth.RequireReauth(nil),
 		Calendar: holidayCalendars(hp)})
 	mux := http.NewServeMux()
 	// Public auth endpoints authenticate themselves; they share the global

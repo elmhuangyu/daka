@@ -62,48 +62,9 @@ func (s *server) itemStats(userID string, itemID uint, redact bool) (result, err
 	if err != nil {
 		return result{}, err
 	}
-	st, err := userSettings(db, userID)
+	val, err := s.cachedStats(db, userID, item)
 	if err != nil {
 		return result{}, err
-	}
-	today, err := schedule.Today(s.now(), st.Timezone)
-	if err != nil {
-		return result{}, err
-	}
-	logSig, err := stats.LogSignature(db, s.versions, itemID)
-	if err != nil {
-		return result{}, err
-	}
-	ruleSig, err := stats.RuleSignature(db, itemID)
-	if err != nil {
-		return result{}, err
-	}
-	key := stats.Key{
-		UserID: userID, ItemID: itemID, LogSig: logSig, RuleSig: ruleSig, Today: today, StateVersion: st.StateVersion,
-		SettingsSig: fmt.Sprintf("%s/%d/%s/%t", st.Timezone, st.WeekStart, st.HolidayRegion, st.StreakHolidayFreeze),
-	}
-	val, hit := s.cache.Get(key)
-	if !hit {
-		in := stats.Input{
-			Item: item, Calendar: s.calendarFor(st), Today: today,
-			Settings: stats.Settings{Timezone: st.Timezone, WeekStart: st.WeekStart, StreakHolidayFreeze: st.StreakHolidayFreeze},
-		}
-		if err := db.Where("item_id = ?", itemID).Find(&in.Versions).Error; err != nil {
-			return result{}, err
-		}
-		if err := db.Where("item_id = ?", itemID).Order("sort_order, id").Find(&in.Options).Error; err != nil {
-			return result{}, err
-		}
-		if err := db.Where("item_id = ? AND user_id = ?", itemID, userID).Find(&in.Logs).Error; err != nil {
-			return result{}, err
-		}
-		if err := db.Where("user_id = ?", userID).Find(&in.Freezes).Error; err != nil {
-			return result{}, err
-		}
-		if val, err = stats.ComputeStats(in); err != nil {
-			return result{}, err
-		}
-		s.cache.Put(key, val)
 	}
 
 	sensitive := item.IsSensitive
@@ -129,4 +90,54 @@ func (s *server) itemStats(userID string, itemID uint, redact bool) (result, err
 		resp.Options = opts
 	}
 	return jsonResult(http.StatusOK, resp), nil
+}
+
+// cachedStats computes (or fetches from the cache) the stats of one owned item.
+func (s *server) cachedStats(db *gorm.DB, userID string, item dbmodels.Item) (stats.Stats, error) {
+	itemID := item.ID
+	st, err := userSettings(db, userID)
+	if err != nil {
+		return stats.Stats{}, err
+	}
+	today, err := schedule.Today(s.now(), st.Timezone)
+	if err != nil {
+		return stats.Stats{}, err
+	}
+	logSig, err := stats.LogSignature(db, s.versions, itemID)
+	if err != nil {
+		return stats.Stats{}, err
+	}
+	ruleSig, err := stats.RuleSignature(db, itemID)
+	if err != nil {
+		return stats.Stats{}, err
+	}
+	key := stats.Key{
+		UserID: userID, ItemID: itemID, LogSig: logSig, RuleSig: ruleSig, Today: today, StateVersion: st.StateVersion,
+		SettingsSig: fmt.Sprintf("%s/%d/%s/%t", st.Timezone, st.WeekStart, st.HolidayRegion, st.StreakHolidayFreeze),
+	}
+	val, hit := s.cache.Get(key)
+	if !hit {
+		in := stats.Input{
+			Item: item, Calendar: s.calendarFor(st), Today: today,
+			Settings: stats.Settings{Timezone: st.Timezone, WeekStart: st.WeekStart, StreakHolidayFreeze: st.StreakHolidayFreeze},
+		}
+		if err := db.Where("item_id = ?", itemID).Find(&in.Versions).Error; err != nil {
+			return stats.Stats{}, err
+		}
+		if err := db.Where("item_id = ?", itemID).Order("sort_order, id").Find(&in.Options).Error; err != nil {
+			return stats.Stats{}, err
+		}
+		if err := db.Where("item_id = ? AND user_id = ?", itemID, userID).Find(&in.Logs).Error; err != nil {
+			return stats.Stats{}, err
+		}
+		if err := db.Where("user_id = ?", userID).Find(&in.Freezes).Error; err != nil {
+			return stats.Stats{}, err
+		}
+		if val, err = stats.ComputeStats(in); err != nil {
+			return stats.Stats{}, err
+		}
+		s.cache.Put(key, val)
+	}
+
+	return val, nil
 }

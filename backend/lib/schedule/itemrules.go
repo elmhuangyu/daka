@@ -30,6 +30,7 @@ const (
 	ReasonQuotaMeasure         = "invalid_quota_measure"
 	ReasonQuotaOptionRequired  = "quota_option_required"
 	ReasonQuotaOptionUnknown   = "quota_option_unknown"
+	ReasonQuotaOptionNotApplic = "quota_option_not_applicable"
 	ReasonInvalidStaleAfter    = "invalid_stale_after_days"
 	ReasonInvalidTarget        = "invalid_target_value"
 	ReasonTargetNotApplicable  = "target_not_applicable"
@@ -307,6 +308,9 @@ func validateQuotaRule(tracker dbmodels.TrackerType, polarity dbmodels.Polarity,
 		return reasonf(code, "%s", trimInvalid(err))
 	}
 	if rule.QuotaOptionID != nil {
+		if measure != dbmodels.QuotaMeasureSum {
+			return reasonf(ReasonQuotaOptionNotApplic, "quota_option_id only applies to quota_measure sum")
+		}
 		for _, o := range options {
 			if o.ID == *rule.QuotaOptionID {
 				return nil

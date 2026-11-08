@@ -30,6 +30,9 @@ type Deps struct {
 	// Calendar returns the holiday calendar for a UserSettings.holiday_region;
 	// nil, or a nil result, means no holiday awareness.
 	Calendar func(region dbmodels.HolidayRegion) schedule.DayCalendar
+	// Reauth guards dangerous routes (DELETE /api/items/{id}); it must run
+	// after Auth (see auth.RequireReauth). Nil means no extra guard.
+	Reauth func(http.Handler) http.Handler
 	// Versions are the per-item write counters bumped by check-in writes (part
 	// of the stats cache key); nil creates a private set.
 	Versions *stats.Versions
@@ -65,10 +68,23 @@ func NewRouter(d Deps) http.Handler {
 	if s.now == nil {
 		s.now = time.Now
 	}
+	reauth := d.Reauth
+	if reauth == nil {
+		reauth = func(h http.Handler) http.Handler { return h }
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/checkins", s.postCheckin)
 	mux.HandleFunc("DELETE /api/checkins/{id}", s.deleteCheckin)
+	mux.HandleFunc("GET /api/items", s.listItems)
 	mux.HandleFunc("POST /api/items", s.postItem)
+	mux.HandleFunc("GET /api/items/{id}", s.getItem)
+	mux.HandleFunc("PATCH /api/items/{id}", s.patchItem)
+	mux.Handle("DELETE /api/items/{id}", reauth(http.HandlerFunc(s.deleteItem)))
+	mux.HandleFunc("GET /api/items/{id}/options", s.listOptions)
+	mux.HandleFunc("POST /api/items/{id}/options", s.postOption)
+	mux.HandleFunc("PUT /api/items/{id}/options/{oid}", s.putOption)
+	mux.HandleFunc("DELETE /api/items/{id}/options/{oid}", s.deleteOption)
+	mux.HandleFunc("GET /api/checkins", s.listCheckins)
 	mux.HandleFunc("GET /api/view/today", s.getToday)
 	mux.HandleFunc("GET /api/items/{id}/stats", s.getItemStats)
 	mux.HandleFunc("GET /api/freezes", s.listFreezes)

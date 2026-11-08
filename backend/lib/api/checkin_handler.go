@@ -287,19 +287,52 @@ func (s *server) deleteCheckin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var itemID uint
-	_ = s.db.Write().Model(&dbmodels.CheckinLog{}).Where("id = ? AND user_id = ?", id, u.ID).
-		Select("item_id").Scan(&itemID).Error
-	tr := s.db.Write().Where("id = ? AND user_id = ?", id, u.ID).Delete(&dbmodels.CheckinLog{})
+	res, err := s.txResult(func(tx *gorm.DB) (result, error) {
+		var row dbmodels.CheckinLog
+		err := tx.Where("id = ? AND user_id = ?", id, u.ID).Take(&row).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errResult(http.StatusNotFound, "check-in not found"), nil
+		}
+		if err != nil {
+			return result{}, err
+		}
+		itemID = row.ItemID
+		if needsAdvisoryLock(tx.Name()) {
+			lockKey := fmt.Sprintf("%s|%d|%s", u.ID, row.ItemID, row.CheckinDate)
+			if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?))", lockKey).Error; err != nil {
+				return result{}, err
+			}
+		}
+		// Removing a counter increment must not push the day's total of its
+		// option below zero (later deltas would be blocked).
+		if row.Value > 0 {
+			var item dbmodels.Item
+			if err := tx.Where("id = ?", row.ItemID).Take(&item).Error; err != nil {
+				return result{}, err
+			}
+			if item.TrackerType == dbmodels.TrackerCounter {
+				var sum float64
+				q := optionEq(tx.Model(&dbmodels.CheckinLog{}).
+					Where("user_id = ? AND item_id = ? AND checkin_date = ?", u.ID, row.ItemID, row.CheckinDate), row.OptionID)
+				if err := q.Select("COALESCE(SUM(value), 0)").Scan(&sum).Error; err != nil {
+					return result{}, err
+				}
+				if sum-row.Value < -1e-9 {
+					return errResult(http.StatusBadRequest, "deleting this increment would make the day's total negative"), nil
+				}
+			}
+		}
+		if err := tx.Where("id = ? AND user_id = ?", id, u.ID).Delete(&dbmodels.CheckinLog{}).Error; err != nil {
+			return result{}, err
+		}
+		return jsonResult(http.StatusOK, map[string]bool{"ok": true}), nil
+	})
 	s.versions.Bump(itemID)
-	if tr.Error != nil {
+	if err != nil {
 		errResult(http.StatusInternalServerError, "internal error").write(w)
 		return
 	}
-	if tr.RowsAffected == 0 {
-		errResult(http.StatusNotFound, "check-in not found").write(w)
-		return
-	}
-	jsonResult(http.StatusOK, map[string]bool{"ok": true}).write(w)
+	res.write(w)
 }
 
 // needsAdvisoryLock reports whether the dialect needs an explicit per-row-set
@@ -321,7 +354,7 @@ func modeAllowed(item dbmodels.Item, mode string) bool {
 	case dbmodels.TrackerMaintenance:
 		return mode == "set" || mode == "unset"
 	case dbmodels.TrackerCounter:
-		return mode == "delta"
+		return mode == "delta" && item.Polarity != dbmodels.PolarityNegative
 	case dbmodels.TrackerMetric:
 		return mode == "append"
 	}
