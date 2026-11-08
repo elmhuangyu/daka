@@ -55,3 +55,7 @@ fe-build:
 # Run the frontend dev server (proxies /api to 127.0.0.1:8080)
 fe-dev:
     cd frontend && pnpm dev
+
+# Build the frontend, then run the backend serving it (single-user, 127.0.0.1:8080)
+run-full: fe-build
+    cd backend && DAKA_STATIC_DIR="{{justfile_directory()}}/frontend/dist" go run ./cmd/daka

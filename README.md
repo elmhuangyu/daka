@@ -18,7 +18,25 @@ Requires Go and [just](https://github.com/casey/just).
 - `just e2e` - run the end-to-end tests (real router, temp SQLite DB, injected clock, fake OIDC provider)
 - `just lint` - golangci-lint if installed, else `go vet` and a gofmt check
 - `just fmt` - format code
-- `just run` - run the backend
+- `just run` - run the backend (API only)
+- `just run-full` - build the frontend, then run the backend serving it at http://127.0.0.1:8080
+
+## Running with the frontend
+
+The backend serves the built frontend from a plain directory (no `go:embed`). Set `DAKA_STATIC_DIR` (or `server.static_dir`) to a directory containing `index.html`; relative paths are resolved at startup, and a missing directory is a startup error (a directory without `index.html` only logs a warning). `/api/*` always wins over static files, unknown non-file paths fall back to `index.html` (SPA routing), and hashed `/assets/*` are served immutable while `index.html`, `sw.js` and the manifest are always revalidated.
+
+- Local: `just run-full` runs `just fe-build` and then starts the backend with `DAKA_STATIC_DIR` pointing at `frontend/dist`.
+- Docker: the root `Dockerfile` builds the frontend and a static backend binary (no CGO) and runs as a non-root user. The image sets `DAKA_STATIC_DIR=/app/web`, `DAKA_LISTEN=0.0.0.0:8080` and `DAKA_DB_DSN=/data/daka.db`; `/data` is a volume. No secrets are baked in.
+
+  ```sh
+  docker build -t daka .
+  docker run -d -p 8080:8080 -v daka-data:/data \
+    -e DAKA_AUTH_ALLOW_INSECURE_PUBLIC=1 -e DAKA_AUTH_SHARED_SECRET=<16+ chars> \
+    -e DAKA_AUTH_SECURE_COOKIE=1 -e DAKA_SECRET_KEY=<key> daka
+  ```
+
+  Because the container listens on a non-loopback address, it refuses to start without either OIDC (`DAKA_AUTH_ISSUER` and friends) or `DAKA_AUTH_ALLOW_INSECURE_PUBLIC=1` plus `DAKA_AUTH_SHARED_SECRET`. Terminate TLS in front of it (set `DAKA_AUTH_SECURE_COOKIE=1` only behind HTTPS).
+- Caveat (known open item): in login mode the HostGuard (DNS-rebinding defence) is off unless `server.allowed_hosts` / `DAKA_ALLOWED_HOSTS` is set, and there is no startup warning. Set it when exposing the container.
 
 ## Deployment and security
 

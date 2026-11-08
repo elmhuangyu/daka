@@ -1,0 +1,9 @@
+.git
+.claude
+tmp
+**/node_modules
+frontend/dist
+*.db*
+.env*
+Dockerfile
+.dockerignore
