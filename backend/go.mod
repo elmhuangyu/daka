@@ -7,6 +7,7 @@ require (
 	github.com/libtnb/sqlite v1.2.2
 	github.com/rs/zerolog v1.35.1
 	github.com/stretchr/testify v1.12.1
+	github.com/teambition/rrule-go v1.8.2
 	gorm.io/driver/postgres v1.6.3
 	gorm.io/gorm v1.31.2
 )
