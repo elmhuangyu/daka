@@ -57,6 +57,35 @@ const ICONS: Record<string, string> = {
   ),
   'lucide:chevron-left': wrap('<path d="m15 18-6-6 6-6"/>'),
   'lucide:chevron-right': wrap('<path d="m9 18 6-6-6-6"/>'),
+  'lucide:sliders': wrap(
+    '<line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="1" x2="7" y1="14" y2="14"/><line x1="9" x2="15" y1="8" y2="8"/><line x1="17" x2="23" y1="16" y2="16"/>',
+  ),
+  'lucide:tags': wrap(
+    '<path d="m15 5 6.3 6.3a2.4 2.4 0 0 1 0 3.4L17 19a2.4 2.4 0 0 1-3.4 0L7.3 12.7A2.4 2.4 0 0 1 7 11V5a2 2 0 0 1 2-2h6a2 2 0 0 1 1.7 1z"/><path d="M7 7h.01"/><path d="m2 9 6.3 6.3a2.4 2.4 0 0 0 3.4 0L14 13"/>',
+  ),
+  'lucide:link-2': wrap(
+    '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/>',
+  ),
+  'lucide:shield': wrap(
+    '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  ),
+  'lucide:database': wrap(
+    '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
+  ),
+  'lucide:download': wrap(
+    '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+  ),
+  'lucide:upload': wrap(
+    '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
+  ),
+  'lucide:key': wrap(
+    '<path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/>',
+  ),
+  'lucide:send': wrap('<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>'),
+  'lucide:user': wrap(
+    '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  ),
+  'lucide:info': wrap('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>'),
 }
 
 for (const [name, body] of Object.entries(ICONS)) addIcon(name, { body, width: 24, height: 24 })

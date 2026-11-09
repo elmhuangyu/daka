@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { Icon } from '@iconify/vue'
 import { deleteAccount, describeError, exportData, importData, type ImportSummary } from '../../api'
 import { useAuthStore } from '../../stores/auth'
 import { useI18n } from '../../i18n'
@@ -113,92 +114,138 @@ async function doDelete() {
 </script>
 
 <template>
-  <section class="card bg-base-200" data-testid="section-data">
-    <div class="card-body gap-4">
-      <h2 class="card-title">{{ t('data.title') }}</h2>
-      <p class="text-sm opacity-80">{{ t('data.intro') }}</p>
-      <p v-if="error" class="text-error" role="alert" data-testid="data-error">{{ error }}</p>
-      <p v-if="notice" class="text-success" role="status" data-testid="data-notice">{{ notice }}</p>
+  <section class="card bg-base-200/50 border border-base-300 shadow-sm" data-testid="section-data">
+    <div class="card-body p-6 gap-6">
+      <div class="flex items-center gap-3 border-b border-base-300/80 pb-4">
+        <div class="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Icon icon="lucide:database" class="size-5" aria-hidden="true" />
+        </div>
+        <div>
+          <h2 class="text-lg font-bold leading-none">{{ t('data.title') }}</h2>
+          <p class="mt-1 text-xs opacity-70">{{ t('data.intro') }}</p>
+        </div>
+      </div>
 
-      <div class="flex flex-col gap-2">
-        <h3 class="font-semibold">{{ t('data.export.title') }}</h3>
-        <p class="text-sm opacity-80">{{ t('data.export.help') }}</p>
+      <div
+        v-if="error"
+        class="alert alert-error text-sm py-2.5 px-4 shadow-sm"
+        role="alert"
+        data-testid="data-error"
+      >
+        <span>{{ error }}</span>
+      </div>
+      <div
+        v-if="notice"
+        class="alert alert-success text-sm py-2.5 px-4 shadow-sm"
+        role="status"
+        data-testid="data-notice"
+      >
+        <Icon icon="lucide:check" class="size-4" aria-hidden="true" />
+        <span>{{ notice }}</span>
+      </div>
+
+      <div
+        class="rounded-xl border border-base-300 bg-base-100/40 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+      >
+        <div class="flex flex-col gap-0.5 max-w-lg">
+          <h3 class="font-semibold text-sm">{{ t('data.export.title') }}</h3>
+          <p class="text-xs opacity-70 leading-relaxed">{{ t('data.export.help') }}</p>
+        </div>
         <button
-          class="btn btn-sm btn-outline self-start"
+          class="btn btn-sm btn-outline gap-1.5 shrink-0 self-start sm:self-auto"
           :disabled="busy"
           data-testid="data-export"
           @click="doExport"
         >
+          <Icon icon="lucide:download" class="size-3.5" aria-hidden="true" />
           {{ t('data.export.button') }}
         </button>
       </div>
 
-      <div class="flex flex-col gap-2">
-        <h3 class="font-semibold">{{ t('data.import.title') }}</h3>
-        <p class="text-sm opacity-80">{{ t('data.import.help') }}</p>
-        <label class="form-control">
-          <span class="label-text">{{ t('data.import.choose') }}</span>
+      <div class="rounded-xl border border-base-300 bg-base-100/40 p-4 space-y-3">
+        <div class="flex flex-col gap-0.5">
+          <h3 class="font-semibold text-sm">{{ t('data.import.title') }}</h3>
+          <p class="text-xs opacity-70 leading-relaxed">{{ t('data.import.help') }}</p>
+        </div>
+        <label class="form-control max-w-sm">
+          <span class="label-text text-xs font-medium mb-1">{{ t('data.import.choose') }}</span>
           <input
             type="file"
             accept="application/json,.json"
-            class="file-input file-input-bordered file-input-sm"
+            class="file-input file-input-bordered file-input-sm w-full"
             data-testid="data-file"
             @change="onFile"
           />
         </label>
         <template v-if="summary">
-          <p class="text-sm" data-testid="data-summary">
-            {{
-              t('data.import.summary', {
-                items: summary.items,
-                options: summary.options,
-                versions: summary.rule_versions,
-                checkins: summary.checkins,
-                categories: summary.categories,
-                freezes: summary.freezes,
-              })
-            }}
-          </p>
-          <label class="label cursor-pointer justify-start gap-2">
+          <div
+            class="rounded-lg bg-base-200/80 p-3 text-xs leading-relaxed space-y-2 border border-base-300"
+            data-testid="data-summary"
+          >
+            <p>
+              {{
+                t('data.import.summary', {
+                  items: summary.items,
+                  options: summary.options,
+                  versions: summary.rule_versions,
+                  checkins: summary.checkins,
+                  categories: summary.categories,
+                  freezes: summary.freezes,
+                })
+              }}
+            </p>
+          </div>
+          <label class="label cursor-pointer justify-start gap-2 py-0">
             <input
               v-model="applySettings"
               type="checkbox"
-              class="checkbox checkbox-sm"
+              class="checkbox checkbox-sm checkbox-primary"
               data-testid="data-apply-settings"
             />
-            <span class="label-text">{{ t('data.import.applySettings') }}</span>
+            <span class="label-text text-xs">{{ t('data.import.applySettings') }}</span>
           </label>
           <button
-            class="btn btn-sm btn-primary self-start"
+            class="btn btn-sm btn-primary gap-1.5 self-start"
             :disabled="busy"
             data-testid="data-import"
             @click="doImport"
           >
+            <Icon icon="lucide:upload" class="size-3.5" aria-hidden="true" />
             {{ t('data.import.button') }}
           </button>
         </template>
       </div>
 
-      <div class="flex flex-col gap-2">
-        <h3 class="font-semibold text-error">{{ t('data.delete.title') }}</h3>
-        <p class="text-sm opacity-80">{{ t('data.delete.help') }}</p>
-        <label class="form-control">
-          <span class="label-text">{{ t('data.delete.prompt', { word: CONFIRM_WORD }) }}</span>
-          <input
-            v-model="confirmText"
-            class="input input-bordered input-sm w-48"
-            autocomplete="off"
-            data-testid="data-confirm"
-          />
-        </label>
-        <button
-          class="btn btn-sm btn-error self-start"
-          :disabled="!canDelete"
-          data-testid="data-delete"
-          @click="doDelete"
-        >
-          {{ t('data.delete.button') }}
-        </button>
+      <!-- Danger Zone -->
+      <div class="rounded-xl border border-error/30 bg-error/5 p-5 space-y-3">
+        <div class="flex items-center gap-2 text-error">
+          <Icon icon="lucide:triangle-alert" class="size-4.5 shrink-0" aria-hidden="true" />
+          <h3 class="font-bold text-sm">{{ t('data.delete.title') }}</h3>
+        </div>
+        <p class="text-xs opacity-80 leading-relaxed max-w-xl">{{ t('data.delete.help') }}</p>
+        <div class="flex flex-wrap items-end gap-3 pt-2">
+          <label class="form-control gap-1">
+            <span class="label-text text-xs font-medium text-error">{{
+              t('data.delete.prompt', { word: CONFIRM_WORD })
+            }}</span>
+            <input
+              v-model="confirmText"
+              class="input input-bordered input-sm w-48 font-mono"
+              autocomplete="off"
+              data-testid="data-confirm"
+              :placeholder="CONFIRM_WORD"
+            />
+          </label>
+          <button
+            class="btn btn-sm btn-error gap-1.5"
+            :disabled="!canDelete"
+            data-testid="data-delete"
+            @click="doDelete"
+          >
+            <Icon icon="lucide:trash-2" class="size-3.5" aria-hidden="true" />
+            {{ t('data.delete.button') }}
+          </button>
+        </div>
       </div>
     </div>
   </section>

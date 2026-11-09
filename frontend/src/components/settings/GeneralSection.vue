@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { Icon } from '@iconify/vue'
 import {
   describeError,
   getCalendarSettings,
@@ -81,68 +82,119 @@ async function save() {
 </script>
 
 <template>
-  <section class="card bg-base-200" data-testid="section-general">
-    <form class="card-body gap-3" @submit.prevent="save">
-      <h2 class="card-title">{{ t('settings.general.title') }}</h2>
-      <p v-if="error" class="text-error" role="alert" data-testid="general-error">{{ error }}</p>
-      <label class="form-control">
-        <span class="label-text">{{ t('settings.language.label') }}</span>
-        <select
-          v-model="lang"
-          class="select select-bordered"
-          data-testid="g-language"
-          @change="changeLanguage"
-        >
-          <option v-for="l in SUPPORTED_LOCALES" :key="l.value" :value="l.value">
-            {{ l.label }}
-          </option>
-        </select>
-        <span class="label-text-alt opacity-70">{{ t('settings.language.hint') }}</span>
+  <section
+    class="card bg-base-200/50 border border-base-300 shadow-sm"
+    data-testid="section-general"
+  >
+    <form class="card-body p-6 gap-6" @submit.prevent="save">
+      <div class="flex items-center gap-3 border-b border-base-300/80 pb-4">
+        <div class="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Icon icon="lucide:sliders" class="size-5" aria-hidden="true" />
+        </div>
+        <div>
+          <h2 class="text-lg font-bold leading-none">{{ t('settings.general.title') }}</h2>
+        </div>
+      </div>
+
+      <div
+        v-if="error"
+        class="alert alert-error text-sm py-2.5 px-4 shadow-sm"
+        role="alert"
+        data-testid="general-error"
+      >
+        <span>{{ error }}</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <label class="form-control gap-1.5">
+          <span class="label-text font-medium text-xs">{{ t('settings.language.label') }}</span>
+          <select
+            v-model="lang"
+            class="select select-bordered select-sm md:select-md w-full"
+            data-testid="g-language"
+            @change="changeLanguage"
+          >
+            <option v-for="l in SUPPORTED_LOCALES" :key="l.value" :value="l.value">
+              {{ l.label }}
+            </option>
+          </select>
+          <span class="text-[11px] opacity-60">{{ t('settings.language.hint') }}</span>
+        </label>
+
+        <label class="form-control gap-1.5">
+          <span class="label-text font-medium text-xs">{{ t('settings.general.timezone') }}</span>
+          <select
+            v-model="tz"
+            class="select select-bordered select-sm md:select-md w-full"
+            data-testid="g-timezone"
+          >
+            <option v-for="z in zones" :key="z" :value="z">{{ z }}</option>
+          </select>
+        </label>
+
+        <label class="form-control gap-1.5">
+          <span class="label-text font-medium text-xs">{{ t('settings.general.weekStart') }}</span>
+          <select
+            v-model.number="weekStart"
+            class="select select-bordered select-sm md:select-md w-full"
+            data-testid="g-week-start"
+          >
+            <option :value="1">{{ t('settings.general.monday') }}</option>
+            <option :value="0">{{ t('settings.general.sunday') }}</option>
+          </select>
+        </label>
+
+        <label class="form-control gap-1.5">
+          <span class="label-text font-medium text-xs">{{ t('settings.general.region') }}</span>
+          <select
+            v-model="region"
+            class="select select-bordered select-sm md:select-md w-full"
+            data-testid="g-region"
+          >
+            <!-- The server cannot clear a region once set. -->
+            <option value="" :disabled="!!settings?.holiday_region">
+              {{ t('settings.general.regionNone') }}
+            </option>
+            <option value="CN">{{ t('settings.general.regionCN') }}</option>
+            <option value="US">{{ t('settings.general.regionUS') }}</option>
+          </select>
+        </label>
+      </div>
+
+      <label
+        class="rounded-xl border border-base-300 bg-base-100/50 p-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-base-100/80 transition-colors"
+      >
+        <div class="flex flex-col gap-0.5">
+          <span class="text-sm font-medium">{{ t('settings.general.freeze') }}</span>
+        </div>
+        <input
+          v-model="freeze"
+          type="checkbox"
+          class="checkbox checkbox-primary checkbox-sm"
+          data-testid="g-freeze"
+        />
       </label>
-      <label class="form-control">
-        <span class="label-text">{{ t('settings.general.timezone') }}</span>
-        <select v-model="tz" class="select select-bordered" data-testid="g-timezone">
-          <option v-for="z in zones" :key="z" :value="z">{{ z }}</option>
-        </select>
-      </label>
-      <label class="form-control">
-        <span class="label-text">{{ t('settings.general.weekStart') }}</span>
-        <select
-          v-model.number="weekStart"
-          class="select select-bordered"
-          data-testid="g-week-start"
-        >
-          <option :value="1">{{ t('settings.general.monday') }}</option>
-          <option :value="0">{{ t('settings.general.sunday') }}</option>
-        </select>
-      </label>
-      <label class="form-control">
-        <span class="label-text">{{ t('settings.general.region') }}</span>
-        <select v-model="region" class="select select-bordered" data-testid="g-region">
-          <!-- The server cannot clear a region once set. -->
-          <option value="" :disabled="!!settings?.holiday_region">
-            {{ t('settings.general.regionNone') }}
-          </option>
-          <option value="CN">{{ t('settings.general.regionCN') }}</option>
-          <option value="US">{{ t('settings.general.regionUS') }}</option>
-        </select>
-      </label>
-      <label class="label cursor-pointer justify-start gap-3">
-        <input v-model="freeze" type="checkbox" class="checkbox" data-testid="g-freeze" />
-        <span class="label-text">{{ t('settings.general.freeze') }}</span>
-      </label>
-      <div class="flex items-center gap-3">
+
+      <div class="flex items-center justify-between border-t border-base-300/80 pt-4">
+        <div class="flex items-center gap-2">
+          <span
+            v-if="saved"
+            class="badge badge-success gap-1.5 py-3 px-3 text-xs"
+            data-testid="g-saved"
+          >
+            <Icon icon="lucide:check" class="size-3.5" aria-hidden="true" />
+            {{ t('settings.general.saved') }}
+          </span>
+        </div>
         <button
-          class="btn btn-primary"
+          class="btn btn-primary btn-sm md:btn-md min-w-24 gap-1.5"
           type="submit"
           :disabled="busy || !settings"
           data-testid="g-save"
         >
+          <span v-if="busy" class="loading loading-spinner loading-xs" aria-hidden="true"></span>
           {{ t('settings.general.save') }}
         </button>
-        <span v-if="saved" class="text-success" data-testid="g-saved">{{
-          t('settings.general.saved')
-        }}</span>
       </div>
     </form>
   </section>

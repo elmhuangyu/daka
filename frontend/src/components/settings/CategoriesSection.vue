@@ -116,89 +116,137 @@ const confirmDelete = () => {
 </script>
 
 <template>
-  <section class="card bg-base-200" data-testid="section-categories">
-    <div class="card-body gap-3">
-      <h2 class="card-title">{{ t('settings.categories.title') }}</h2>
-      <p v-if="error" class="text-error" role="alert" data-testid="cat-error">{{ error }}</p>
-      <p v-if="notice" class="text-info" data-testid="cat-notice">{{ notice }}</p>
+  <section
+    class="card bg-base-200/50 border border-base-300 shadow-sm"
+    data-testid="section-categories"
+  >
+    <div class="card-body p-6 gap-6">
+      <div class="flex items-center gap-3 border-b border-base-300/80 pb-4">
+        <div class="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Icon icon="lucide:tags" class="size-5" aria-hidden="true" />
+        </div>
+        <div>
+          <h2 class="text-lg font-bold leading-none">{{ t('settings.categories.title') }}</h2>
+        </div>
+      </div>
+
+      <div
+        v-if="error"
+        class="alert alert-error text-sm py-2.5 px-4 shadow-sm"
+        role="alert"
+        data-testid="cat-error"
+      >
+        <span>{{ error }}</span>
+      </div>
+      <div
+        v-if="notice"
+        class="alert alert-info text-sm py-2.5 px-4 shadow-sm"
+        data-testid="cat-notice"
+      >
+        <span>{{ notice }}</span>
+      </div>
+
       <ul class="flex flex-col gap-2">
         <li
           v-for="c in cats"
           :key="c.id"
-          class="flex flex-wrap items-center gap-2"
+          class="rounded-xl border border-base-300 bg-base-100/60 p-3 flex flex-wrap items-center justify-between gap-3 transition-colors hover:bg-base-100/90"
           data-testid="cat-row"
         >
           <template v-if="editingId === c.id">
-            <input
-              v-model="editName"
-              class="input input-bordered input-sm"
-              maxlength="64"
-              data-testid="cat-edit-name"
-            />
-            <button class="btn btn-sm btn-primary" data-testid="cat-edit-save" @click="rename(c)">
-              {{ t('common.save') }}
-            </button>
-            <button class="btn btn-sm btn-ghost" @click="editingId = null">
-              {{ t('common.cancel') }}
-            </button>
+            <div class="flex flex-1 items-center gap-2">
+              <input
+                v-model="editName"
+                class="input input-bordered input-sm flex-1"
+                maxlength="64"
+                data-testid="cat-edit-name"
+              />
+              <button class="btn btn-sm btn-primary" data-testid="cat-edit-save" @click="rename(c)">
+                {{ t('common.save') }}
+              </button>
+              <button class="btn btn-sm btn-ghost" @click="editingId = null">
+                {{ t('common.cancel') }}
+              </button>
+            </div>
           </template>
           <template v-else>
-            <span class="font-medium" data-testid="cat-name">{{ store.categoryLabel(c) }}</span>
-            <span v-if="c.is_sensitive" class="badge badge-warning gap-1"
-              ><Icon icon="lucide:lock" aria-hidden="true" />{{
-                t('settings.categories.sensitive')
-              }}</span
-            >
-            <span class="flex-1" />
-            <button
-              class="btn btn-sm btn-ghost"
-              :disabled="store.masking && c.is_sensitive"
-              :aria-label="t('settings.categories.renameAria', { name: store.categoryLabel(c) })"
-              @click="startEdit(c)"
-            >
-              {{ t('settings.categories.rename') }}
-            </button>
-            <button
-              class="btn btn-sm btn-ghost"
-              data-testid="cat-toggle"
-              @click="toggleSensitive(c)"
-            >
-              {{
-                c.is_sensitive
-                  ? t('settings.categories.makeNotSensitive')
-                  : t('settings.categories.makeSensitive')
-              }}
-            </button>
-            <button
-              class="btn btn-sm btn-ghost text-error"
-              data-testid="cat-delete"
-              :aria-label="t('settings.categories.deleteAria', { name: store.categoryLabel(c) })"
-              @click="startDelete(c)"
-            >
-              <Icon icon="lucide:trash-2" aria-hidden="true" />
-            </button>
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="font-medium text-sm truncate" data-testid="cat-name">{{
+                store.categoryLabel(c)
+              }}</span>
+              <span v-if="c.is_sensitive" class="badge badge-warning badge-sm gap-1">
+                <Icon icon="lucide:lock" class="size-3" aria-hidden="true" />
+                {{ t('settings.categories.sensitive') }}
+              </span>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button
+                class="btn btn-sm btn-ghost gap-1"
+                :disabled="store.masking && c.is_sensitive"
+                :aria-label="t('settings.categories.renameAria', { name: store.categoryLabel(c) })"
+                @click="startEdit(c)"
+              >
+                <Icon icon="lucide:pencil" class="size-3.5" aria-hidden="true" />
+                <span class="hidden sm:inline text-xs">{{ t('settings.categories.rename') }}</span>
+              </button>
+              <button
+                class="btn btn-sm btn-ghost text-xs"
+                data-testid="cat-toggle"
+                @click="toggleSensitive(c)"
+              >
+                {{
+                  c.is_sensitive
+                    ? t('settings.categories.makeNotSensitive')
+                    : t('settings.categories.makeSensitive')
+                }}
+              </button>
+              <button
+                class="btn btn-sm btn-ghost text-error hover:bg-error/10"
+                data-testid="cat-delete"
+                :aria-label="t('settings.categories.deleteAria', { name: store.categoryLabel(c) })"
+                @click="startDelete(c)"
+              >
+                <Icon icon="lucide:trash-2" class="size-4" aria-hidden="true" />
+              </button>
+            </div>
           </template>
         </li>
-        <li v-if="!cats.length" class="opacity-70">{{ t('settings.categories.empty') }}</li>
+        <li
+          v-if="!cats.length"
+          class="rounded-xl border border-dashed border-base-300 p-8 text-center flex flex-col items-center justify-center gap-2"
+        >
+          <Icon icon="lucide:tags" class="size-8 opacity-25" aria-hidden="true" />
+          <span class="text-sm opacity-70">{{ t('settings.categories.empty') }}</span>
+        </li>
       </ul>
-      <form class="flex flex-wrap items-center gap-2" @submit.prevent="create">
-        <input
-          v-model="newName"
-          class="input input-bordered input-sm"
-          :placeholder="t('settings.categories.new')"
-          maxlength="64"
-          data-testid="cat-new-name"
-        />
-        <label class="label cursor-pointer gap-2">
+
+      <form
+        class="rounded-xl border border-base-300 bg-base-100/40 p-3.5 flex flex-wrap items-center gap-3"
+        @submit.prevent="create"
+      >
+        <div class="flex-1 min-w-44">
+          <input
+            v-model="newName"
+            class="input input-bordered input-sm w-full"
+            :placeholder="t('settings.categories.new')"
+            maxlength="64"
+            data-testid="cat-new-name"
+          />
+        </div>
+        <label class="label cursor-pointer gap-2 py-0">
           <input
             v-model="newSensitive"
             type="checkbox"
-            class="checkbox checkbox-sm"
+            class="checkbox checkbox-sm checkbox-warning"
             data-testid="cat-new-sensitive"
           />
-          <span class="label-text">{{ t('settings.categories.sensitive') }}</span>
+          <span class="label-text text-xs flex items-center gap-1">
+            <Icon icon="lucide:lock" class="size-3.5 opacity-60" aria-hidden="true" />
+            {{ t('settings.categories.sensitive') }}
+          </span>
         </label>
-        <button class="btn btn-sm btn-primary" type="submit" data-testid="cat-create">
+        <button class="btn btn-sm btn-primary gap-1" type="submit" data-testid="cat-create">
+          <Icon icon="lucide:plus" class="size-3.5" aria-hidden="true" />
           {{ t('common.add') }}
         </button>
       </form>
@@ -213,30 +261,40 @@ const confirmDelete = () => {
     >
       <div class="modal-box">
         <h3 class="text-lg font-bold">{{ t('settings.categories.unmarkTitle') }}</h3>
-        <p class="mt-2">{{ t('settings.categories.unmarkBody') }}</p>
-        <label class="label cursor-pointer justify-start gap-2">
-          <input
-            v-model="expose"
-            type="radio"
-            class="radio"
-            :value="false"
-            data-testid="cat-freeze"
-          />
-          <span>{{ t('settings.categories.freeze') }}</span>
-        </label>
-        <label class="label cursor-pointer justify-start gap-2">
-          <input
-            v-model="expose"
-            type="radio"
-            class="radio"
-            :value="true"
-            data-testid="cat-expose"
-          />
-          <span>{{ t('settings.categories.expose') }}</span>
-        </label>
+        <p class="mt-2 text-sm opacity-80">{{ t('settings.categories.unmarkBody') }}</p>
+        <div class="mt-4 flex flex-col gap-2">
+          <label
+            class="label cursor-pointer justify-start gap-3 rounded-lg border border-base-300 p-3 bg-base-100/50"
+          >
+            <input
+              v-model="expose"
+              type="radio"
+              class="radio radio-primary radio-sm"
+              :value="false"
+              data-testid="cat-freeze"
+            />
+            <span class="text-sm">{{ t('settings.categories.freeze') }}</span>
+          </label>
+          <label
+            class="label cursor-pointer justify-start gap-3 rounded-lg border border-base-300 p-3 bg-base-100/50"
+          >
+            <input
+              v-model="expose"
+              type="radio"
+              class="radio radio-primary radio-sm"
+              :value="true"
+              data-testid="cat-expose"
+            />
+            <span class="text-sm">{{ t('settings.categories.expose') }}</span>
+          </label>
+        </div>
         <div class="modal-action">
-          <button class="btn" @click="unmarking = null">{{ t('common.cancel') }}</button>
-          <button class="btn btn-primary" data-testid="cat-unmark-confirm" @click="confirmUnmark">
+          <button class="btn btn-sm" @click="unmarking = null">{{ t('common.cancel') }}</button>
+          <button
+            class="btn btn-sm btn-primary"
+            data-testid="cat-unmark-confirm"
+            @click="confirmUnmark"
+          >
             {{ t('settings.categories.confirm') }}
           </button>
         </div>
@@ -254,10 +312,10 @@ const confirmDelete = () => {
         <h3 class="text-lg font-bold">
           {{ t('settings.categories.deleteTitle', { name: store.categoryLabel(deleting) }) }}
         </h3>
-        <p class="mt-2">{{ t('settings.categories.deleteBody') }}</p>
+        <p class="mt-2 text-sm opacity-80">{{ t('settings.categories.deleteBody') }}</p>
         <select
           v-model="target"
-          class="select select-bordered mt-2 w-full"
+          class="select select-bordered select-sm mt-3 w-full"
           data-testid="cat-delete-target"
         >
           <option value="uncategorize">{{ t('settings.categories.uncategorize') }}</option>
@@ -265,26 +323,42 @@ const confirmDelete = () => {
             {{ t('settings.categories.moveTo', { name: store.categoryLabel(c) }) }}
           </option>
         </select>
-        <div v-if="deleting.is_sensitive" class="mt-3">
-          <p>{{ t('settings.categories.deleteSensitive') }}</p>
-          <label class="label cursor-pointer justify-start gap-2">
-            <input v-model="expose" type="radio" class="radio" :value="false" />
-            <span>{{ t('settings.categories.stayProtected') }}</span>
-          </label>
-          <label class="label cursor-pointer justify-start gap-2">
-            <input
-              v-model="expose"
-              type="radio"
-              class="radio"
-              :value="true"
-              data-testid="cat-delete-expose"
-            />
-            <span>{{ t('settings.categories.becomeExposed') }}</span>
-          </label>
+        <div
+          v-if="deleting.is_sensitive"
+          class="mt-4 p-3 rounded-lg border border-warning/30 bg-warning/5"
+        >
+          <p class="text-xs font-medium text-warning">
+            {{ t('settings.categories.deleteSensitive') }}
+          </p>
+          <div class="mt-2 flex flex-col gap-1.5">
+            <label class="label cursor-pointer justify-start gap-2 py-0">
+              <input
+                v-model="expose"
+                type="radio"
+                class="radio radio-warning radio-sm"
+                :value="false"
+              />
+              <span class="text-xs">{{ t('settings.categories.stayProtected') }}</span>
+            </label>
+            <label class="label cursor-pointer justify-start gap-2 py-0">
+              <input
+                v-model="expose"
+                type="radio"
+                class="radio radio-warning radio-sm"
+                :value="true"
+                data-testid="cat-delete-expose"
+              />
+              <span class="text-xs">{{ t('settings.categories.becomeExposed') }}</span>
+            </label>
+          </div>
         </div>
         <div class="modal-action">
-          <button class="btn" @click="deleting = null">{{ t('common.cancel') }}</button>
-          <button class="btn btn-error" data-testid="cat-delete-confirm" @click="confirmDelete">
+          <button class="btn btn-sm" @click="deleting = null">{{ t('common.cancel') }}</button>
+          <button
+            class="btn btn-sm btn-error"
+            data-testid="cat-delete-confirm"
+            @click="confirmDelete"
+          >
             {{ t('common.delete') }}
           </button>
         </div>
