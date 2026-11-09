@@ -1,8 +1,14 @@
-<!-- eslint-disable vue/multi-word-component-names -->
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from '../i18n'
-import { buildGrid, cellLabel, levelBucket, monthLabels, weekdayNames, type HeatmapCell } from '../items/heatmap'
+import {
+  buildGrid,
+  cellLabel,
+  levelBucket,
+  monthLabels,
+  weekdayNames,
+  type HeatmapCell,
+} from '../items/heatmap'
 
 const props = withDefaults(
   defineProps<{
@@ -44,7 +50,10 @@ const tip = computed(() => {
 })
 const legend = computed(() =>
   props.negative
-    ? [{ cls: palette.value[0], text: t('heatmap.legend.none') }, { cls: palette.value[4], text: t('heatmap.legend.occurred'), mark: true }]
+    ? [
+        { cls: palette.value[0], text: t('heatmap.legend.none') },
+        { cls: palette.value[4], text: t('heatmap.legend.occurred'), mark: true },
+      ]
     : [
         { cls: palette.value[0], text: t('heatmap.legend.none') },
         { cls: palette.value[1], text: t('heatmap.legend.some') },
@@ -73,11 +82,18 @@ async function onKey(e: KeyboardEvent, date: string) {
 <template>
   <div ref="root" data-testid="heatmap" class="inline-block max-w-full">
     <div class="flex gap-1">
-      <div class="mt-4 flex shrink-0 flex-col gap-0.5 pr-1 text-[10px] leading-3 opacity-70" aria-hidden="true">
+      <div
+        class="mt-4 flex shrink-0 flex-col gap-0.5 pr-1 text-[10px] leading-3 opacity-70"
+        aria-hidden="true"
+      >
         <span v-for="(w, i) in weekdays" :key="w" class="h-3">{{ i % 2 === 1 ? w : '' }}</span>
       </div>
       <div class="overflow-x-auto pb-1">
-        <div class="flex gap-0.5 text-[10px] leading-3 opacity-70" aria-hidden="true" data-testid="heatmap-months">
+        <div
+          class="flex gap-0.5 text-[10px] leading-3 opacity-70"
+          aria-hidden="true"
+          data-testid="heatmap-months"
+        >
           <span v-for="(m, ci) in months" :key="ci" class="relative h-4 w-3 shrink-0">
             <span class="absolute left-0 whitespace-nowrap">{{ m }}</span>
           </span>
@@ -90,7 +106,10 @@ async function onKey(e: KeyboardEvent, date: string) {
                 type="button"
                 role="gridcell"
                 class="relative block size-3 rounded-sm outline-offset-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                :class="[palette[levelBucket(cell.level)], levelBucket(cell.level) === 4 ? 'ring-1 ring-inset ring-base-content/60' : '']"
+                :class="[
+                  palette[levelBucket(cell.level)],
+                  levelBucket(cell.level) === 4 ? 'ring-1 ring-inset ring-base-content/60' : '',
+                ]"
                 :data-date="cell.date"
                 :data-level="levelBucket(cell.level)"
                 :tabindex="cell.date === tabDate ? 0 : -1"
@@ -109,9 +128,16 @@ async function onKey(e: KeyboardEvent, date: string) {
       </div>
     </div>
     <p class="mt-1 min-h-4 text-xs" aria-live="polite" data-testid="heatmap-tip">{{ tip }}</p>
-    <ul class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs opacity-80" data-testid="heatmap-legend">
+    <ul
+      class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs opacity-80"
+      data-testid="heatmap-legend"
+    >
       <li v-for="l in legend" :key="l.text" class="flex items-center gap-1">
-        <span class="inline-block size-3 rounded-sm" :class="[l.cls, l.mark ? 'ring-1 ring-inset ring-base-content/60' : '']"></span>{{ l.text }}
+        <span
+          class="inline-block size-3 rounded-sm"
+          :class="[l.cls, l.mark ? 'ring-1 ring-inset ring-base-content/60' : '']"
+        ></span
+        >{{ l.text }}
       </li>
     </ul>
   </div>

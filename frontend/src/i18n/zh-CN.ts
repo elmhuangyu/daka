@@ -2,22 +2,26 @@ import type { MessageKey } from './en'
 
 const zhCN: Record<MessageKey, string> = {
   'data.title': '你的数据',
-  'data.intro': '导出你记录的全部内容、导入之前的导出文件，或删除你的账号。这些操作需要你再次确认身份。',
+  'data.intro':
+    '导出你记录的全部内容、导入之前的导出文件，或删除你的账号。这些操作需要你再次确认身份。',
   'data.export.title': '导出',
-  'data.export.help': '下载一个 JSON 文件，包含你的设置、分类、事项及其完整规则历史、打卡记录和冻结期。日历订阅地址和令牌不包含在内。该文件未加密，可能包含敏感事项，请妥善保管。',
+  'data.export.help':
+    '下载一个 JSON 文件，包含你的设置、分类、事项及其完整规则历史、打卡记录和冻结期。日历订阅地址和令牌不包含在内。该文件未加密，可能包含敏感事项，请妥善保管。',
   'data.export.button': '下载导出文件',
   'data.export.done': '导出文件已下载。',
   'data.import.title': '导入',
   'data.import.help': '导入的数据会添加到现有数据旁边，不会覆盖或合并任何内容。',
   'data.import.choose': '导出文件',
   'data.import.applySettings': '同时应用文件中的时区、每周起始日和节假日设置',
-  'data.import.summary': '可导入：{items} 个事项、{options} 个选项、{versions} 个规则版本、{checkins} 条打卡、{categories} 个分类、{freezes} 个冻结期。',
+  'data.import.summary':
+    '可导入：{items} 个事项、{options} 个选项、{versions} 个规则版本、{checkins} 条打卡、{categories} 个分类、{freezes} 个冻结期。',
   'data.import.button': '导入',
   'data.import.done': '已导入 {items} 个事项和 {checkins} 条打卡。',
   'data.import.tooLarge': '文件超过 {mb} MB。',
   'data.import.readFailed': '无法读取该文件。',
   'data.delete.title': '删除账号',
-  'data.delete.help': '永久删除你的账号和所有数据：事项、打卡记录、分类、令牌、Telegram 关联和设置。此操作无法撤销。如有可能需要，请先导出数据。',
+  'data.delete.help':
+    '永久删除你的账号和所有数据：事项、打卡记录、分类、令牌、Telegram 关联和设置。此操作无法撤销。如有可能需要，请先导出数据。',
   'data.delete.prompt': '输入 {word} 以确认',
   'data.delete.button': '删除我的账号',
   'data.delete.done': '你的账号已删除。',
@@ -373,9 +377,12 @@ const zhCN: Record<MessageKey, string> = {
   'items.editor.noCategory': '无分类',
   'items.editor.catSensitive': '{name}（敏感）',
   'items.editor.newCategory': '新分类',
-  'items.editor.ruleWarningToday': '更改日程或目标会创建一个今天起生效的新规则版本，之前的日期仍沿用旧规则。',
-  'items.editor.ruleWarningDate': '更改日程或目标会创建一个自 {date} 起生效的新规则版本，之前的日期仍沿用旧规则。',
-  'items.editor.ruleWarningBelow': '更改日程或目标会创建一个自下方日期起生效的新规则版本，之前的日期仍沿用旧规则。',
+  'items.editor.ruleWarningToday':
+    '更改日程或目标会创建一个今天起生效的新规则版本，之前的日期仍沿用旧规则。',
+  'items.editor.ruleWarningDate':
+    '更改日程或目标会创建一个自 {date} 起生效的新规则版本，之前的日期仍沿用旧规则。',
+  'items.editor.ruleWarningBelow':
+    '更改日程或目标会创建一个自下方日期起生效的新规则版本，之前的日期仍沿用旧规则。',
   'items.editor.retro': '从更早的日期起生效',
   'items.editor.saveChanges': '保存更改',
   'items.editor.create': '创建事项',
@@ -568,7 +575,8 @@ const zhCN: Record<MessageKey, string> = {
   'settings.categories.becomeExposed': '变为公开',
   'settings.categories.masked': '敏感分类',
   'settings.tokens.title': '订阅源与令牌',
-  'settings.tokens.help': '令牌提供对你日历订阅源的只读访问。请在日历应用中订阅该订阅地址（ICS / webcal）。令牌是网址的一部分，请确保反向代理或服务器日志会隐去 token= 查询参数。',
+  'settings.tokens.help':
+    '令牌提供对你日历订阅源的只读访问。请在日历应用中订阅该订阅地址（ICS / webcal）。令牌是网址的一部分，请确保反向代理或服务器日志会隐去 token= 查询参数。',
   'settings.tokens.active': '有效',
   'settings.tokens.revoked': '已撤销',
   'settings.tokens.expired': '已过期',
@@ -591,7 +599,8 @@ const zhCN: Record<MessageKey, string> = {
   'settings.tokens.copied': '已复制',
   'settings.tokens.done': '完成',
   'settings.external.title': '外部日历',
-  'settings.external.help': '订阅只读的 ICS 网址，即可在事项旁查看其中的事件。完整网址会加密保存且不再显示，仅显示简短提示。',
+  'settings.external.help':
+    '订阅只读的 ICS 网址，即可在事项旁查看其中的事件。完整网址会加密保存且不再显示，仅显示简短提示。',
   'settings.external.ok': '正常',
   'settings.external.failed': '失败',
   'settings.external.remove': '移除',
@@ -606,7 +615,8 @@ const zhCN: Record<MessageKey, string> = {
   'settings.privacy.off': '关闭',
   'settings.privacy.mask': '隐私保护开启时隐藏敏感分类的名称',
   'settings.account.title': '账号',
-  'settings.account.noLogin': '此实例未配置登录，任何能访问它的人都可以使用。在将其暴露到本机之外前，请先设置共享密钥或 OIDC。',
+  'settings.account.noLogin':
+    '此实例未配置登录，任何能访问它的人都可以使用。在将其暴露到本机之外前，请先设置共享密钥或 OIDC。',
   'settings.account.logout': '退出登录',
   'settings.telegram.title': 'Telegram',
   'settings.telegram.unconfigured': '此服务器未配置 Telegram 机器人。',

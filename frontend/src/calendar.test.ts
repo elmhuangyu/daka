@@ -5,10 +5,20 @@ import { createPinia, setActivePinia } from 'pinia'
 import { makeRouter } from './router'
 import CalendarView from './views/CalendarView.vue'
 import { usePrivacyStore } from './stores/privacy'
-import { addDays, addMonths, eventDates, gridRange, shiftAnchor, startOfWeek } from './calendar/logic'
+import {
+  addDays,
+  addMonths,
+  eventDates,
+  gridRange,
+  shiftAnchor,
+  startOfWeek,
+} from './calendar/logic'
 
 function jsonRes(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
 describe('calendar logic', () => {
@@ -31,23 +41,56 @@ describe('calendar logic', () => {
     expect(addDays('2026-02-28', 1)).toBe('2026-03-01')
   })
   it('expands external events over days', () => {
-    expect(eventDates({ title: 'x', start: '2026-11-02', end: '2026-11-04', all_day: true })).toEqual([
-      '2026-11-02', '2026-11-03', '2026-11-04',
-    ])
-    expect(eventDates({ title: 'x', start: '2026-11-02T10:00:00+08:00', end: '2026-11-03T00:00:00+08:00' })).toEqual(['2026-11-02'])
+    expect(
+      eventDates({ title: 'x', start: '2026-11-02', end: '2026-11-04', all_day: true }),
+    ).toEqual(['2026-11-02', '2026-11-03', '2026-11-04'])
+    expect(
+      eventDates({
+        title: 'x',
+        start: '2026-11-02T10:00:00+08:00',
+        end: '2026-11-03T00:00:00+08:00',
+      }),
+    ).toEqual(['2026-11-02'])
   })
 })
 
 const item = (id: number, name: string, o: object = {}) => ({
-  item_id: id, name, category_id: null, tracker_type: 'boolean', is_sensitive: false, due: true, status: 'missed',
-  done: false, log_count: 0, has_supplement: false, forecast: false, overdue: false, ...o,
+  item_id: id,
+  name,
+  category_id: null,
+  tracker_type: 'boolean',
+  is_sensitive: false,
+  due: true,
+  status: 'missed',
+  done: false,
+  log_count: 0,
+  has_supplement: false,
+  forecast: false,
+  overdue: false,
+  ...o,
 })
 const day = (date: string, o: object = {}) => ({
-  date, weekday: 0, day_type: 'normal', is_off_day: false, makeup_workday: false, frozen: false, status: 'none',
-  due_count: 0, done_count: 0, partial_count: 0, has_overdue: false, items: [], ...o,
+  date,
+  weekday: 0,
+  day_type: 'normal',
+  is_off_day: false,
+  makeup_workday: false,
+  frozen: false,
+  status: 'none',
+  due_count: 0,
+  done_count: 0,
+  partial_count: 0,
+  has_overdue: false,
+  items: [],
+  ...o,
 })
 
-interface Call { url: string; method: string; headers: Record<string, string>; body?: Record<string, unknown> }
+interface Call {
+  url: string
+  method: string
+  headers: Record<string, string>
+  body?: Record<string, unknown>
+}
 let calls: Call[]
 let extResponses: Record<string, () => Response | Promise<Response>>
 let viewDays: Record<string, object>
@@ -59,38 +102,82 @@ beforeEach(() => {
   extResponses = {}
   viewStatus = 200
   viewDays = {
-    '2026-11-06': day('2026-11-06', { status: 'incomplete', due_count: 1, items: [item(1, 'Water')] }),
+    '2026-11-06': day('2026-11-06', {
+      status: 'incomplete',
+      due_count: 1,
+      items: [item(1, 'Water')],
+    }),
     '2026-11-07': day('2026-11-07', { day_type: 'holiday', holiday_name: 'Break' }),
-    '2026-11-08': day('2026-11-08', { status: 'pending', due_count: 1, has_overdue: true, items: [item(2, 'Filter', { status: 'pending', overdue: true })] }),
-    '2026-11-20': day('2026-11-20', { day_type: 'workday', status: 'upcoming', due_count: 1, items: [item(1, 'Water', { status: 'upcoming', forecast: true })] }),
+    '2026-11-08': day('2026-11-08', {
+      status: 'pending',
+      due_count: 1,
+      has_overdue: true,
+      items: [item(2, 'Filter', { status: 'pending', overdue: true })],
+    }),
+    '2026-11-20': day('2026-11-20', {
+      day_type: 'workday',
+      status: 'upcoming',
+      due_count: 1,
+      items: [item(1, 'Water', { status: 'upcoming', forecast: true })],
+    }),
   }
   const detail = (id: number, name: string) => ({
-    id, name, tracker_type: 'boolean', kind: 'habit', polarity: 'positive', category_id: null, effective_sensitive: false,
-    options: [], current_rule: { schedule_type: 'fixed_rrule', option_targets: {} },
+    id,
+    name,
+    tracker_type: 'boolean',
+    kind: 'habit',
+    polarity: 'positive',
+    category_id: null,
+    effective_sensitive: false,
+    options: [],
+    current_rule: { schedule_type: 'fixed_rrule', option_targets: {} },
   })
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     url = String(url)
     const method = init?.method ?? 'GET'
     calls.push({
-      url, method, headers: (init?.headers ?? {}) as Record<string, string>,
+      url,
+      method,
+      headers: (init?.headers ?? {}) as Record<string, string>,
       body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : undefined,
     })
-    if (url === '/api/auth/status') return jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
+    if (url === '/api/auth/status')
+      return jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
     if (url === '/api/settings/calendar')
-      return jsonRes({ timezone: 'UTC', week_start: 1, external_calendars: [{ id: 'a', name: 'Work', url_hint: '' }, { id: 'b', name: 'Home', url_hint: '' }] })
+      return jsonRes({
+        timezone: 'UTC',
+        week_start: 1,
+        external_calendars: [
+          { id: 'a', name: 'Work', url_hint: '' },
+          { id: 'b', name: 'Home', url_hint: '' },
+        ],
+      })
     if (url.startsWith('/api/view/calendar')) {
       if (viewStatus !== 200) return jsonRes({ error: 'internal error' }, viewStatus)
       const q = new URL(url, 'http://x').searchParams
       const days = []
-      for (let d = q.get('start')!; d <= q.get('end')!; d = addDays(d, 1)) days.push(viewDays[d] ?? day(d))
-      return jsonRes({ start: q.get('start'), end: q.get('end'), timezone: 'UTC', today: '2026-11-08', week_start: 1, holiday_region: 'CN', holiday_published: true, freezes: [], days })
+      for (let d = q.get('start')!; d <= q.get('end')!; d = addDays(d, 1))
+        days.push(viewDays[d] ?? day(d))
+      return jsonRes({
+        start: q.get('start'),
+        end: q.get('end'),
+        timezone: 'UTC',
+        today: '2026-11-08',
+        week_start: 1,
+        holiday_region: 'CN',
+        holiday_published: true,
+        freezes: [],
+        days,
+      })
     }
     if (url.startsWith('/api/calendar/external')) {
       const id = new URL(url, 'http://x').searchParams.get('source_id')!
       return extResponses[id]?.() ?? jsonRes({ sources: [{ id, name: id, ok: true, events: [] }] })
     }
-    if (url.startsWith('/api/items')) return jsonRes({ items: [detail(1, 'Water'), detail(3, 'Read')] })
-    if (url.startsWith('/api/checkins') && method === 'GET') return jsonRes({ checkins: [], next_cursor: null })
+    if (url.startsWith('/api/items'))
+      return jsonRes({ items: [detail(1, 'Water'), detail(3, 'Read')] })
+    if (url.startsWith('/api/checkins') && method === 'GET')
+      return jsonRes({ checkins: [], next_cursor: null })
     return jsonRes({})
   })
   vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-08T12:00:00Z') })
@@ -110,7 +197,8 @@ async function mountView() {
   await flushPromises()
   return { w, pinia }
 }
-const viewCalls = () => calls.filter((c) => c.url.startsWith('/api/view/calendar')).map((c) => c.url)
+const viewCalls = () =>
+  calls.filter((c) => c.url.startsWith('/api/view/calendar')).map((c) => c.url)
 
 describe('CalendarView', () => {
   it('renders the month grid with badges, ribbon and overdue marker', async () => {
@@ -119,7 +207,9 @@ describe('CalendarView', () => {
     expect(w.findAll('[role=gridcell]')).toHaveLength(42)
     expect(w.find('[data-testid=day-2026-11-07] [data-testid=badge-off]').exists()).toBe(true)
     expect(w.find('[data-testid=day-2026-11-20] [data-testid=badge-work]').exists()).toBe(true)
-    expect(w.get('[data-testid=day-2026-11-06] [data-ribbon]').attributes('data-ribbon')).toBe('incomplete')
+    expect(w.get('[data-testid=day-2026-11-06] [data-ribbon]').attributes('data-ribbon')).toBe(
+      'incomplete',
+    )
     expect(w.find('[data-testid=day-2026-11-08] [data-testid=overdue-mark]').exists()).toBe(true)
     expect(w.get('[data-testid=day-2026-11-08]').attributes('aria-current')).toBe('date')
     expect(w.get('[data-testid=period-title]').text()).toBe('November 2026')
@@ -152,14 +242,28 @@ describe('CalendarView', () => {
   })
 
   it('isolates external source failures and shows other sources', async () => {
-    extResponses.a = () => jsonRes({ sources: [{ id: 'a', name: 'Work', ok: false, error: 'fetch_failed', events: [] }] })
+    extResponses.a = () =>
+      jsonRes({
+        sources: [{ id: 'a', name: 'Work', ok: false, error: 'fetch_failed', events: [] }],
+      })
     extResponses.b = () =>
-      jsonRes({ sources: [{ id: 'b', name: 'Home', ok: true, events: [{ title: 'Dentist', start: '2026-11-06', end: '2026-11-06', all_day: true }] }] })
+      jsonRes({
+        sources: [
+          {
+            id: 'b',
+            name: 'Home',
+            ok: true,
+            events: [{ title: 'Dentist', start: '2026-11-06', end: '2026-11-06', all_day: true }],
+          },
+        ],
+      })
     const { w } = await mountView()
     expect(w.findAll('[role=gridcell]')).toHaveLength(42)
     expect(w.get('[data-testid=ext-error-a]').text()).toContain('the download failed')
     expect(w.find('[data-testid=day-2026-11-06] [data-testid=external-chips]').exists()).toBe(true)
-    expect(calls.filter((c) => c.url.startsWith('/api/calendar/external')).map((c) => c.url)).toEqual([
+    expect(
+      calls.filter((c) => c.url.startsWith('/api/calendar/external')).map((c) => c.url),
+    ).toEqual([
       '/api/calendar/external?start=2026-10-26&end=2026-12-06&source_id=a',
       '/api/calendar/external?start=2026-10-26&end=2026-12-06&source_id=b',
     ])

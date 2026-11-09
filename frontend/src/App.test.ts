@@ -7,7 +7,10 @@ import App from './App.vue'
 import { makeRouter } from './router'
 
 function jsonRes(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
 beforeEach(() => {
@@ -19,7 +22,13 @@ beforeEach(() => {
       url === '/api/auth/status'
         ? jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
         : String(url).startsWith('/api/view/today')
-          ? jsonRes({ date: '2026-11-07', weekday: 6, timezone: 'UTC', progress: { done: 0, total: 0 }, items: [] })
+          ? jsonRes({
+              date: '2026-11-07',
+              weekday: 6,
+              timezone: 'UTC',
+              progress: { done: 0, total: 0 },
+              items: [],
+            })
           : jsonRes({}),
     ),
   )
@@ -51,7 +60,13 @@ describe('App', () => {
           : url === '/api/auth/me'
             ? jsonRes({ id: '1', name: 'user' })
             : String(url).startsWith('/api/view/today')
-              ? jsonRes({ date: '2026-11-07', weekday: 6, timezone: 'UTC', progress: { done: 0, total: 0 }, items: [] })
+              ? jsonRes({
+                  date: '2026-11-07',
+                  weekday: 6,
+                  timezone: 'UTC',
+                  progress: { done: 0, total: 0 },
+                  items: [],
+                })
               : jsonRes({}),
       ),
     )

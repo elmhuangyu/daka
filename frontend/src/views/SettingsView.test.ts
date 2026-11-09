@@ -8,14 +8,24 @@ import { usePrivacyStore } from '../stores/privacy'
 import { MASK_STORAGE_KEY, useSettingsStore } from '../stores/settings'
 
 function jsonRes(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
-let calls: { url: string; method: string; body?: Record<string, unknown> & { external_calendars?: unknown } }[]
+let calls: {
+  url: string
+  method: string
+  body?: Record<string, unknown> & { external_calendars?: unknown }
+}[]
 let telegramConfigured = true
 
 const cal = {
-  timezone: 'Asia/Shanghai', week_start: 1, holiday_region: '', streak_holiday_freeze: false,
+  timezone: 'Asia/Shanghai',
+  week_start: 1,
+  holiday_region: '',
+  streak_holiday_freeze: false,
   external_calendars: [{ id: 'work', name: 'Work', url_hint: 'example.com/…/a.ics' }],
 }
 
@@ -26,7 +36,8 @@ beforeEach(() => {
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
     calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined })
-    if (url === '/api/auth/status') return jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
+    if (url === '/api/auth/status')
+      return jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
     if (url === '/api/settings/calendar') return jsonRes(cal)
     if (url === '/api/categories' && method === 'GET') {
       return jsonRes({
@@ -36,19 +47,30 @@ beforeEach(() => {
         ],
       })
     }
-    if (url.startsWith('/api/categories/') && method === 'PUT') return jsonRes({ id: 1, name: 'Health', is_sensitive: false, affected_items: 2 })
-    if (url.startsWith('/api/categories/') && method === 'DELETE') return jsonRes({ deleted: true, moved_items: 0, affected_items: 0 })
+    if (url.startsWith('/api/categories/') && method === 'PUT')
+      return jsonRes({ id: 1, name: 'Health', is_sensitive: false, affected_items: 2 })
+    if (url.startsWith('/api/categories/') && method === 'DELETE')
+      return jsonRes({ deleted: true, moved_items: 0, affected_items: 0 })
     if (url === '/api/tokens' && method === 'GET') return jsonRes({ tokens: [] })
     if (url === '/api/tokens' && method === 'POST') {
-      return jsonRes({ id: 1, name: 'cal', token: 'dk_secret', feed_path: '/feed.ics?token=dk_secret' }, 201)
+      return jsonRes(
+        { id: 1, name: 'cal', token: 'dk_secret', feed_path: '/feed.ics?token=dk_secret' },
+        201,
+      )
     }
     if (url === '/api/telegram' && method === 'GET') {
       return jsonRes({
-        configured: telegramConfigured, linked: false, enabled: false, remind_sensitive: true, digest_time: '08:00',
-        linked_at: null, bot_username: 'dakabot',
+        configured: telegramConfigured,
+        linked: false,
+        enabled: false,
+        remind_sensitive: true,
+        digest_time: '08:00',
+        linked_at: null,
+        bot_username: 'dakabot',
       })
     }
-    if (url === '/api/telegram/link-code') return jsonRes({ error: 'telegram is not configured' }, 503)
+    if (url === '/api/telegram/link-code')
+      return jsonRes({ error: 'telegram is not configured' }, 503)
     return jsonRes({})
   })
 })
@@ -72,14 +94,20 @@ describe('SettingsView', () => {
     await w.get('[data-testid=section-general] form').trigger('submit')
     await flushPromises()
     const put = calls.find((c) => c.method === 'PUT' && c.url === '/api/settings/calendar')!
-    expect(put.body).toMatchObject({ timezone: 'Asia/Shanghai', week_start: 0, holiday_region: 'CN' })
+    expect(put.body).toMatchObject({
+      timezone: 'Asia/Shanghai',
+      week_start: 0,
+      holiday_region: 'CN',
+    })
   })
 
   it('asks before un-marking a category and sends confirm_exposure when exposing', async () => {
     const w = await mountView()
     await w.get('[data-testid=cat-toggle]').trigger('click')
     expect(w.find('[data-testid=cat-unmark-dialog]').exists()).toBe(true)
-    expect(calls.some((c) => c.method === 'PUT' && c.url.startsWith('/api/categories/'))).toBe(false)
+    expect(calls.some((c) => c.method === 'PUT' && c.url.startsWith('/api/categories/'))).toBe(
+      false,
+    )
     await w.get('[data-testid=cat-expose]').setValue(true)
     await w.get('[data-testid=cat-unmark-confirm]').trigger('click')
     await flushPromises()

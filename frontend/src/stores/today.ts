@@ -5,7 +5,13 @@ import type { Category, CheckinInput, CheckinLog, ItemDetail, TodayView } from '
 import { useOfflineStore } from './offline'
 import { usePrivacyStore } from './privacy'
 import { t } from '../i18n'
-import { matchesFilter, needsAttention, ringStats, type CardVM, type CategoryFilter } from '../today/logic'
+import {
+  matchesFilter,
+  needsAttention,
+  ringStats,
+  type CardVM,
+  type CategoryFilter,
+} from '../today/logic'
 
 /**
  * State of the Today page. Holds plaintext only while the privacy guard is off:
@@ -49,7 +55,11 @@ export const useTodayStore = defineStore('today', () => {
     const redact = privacy.redact
     if (!view.value) loading.value = true
     try {
-      const [v, it, cats] = await Promise.all([api.getToday(redact), api.getItems(redact), api.getCategories()])
+      const [v, it, cats] = await Promise.all([
+        api.getToday(redact),
+        api.getItems(redact),
+        api.getCategories(),
+      ])
       const ls = await api.getCheckinsOn(v.date, redact)
       if (my !== seq) return
       view.value = v
@@ -60,7 +70,8 @@ export const useTodayStore = defineStore('today', () => {
       )
       logs.value = ls
       error.value = ''
-      if (typeof filter.value === 'number' && !categories.value.some((c) => c.id === filter.value)) filter.value = 'all'
+      if (typeof filter.value === 'number' && !categories.value.some((c) => c.id === filter.value))
+        filter.value = 'all'
     } catch (e) {
       if (my !== seq) return
       error.value = api.describeError(e)
@@ -86,15 +97,23 @@ export const useTodayStore = defineStore('today', () => {
       return t.due && d ? [vm(d)] : []
     }),
   )
-  const scoped = (cards: CardVM[]) => cards.filter((c) => matchesFilter(c.detail.category_id, filter.value))
+  const scoped = (cards: CardVM[]) =>
+    cards.filter((c) => matchesFilter(c.detail.category_id, filter.value))
 
   const todoCards = computed(() => scoped(dueCards.value.filter((c) => !c.today?.done)))
   const rollingDone = computed(() =>
-    items.value.filter((d) => d.current_rule.schedule_type === 'rolling' && !needsAttention(d)).map(vm).filter((c) => c.logs.length > 0),
+    items.value
+      .filter((d) => d.current_rule.schedule_type === 'rolling' && !needsAttention(d))
+      .map(vm)
+      .filter((c) => c.logs.length > 0),
   )
-  const doneCards = computed(() => scoped([...dueCards.value.filter((c) => c.today?.done), ...rollingDone.value]))
+  const doneCards = computed(() =>
+    scoped([...dueCards.value.filter((c) => c.today?.done), ...rollingDone.value]),
+  )
   const maintenanceCards = computed(() => scoped(items.value.filter(needsAttention).map(vm)))
-  const quotaCards = computed(() => scoped(items.value.filter((d) => d.current_rule.schedule_type === 'quota').map(vm)))
+  const quotaCards = computed(() =>
+    scoped(items.value.filter((d) => d.current_rule.schedule_type === 'quota').map(vm)),
+  )
 
   /** Ring over the filtered due items; the unfiltered view uses the server's progress. */
   const ring = computed(() => {
@@ -105,7 +124,12 @@ export const useTodayStore = defineStore('today', () => {
 
   /** Filter chips: counts cover every visible card of a category. */
   const categoryCounts = computed(() => {
-    const all = [...dueCards.value, ...items.value.filter((d) => needsAttention(d) || d.current_rule.schedule_type === 'quota').map(vm)]
+    const all = [
+      ...dueCards.value,
+      ...items.value
+        .filter((d) => needsAttention(d) || d.current_rule.schedule_type === 'quota')
+        .map(vm),
+    ]
     const counts = new Map<number | 'none', number>()
     for (const c of all) {
       const k = c.detail.category_id ?? 'none'
@@ -141,8 +165,23 @@ export const useTodayStore = defineStore('today', () => {
   }
 
   return {
-    view, items, categories, logs, loading, error, filter, busy,
-    todoCards, doneCards, maintenanceCards, quotaCards, ring, categoryCounts,
-    refresh, clear, submit, remove,
+    view,
+    items,
+    categories,
+    logs,
+    loading,
+    error,
+    filter,
+    busy,
+    todoCards,
+    doneCards,
+    maintenanceCards,
+    quotaCards,
+    ring,
+    categoryCounts,
+    refresh,
+    clear,
+    submit,
+    remove,
   }
 })

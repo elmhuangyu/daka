@@ -7,7 +7,10 @@ import { makeRouter } from './router'
 import { usePrivacyStore } from './stores/privacy'
 
 function jsonRes(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
 let fetchMock: ReturnType<typeof vi.fn>
@@ -24,7 +27,13 @@ beforeEach(() => {
       return new Response(null, { status: 204 })
     }
     if (url.startsWith('/api/view/today'))
-      return jsonRes({ date: '2026-11-07', weekday: 6, timezone: 'UTC', progress: { done: 0, total: 0 }, items: [] })
+      return jsonRes({
+        date: '2026-11-07',
+        weekday: 6,
+        timezone: 'UTC',
+        progress: { done: 0, total: 0 },
+        items: [],
+      })
     return jsonRes({})
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -71,7 +80,12 @@ describe('layout', () => {
     await flushPromises()
     expect(t.attributes('aria-pressed')).toBe('true')
     expect(localStorage.getItem('daka.redact')).toBe('1')
-    expect(fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.startsWith('/api/view/today')).at(-1)).toBe('/api/view/today?redact=1')
+    expect(
+      fetchMock.mock.calls
+        .map((c) => String(c[0]))
+        .filter((u) => u.startsWith('/api/view/today'))
+        .at(-1),
+    ).toBe('/api/view/today?redact=1')
     expect(w.get('[data-privacy]').attributes('data-privacy')).toBe('on')
     w.unmount()
   })
@@ -104,9 +118,22 @@ describe('layout', () => {
   it('avatar button and menu display avatar image when avatar_url is provided, falling back to initial on error', async () => {
     fetchMock = vi.fn(async (url: string) => {
       if (url === '/api/auth/status') return jsonRes(status)
-      if (url === '/api/auth/me') return jsonRes({ id: 'u', name: 'Alice', email: 'alice@example.com', avatar_url: 'https://example.com/pic.png', csrf_token: 't' })
+      if (url === '/api/auth/me')
+        return jsonRes({
+          id: 'u',
+          name: 'Alice',
+          email: 'alice@example.com',
+          avatar_url: 'https://example.com/pic.png',
+          csrf_token: 't',
+        })
       if (url.startsWith('/api/view/today'))
-        return jsonRes({ date: '2026-11-07', weekday: 6, timezone: 'UTC', progress: { done: 0, total: 0 }, items: [] })
+        return jsonRes({
+          date: '2026-11-07',
+          weekday: 6,
+          timezone: 'UTC',
+          progress: { done: 0, total: 0 },
+          items: [],
+        })
       return jsonRes({})
     })
     vi.stubGlobal('fetch', fetchMock)

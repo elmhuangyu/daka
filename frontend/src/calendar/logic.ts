@@ -102,10 +102,16 @@ export function joinParts(parts: string[]): string {
 
 export function dayLabel(day: CalendarDay): string {
   const parts = [longDate(day.date)]
-  if (day.day_type === 'holiday') parts.push(day.holiday_name ? t('calendar.day.holidayNamed', { name: day.holiday_name }) : t('calendar.day.holiday'))
+  if (day.day_type === 'holiday')
+    parts.push(
+      day.holiday_name
+        ? t('calendar.day.holidayNamed', { name: day.holiday_name })
+        : t('calendar.day.holiday'),
+    )
   if (day.day_type === 'workday') parts.push(t('calendar.day.makeupWorkday'))
   parts.push(dayStatusText(day.status))
-  if (day.due_count > 0) parts.push(t('calendar.day.doneOf', { done: day.done_count, due: day.due_count }))
+  if (day.due_count > 0)
+    parts.push(t('calendar.day.doneOf', { done: day.done_count, due: day.due_count }))
   if (day.has_overdue) parts.push(t('calendar.day.overdueItem'))
   return joinParts(parts)
 }

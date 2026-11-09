@@ -8,10 +8,22 @@ import { useAuthStore } from '../../stores/auth'
 import DataSection from './DataSection.vue'
 
 function jsonRes(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
-const summary = { dry_run: true, categories: 1, items: 2, options: 3, rule_versions: 4, checkins: 5, freezes: 6, settings_applied: false }
+const summary = {
+  dry_run: true,
+  categories: 1,
+  items: 2,
+  options: 3,
+  rule_versions: 4,
+  checkins: 5,
+  freezes: 6,
+  settings_applied: false,
+}
 let calls: { url: string; method: string; body?: string }[]
 let importError: string | null
 let reauthNeeded: boolean
@@ -25,7 +37,8 @@ beforeEach(() => {
     const method = init?.method ?? 'GET'
     calls.push({ url, method, body: init?.body ? String(init.body) : undefined })
     if (url === '/api/auth/me') return jsonRes({ id: 'u', name: 'U' })
-    if (url === '/api/auth/status') return jsonRes({ oidc_enabled: false, login_required: true, authenticated: true })
+    if (url === '/api/auth/status')
+      return jsonRes({ oidc_enabled: false, login_required: true, authenticated: true })
     if (url === '/api/export') return new Response('{"schema":"daka.export"}', { status: 200 })
     if (url.startsWith('/api/import')) {
       if (importError) return jsonRes({ error: importError }, 400)
@@ -81,7 +94,9 @@ describe('DataSection', () => {
     const dry = calls.find((c) => c.url === '/api/import?dry_run=1')
     expect(dry?.method).toBe('POST')
     expect(dry?.body).toBe('{"doc":1}')
-    expect(w.get('[data-testid=data-summary]').text()).toContain('2 items, 3 options, 4 rule versions, 5 check-ins')
+    expect(w.get('[data-testid=data-summary]').text()).toContain(
+      '2 items, 3 options, 4 rule versions, 5 check-ins',
+    )
 
     await w.get('[data-testid=data-apply-settings]').setValue(true)
     await w.get('[data-testid=data-import]').trigger('click')

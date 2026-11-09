@@ -1,5 +1,10 @@
 import { t } from './i18n'
-import { IMPORT_ERROR_PREFIX, NETWORK_ERROR_KEY, errorKeyForCode, errorKeyForStatus } from './i18n/errors'
+import {
+  IMPORT_ERROR_PREFIX,
+  NETWORK_ERROR_KEY,
+  errorKeyForCode,
+  errorKeyForStatus,
+} from './i18n/errors'
 
 export interface TodayItem {
   id: number
@@ -52,7 +57,8 @@ export function describeError(e: unknown): string {
     const key = errorKeyForCode(e.code)
     if (key) return t(key)
     // Import validation answers carry a language-independent location and code.
-    if (e.code.startsWith(IMPORT_ERROR_PREFIX)) return t('errors.importDetail', { detail: e.code.slice(IMPORT_ERROR_PREFIX.length) })
+    if (e.code.startsWith(IMPORT_ERROR_PREFIX))
+      return t('errors.importDetail', { detail: e.code.slice(IMPORT_ERROR_PREFIX.length) })
     return t(errorKeyForStatus(e.status), { status: e.status })
   }
   return e instanceof Error ? e.message : String(e)
@@ -218,7 +224,10 @@ export interface ReauthResult {
 
 /** POST /api/auth/reauth: shared secret in secret mode, redirect target in OIDC mode. */
 export function reauth(secret?: string): Promise<ReauthResult> {
-  return request<ReauthResult>('/api/auth/reauth', jsonInit('POST', secret === undefined ? {} : { secret }))
+  return request<ReauthResult>(
+    '/api/auth/reauth',
+    jsonInit('POST', secret === undefined ? {} : { secret }),
+  )
 }
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
@@ -229,17 +238,28 @@ interface Retry {
 }
 
 async function request<T>(
-  path: string, init: RequestInit = {}, retry: Retry = { csrf: false, reauth: false }, as: 'json' | 'text' = 'json',
+  path: string,
+  init: RequestInit = {},
+  retry: Retry = { csrf: false, reauth: false },
+  as: 'json' | 'text' = 'json',
 ): Promise<T> {
   let res: Response
   const method = (init.method ?? 'GET').toUpperCase()
   // Started early for every request so writes do not wait for a cold start.
-  const noToken = path === '/api/auth/me' || path === '/api/auth/login' || path === '/api/auth/status'
+  const noToken =
+    path === '/api/auth/me' || path === '/api/auth/login' || path === '/api/auth/status'
   const csrf = noToken ? Promise.resolve(null) : getCsrf()
   try {
     if (!SAFE_METHODS.has(method) && !noToken) {
       const token = await csrf
-      if (token) init = { ...init, headers: { ...(init.headers as Record<string, string> | undefined), 'X-Daka-CSRF': token } }
+      if (token)
+        init = {
+          ...init,
+          headers: {
+            ...(init.headers as Record<string, string> | undefined),
+            'X-Daka-CSRF': token,
+          },
+        }
     }
     res = await fetch(path, { credentials: 'same-origin', ...init })
   } catch {
@@ -265,8 +285,14 @@ async function request<T>(
       // The cached token went stale (new session); fetch a fresh one and retry once.
       return request<T>(path, stripCsrf(init), { ...retry, csrf: true }, as)
     }
-    if (res.status === 403 && code === 'reauth_required' && !retry.reauth && hooks.onReauthRequired) {
-      if (await hooks.onReauthRequired()) return request<T>(path, init, { ...retry, reauth: true }, as)
+    if (
+      res.status === 403 &&
+      code === 'reauth_required' &&
+      !retry.reauth &&
+      hooks.onReauthRequired
+    ) {
+      if (await hooks.onReauthRequired())
+        return request<T>(path, init, { ...retry, reauth: true }, as)
     }
     if (res.status === 401 && code === 'unauthorized' && path !== '/api/auth/me') {
       broadcastAuthEvent({ type: 'session_expired' })
@@ -285,8 +311,16 @@ function stripCsrf(init: RequestInit): RequestInit {
   return { ...init, headers: h }
 }
 
-function jsonInit(method: string, body: unknown, headers: Record<string, string> = {}): RequestInit {
-  return { method, headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) }
+function jsonInit(
+  method: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+): RequestInit {
+  return {
+    method,
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  }
 }
 
 export function getToday(redact: boolean): Promise<TodayView> {
@@ -406,7 +440,9 @@ export async function getCheckinsOn(date: string, redact: boolean): Promise<Chec
   let cursor = ''
   for (let page = 0; page < 20; page++) {
     const q = `from=${date}&to=${date}&limit=200${redact ? '&redact=1' : ''}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`
-    const res = await request<{ checkins?: CheckinLog[]; next_cursor?: string | null }>(`/api/checkins?${q}`)
+    const res = await request<{ checkins?: CheckinLog[]; next_cursor?: string | null }>(
+      `/api/checkins?${q}`,
+    )
     out.push(...(res.checkins ?? []))
     if (!res.next_cursor) break
     cursor = res.next_cursor
@@ -418,12 +454,18 @@ export async function getCheckinsOn(date: string, redact: boolean): Promise<Chec
  * POST /api/checkins. A key identifies one logical user action; callers pass
  * their own to make deliberate retries of that action idempotent.
  */
-export function postCheckin(input: CheckinInput, key: string = newIdempotencyKey()): Promise<unknown> {
+export function postCheckin(
+  input: CheckinInput,
+  key: string = newIdempotencyKey(),
+): Promise<unknown> {
   return request('/api/checkins', jsonInit('POST', input, { 'Idempotency-Key': key }))
 }
 
 export function deleteCheckin(id: number): Promise<unknown> {
-  return request(`/api/checkins/${id}`, { method: 'DELETE', headers: { 'Idempotency-Key': newIdempotencyKey() } })
+  return request(`/api/checkins/${id}`, {
+    method: 'DELETE',
+    headers: { 'Idempotency-Key': newIdempotencyKey() },
+  })
 }
 
 export function setCheckin(itemId: number, done: boolean): Promise<unknown> {
@@ -526,13 +568,30 @@ export async function listCategories(): Promise<CategoryDto[]> {
 }
 
 export function createCategory(name: string, isSensitive: boolean): Promise<CategoryDto> {
-  return request<CategoryDto>('/api/categories', jsonInit('POST', { name, is_sensitive: isSensitive }))
+  return request<CategoryDto>(
+    '/api/categories',
+    jsonInit('POST', { name, is_sensitive: isSensitive }),
+  )
 }
 
 // ---- Calendar view (GET /api/view/calendar, /api/settings/calendar, /api/calendar/external) ----
 
-export type CalItemStatus = 'done' | 'partial' | 'missed' | 'frozen' | 'pending' | 'upcoming' | 'extra'
-export type CalDayStatus = 'none' | 'complete' | 'partial' | 'incomplete' | 'pending' | 'upcoming' | 'frozen'
+export type CalItemStatus =
+  | 'done'
+  | 'partial'
+  | 'missed'
+  | 'frozen'
+  | 'pending'
+  | 'upcoming'
+  | 'extra'
+export type CalDayStatus =
+  | 'none'
+  | 'complete'
+  | 'partial'
+  | 'incomplete'
+  | 'pending'
+  | 'upcoming'
+  | 'frozen'
 
 export interface CalendarDayItem {
   item_id: number
@@ -577,7 +636,11 @@ export interface CalendarViewData {
   days: CalendarDay[]
 }
 
-export function getCalendarView(start: string, end: string, redact: boolean): Promise<CalendarViewData> {
+export function getCalendarView(
+  start: string,
+  end: string,
+  redact: boolean,
+): Promise<CalendarViewData> {
   return request(`/api/view/calendar?start=${start}&end=${end}${redact ? '&redact=1' : ''}`)
 }
 
@@ -598,8 +661,14 @@ export interface ExternalSource {
   truncated?: boolean
 }
 
-export function getExternalCalendar(start: string, end: string, sourceId: string): Promise<{ sources: ExternalSource[] }> {
-  return request(`/api/calendar/external?start=${start}&end=${end}&source_id=${encodeURIComponent(sourceId)}`)
+export function getExternalCalendar(
+  start: string,
+  end: string,
+  sourceId: string,
+): Promise<{ sources: ExternalSource[] }> {
+  return request(
+    `/api/calendar/external?start=${start}&end=${end}&source_id=${encodeURIComponent(sourceId)}`,
+  )
 }
 
 export function createItem(item: NewItem): Promise<unknown> {
@@ -654,7 +723,9 @@ export interface ExternalSourceStatus {
 }
 
 export async function getExternalStatus(day: string): Promise<ExternalSourceStatus[]> {
-  const r = await request<{ sources: ExternalSourceStatus[] }>(`/api/calendar/external?start=${day}&end=${day}`)
+  const r = await request<{ sources: ExternalSourceStatus[] }>(
+    `/api/calendar/external?start=${day}&end=${day}`,
+  )
   return r.sources
 }
 
@@ -704,7 +775,11 @@ export function getTelegram(): Promise<TelegramStatus> {
   return request<TelegramStatus>('/api/telegram')
 }
 
-export function createTelegramLinkCode(): Promise<{ code: string; expires_at: string; deep_link?: string }> {
+export function createTelegramLinkCode(): Promise<{
+  code: string
+  expires_at: string
+  deep_link?: string
+}> {
   return request('/api/telegram/link-code', { method: 'POST' })
 }
 
@@ -712,7 +787,11 @@ export function unlinkTelegram(): Promise<unknown> {
   return request('/api/telegram', { method: 'DELETE' })
 }
 
-export function patchTelegram(body: { enabled?: boolean; remind_sensitive?: boolean; digest_time?: string }): Promise<TelegramStatus> {
+export function patchTelegram(body: {
+  enabled?: boolean
+  remind_sensitive?: boolean
+  digest_time?: string
+}): Promise<TelegramStatus> {
   return request<TelegramStatus>('/api/telegram/settings', jsonInit('PATCH', body))
 }
 
@@ -729,7 +808,10 @@ export function updateCategory(
   body: { name?: string; is_sensitive?: boolean },
   confirmExposure = false,
 ): Promise<CategoryChange> {
-  return request<CategoryChange>(`/api/categories/${id}${confirmExposure ? '?confirm_exposure=1' : ''}`, jsonInit('PUT', body))
+  return request<CategoryChange>(
+    `/api/categories/${id}${confirmExposure ? '?confirm_exposure=1' : ''}`,
+    jsonInit('PUT', body),
+  )
 }
 
 export function removeCategory(
@@ -744,11 +826,14 @@ export function removeCategory(
   return request(`/api/categories/${id}?${q}`, { method: 'DELETE' })
 }
 
-
 // ---- Items panel and detail page ----
 
 /** GET /api/items with stats for the items panel (search is skipped by callers while redacting). */
-export function listItemsPanel(opts: { q?: string; archived?: boolean; redact: boolean }): Promise<{ items: ItemDetail[] }> {
+export function listItemsPanel(opts: {
+  q?: string
+  archived?: boolean
+  redact: boolean
+}): Promise<{ items: ItemDetail[] }> {
   const p = new URLSearchParams({ include: 'stats' })
   if (opts.q) p.set('q', opts.q)
   if (opts.archived) p.set('archived', 'true')
@@ -811,7 +896,10 @@ export interface HistoryLog {
 }
 
 export function getItemCheckins(
-  itemId: number, cursor: string, redact: boolean, limit = 20,
+  itemId: number,
+  cursor: string,
+  redact: boolean,
+  limit = 20,
 ): Promise<{ checkins?: HistoryLog[]; next_cursor?: string | null }> {
   const p = new URLSearchParams({ item_id: String(itemId), limit: String(limit) })
   if (cursor) p.set('cursor', cursor)
@@ -824,11 +912,22 @@ export interface ItemCalendarDay {
   weekday: number
   status: string
   frozen: boolean
-  items: Array<{ item_id: number; due: boolean; status: string; done: boolean; forecast: boolean; overdue: boolean; log_count: number }>
+  items: Array<{
+    item_id: number
+    due: boolean
+    status: string
+    done: boolean
+    forecast: boolean
+    overdue: boolean
+    log_count: number
+  }>
 }
 
 export function getItemCalendar(
-  itemId: number, start: string, end: string, redact: boolean,
+  itemId: number,
+  start: string,
+  end: string,
+  redact: boolean,
 ): Promise<{ today: string; week_start: number; days: ItemCalendarDay[] }> {
   const p = new URLSearchParams({ start, end, item: String(itemId) })
   if (redact) p.set('redact', '1')
@@ -859,13 +958,18 @@ export interface ImportSummary {
 }
 
 /** POST /api/import with the text of an export file; dryRun only validates and counts. */
-export function importData(text: string, opts: { dryRun?: boolean; applySettings?: boolean } = {}): Promise<ImportSummary> {
+export function importData(
+  text: string,
+  opts: { dryRun?: boolean; applySettings?: boolean } = {},
+): Promise<ImportSummary> {
   const q = new URLSearchParams()
   if (opts.dryRun) q.set('dry_run', '1')
   if (opts.applySettings) q.set('apply_settings', '1')
   const qs = q.toString()
   return request<ImportSummary>(`/api/import${qs ? `?${qs}` : ''}`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: text,
   })
 }
 

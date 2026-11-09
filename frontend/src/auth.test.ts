@@ -2,14 +2,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import {
-  ApiError, describeError, getAuthStatus, logout, resetCsrf, setCheckin, setAuthHooks,
+  ApiError,
+  describeError,
+  getAuthStatus,
+  logout,
+  resetCsrf,
+  setCheckin,
+  setAuthHooks,
   broadcastAuthEvent,
 } from './api'
 import { useAuthStore } from './stores/auth'
 import ReauthModal from './components/ReauthModal.vue'
 
 function jsonRes(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
 let fetchMock: ReturnType<typeof vi.fn>
@@ -20,7 +29,8 @@ beforeEach(() => {
   setAuthHooks({})
   routes = {
     '/api/auth/me': () => jsonRes({ id: 'u', name: 'U', csrf_token: 'tok' }),
-    '/api/auth/status': () => jsonRes({ oidc_enabled: false, login_required: true, authenticated: true }),
+    '/api/auth/status': () =>
+      jsonRes({ oidc_enabled: false, login_required: true, authenticated: true }),
   }
   fetchMock = vi.fn(async (url: string) => (routes[url] ? routes[url]() : jsonRes({})))
   vi.stubGlobal('fetch', fetchMock)
@@ -74,7 +84,8 @@ describe('api auth helpers', () => {
     const onReauthRequired = vi.fn(async () => true)
     setAuthHooks({ onReauthRequired })
     let n = 0
-    routes['/api/checkins'] = () => (n++ === 0 ? jsonRes({ error: 'reauth_required' }, 403) : jsonRes({ ok: true }))
+    routes['/api/checkins'] = () =>
+      n++ === 0 ? jsonRes({ error: 'reauth_required' }, 403) : jsonRes({ ok: true })
     await setCheckin(1, true)
     expect(onReauthRequired).toHaveBeenCalledTimes(1)
     expect(callsTo('/api/checkins')).toHaveLength(2)
@@ -92,7 +103,8 @@ describe('auth store', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
   it('single-user mode: no login required, user loaded', async () => {
-    routes['/api/auth/status'] = () => jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
+    routes['/api/auth/status'] = () =>
+      jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
     const auth = useAuthStore()
     await auth.init()
     expect(auth.loginRequired).toBe(false)
@@ -101,7 +113,8 @@ describe('auth store', () => {
   })
 
   it('unauthenticated: does not load the user; init runs once', async () => {
-    routes['/api/auth/status'] = () => jsonRes({ oidc_enabled: true, login_required: true, authenticated: false })
+    routes['/api/auth/status'] = () =>
+      jsonRes({ oidc_enabled: true, login_required: true, authenticated: false })
     const auth = useAuthStore()
     await auth.init()
     await auth.init()
@@ -112,7 +125,8 @@ describe('auth store', () => {
   })
 
   it('secret login posts the secret without a csrf header and authenticates', async () => {
-    routes['/api/auth/status'] = () => jsonRes({ oidc_enabled: false, login_required: true, authenticated: false })
+    routes['/api/auth/status'] = () =>
+      jsonRes({ oidc_enabled: false, login_required: true, authenticated: false })
     const auth = useAuthStore()
     await auth.init()
     await auth.loginWithSecret('s3')
@@ -178,7 +192,8 @@ describe('auth store', () => {
     const auth = useAuthStore()
     await auth.init()
     let n = 0
-    routes['/api/checkins'] = () => (n++ === 0 ? jsonRes({ error: 'reauth_required' }, 403) : jsonRes({ ok: true }))
+    routes['/api/checkins'] = () =>
+      n++ === 0 ? jsonRes({ error: 'reauth_required' }, 403) : jsonRes({ ok: true })
     routes['/api/auth/reauth'] = () => jsonRes({ ok: true })
     const w = mount(ReauthModal, { global: { plugins: [pinia] } })
     const pending = setCheckin(1, true)
@@ -215,7 +230,8 @@ describe('auth store', () => {
   })
 
   it('reauth modal (OIDC mode) navigates to the server-provided redirect', async () => {
-    routes['/api/auth/status'] = () => jsonRes({ oidc_enabled: true, login_required: true, authenticated: true })
+    routes['/api/auth/status'] = () =>
+      jsonRes({ oidc_enabled: true, login_required: true, authenticated: true })
     routes['/api/auth/reauth'] = () => jsonRes({ redirect: '/api/auth/oidc/login?reauth=1' })
     const pinia = createPinia()
     setActivePinia(pinia)

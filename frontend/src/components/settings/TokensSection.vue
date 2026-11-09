@@ -18,7 +18,9 @@ const busy = ref(false)
 const created = ref<{ name: string; feed_path: string } | null>(null)
 const copied = ref(false)
 
-const feedUrl = computed(() => (created.value ? `${window.location.origin}${created.value.feed_path}` : ''))
+const feedUrl = computed(() =>
+  created.value ? `${window.location.origin}${created.value.feed_path}` : '',
+)
 
 async function load() {
   try {
@@ -41,7 +43,10 @@ async function create() {
   error.value = ''
   try {
     const tk = await createToken({
-      name: name.value.trim(), privacy: privacy.value, expires_in_days: days.value, include_negative: includeNegative.value,
+      name: name.value.trim(),
+      privacy: privacy.value,
+      expires_in_days: days.value,
+      include_negative: includeNegative.value,
     })
     created.value = { name: tk.name, feed_path: tk.feed_path ?? '' }
     name.value = ''
@@ -79,7 +84,8 @@ const PRIVACY_KEYS = {
   anonymize_sensitive: 'settings.tokens.anonymized',
   all: 'settings.tokens.included',
 } as const
-const privacyText = (p: string) => (p in PRIVACY_KEYS ? t(PRIVACY_KEYS[p as keyof typeof PRIVACY_KEYS]) : p)
+const privacyText = (p: string) =>
+  p in PRIVACY_KEYS ? t(PRIVACY_KEYS[p as keyof typeof PRIVACY_KEYS]) : p
 </script>
 
 <template>
@@ -89,12 +95,30 @@ const privacyText = (p: string) => (p in PRIVACY_KEYS ? t(PRIVACY_KEYS[p as keyo
       <p class="text-sm opacity-80">{{ t('settings.tokens.help') }}</p>
       <p v-if="error" class="text-error" role="alert" data-testid="tok-error">{{ error }}</p>
       <ul class="flex flex-col gap-2">
-        <li v-for="tk in tokens" :key="tk.id" class="flex flex-wrap items-center gap-2" data-testid="tok-row">
+        <li
+          v-for="tk in tokens"
+          :key="tk.id"
+          class="flex flex-wrap items-center gap-2"
+          data-testid="tok-row"
+        >
           <span class="font-medium">{{ tk.name }}</span>
-          <span class="badge" :class="status(tk) === 'active' ? 'badge-success' : 'badge-ghost'">{{ t(`settings.tokens.${status(tk)}`) }}</span>
-          <span class="text-xs opacity-70">{{ t('settings.tokens.meta', { privacy: privacyText(tk.privacy), expires: day(tk.expires_at), used: day(tk.last_used_at) }) }}</span>
+          <span class="badge" :class="status(tk) === 'active' ? 'badge-success' : 'badge-ghost'">{{
+            t(`settings.tokens.${status(tk)}`)
+          }}</span>
+          <span class="text-xs opacity-70">{{
+            t('settings.tokens.meta', {
+              privacy: privacyText(tk.privacy),
+              expires: day(tk.expires_at),
+              used: day(tk.last_used_at),
+            })
+          }}</span>
           <span class="flex-1" />
-          <button v-if="status(tk) === 'active'" class="btn btn-sm btn-ghost text-error" data-testid="tok-revoke" @click="revoke(tk)">
+          <button
+            v-if="status(tk) === 'active'"
+            class="btn btn-sm btn-ghost text-error"
+            data-testid="tok-revoke"
+            @click="revoke(tk)"
+          >
             {{ t('settings.tokens.revoke') }}
           </button>
         </li>
@@ -103,15 +127,31 @@ const privacyText = (p: string) => (p in PRIVACY_KEYS ? t(PRIVACY_KEYS[p as keyo
       <form class="flex flex-wrap items-end gap-2" @submit.prevent="create">
         <label class="form-control">
           <span class="label-text">{{ t('settings.tokens.name') }}</span>
-          <input v-model="name" class="input input-bordered input-sm" maxlength="64" data-testid="tok-name" />
+          <input
+            v-model="name"
+            class="input input-bordered input-sm"
+            maxlength="64"
+            data-testid="tok-name"
+          />
         </label>
         <label class="form-control">
           <span class="label-text">{{ t('settings.tokens.expiresIn') }}</span>
-          <input v-model.number="days" type="number" min="1" max="365" class="input input-bordered input-sm w-28" data-testid="tok-days" />
+          <input
+            v-model.number="days"
+            type="number"
+            min="1"
+            max="365"
+            class="input input-bordered input-sm w-28"
+            data-testid="tok-days"
+          />
         </label>
         <label class="form-control">
           <span class="label-text">{{ t('settings.tokens.sensitiveItems') }}</span>
-          <select v-model="privacy" class="select select-bordered select-sm" data-testid="tok-privacy">
+          <select
+            v-model="privacy"
+            class="select select-bordered select-sm"
+            data-testid="tok-privacy"
+          >
             <option value="exclude_sensitive">{{ t('settings.tokens.excluded') }}</option>
             <option value="anonymize_sensitive">{{ t('settings.tokens.anonymized') }}</option>
             <option value="all">{{ t('settings.tokens.included') }}</option>
@@ -121,23 +161,47 @@ const privacyText = (p: string) => (p in PRIVACY_KEYS ? t(PRIVACY_KEYS[p as keyo
           <input v-model="includeNegative" type="checkbox" class="checkbox checkbox-sm" />
           <span class="label-text">{{ t('settings.tokens.includeNegative') }}</span>
         </label>
-        <button class="btn btn-sm btn-primary" type="submit" :disabled="busy" data-testid="tok-create">{{ t('settings.tokens.create') }}</button>
+        <button
+          class="btn btn-sm btn-primary"
+          type="submit"
+          :disabled="busy"
+          data-testid="tok-create"
+        >
+          {{ t('settings.tokens.create') }}
+        </button>
       </form>
     </div>
 
-    <div v-if="created" class="modal modal-open" role="dialog" aria-modal="true" data-testid="tok-dialog">
+    <div
+      v-if="created"
+      class="modal modal-open"
+      role="dialog"
+      aria-modal="true"
+      data-testid="tok-dialog"
+    >
       <div class="modal-box">
-        <h3 class="text-lg font-bold">{{ t('settings.tokens.createdTitle', { name: created.name }) }}</h3>
+        <h3 class="text-lg font-bold">
+          {{ t('settings.tokens.createdTitle', { name: created.name }) }}
+        </h3>
         <p class="mt-2 text-warning" role="alert">
           {{ t('settings.tokens.copyNow') }}
         </p>
-        <input class="input input-bordered mt-2 w-full font-mono text-xs" readonly :value="feedUrl" data-testid="tok-plain" />
+        <input
+          class="input input-bordered mt-2 w-full font-mono text-xs"
+          readonly
+          :value="feedUrl"
+          data-testid="tok-plain"
+        />
         <p class="mt-2 text-sm opacity-80">{{ t('settings.tokens.addHelp') }}</p>
         <div class="modal-action">
           <button class="btn" data-testid="tok-copy" @click="copy">
-            <Icon icon="lucide:copy" aria-hidden="true" />{{ copied ? t('settings.tokens.copied') : t('settings.tokens.copy') }}
+            <Icon icon="lucide:copy" aria-hidden="true" />{{
+              copied ? t('settings.tokens.copied') : t('settings.tokens.copy')
+            }}
           </button>
-          <button class="btn btn-primary" data-testid="tok-close" @click="closeDialog">{{ t('settings.tokens.done') }}</button>
+          <button class="btn btn-primary" data-testid="tok-close" @click="closeDialog">
+            {{ t('settings.tokens.done') }}
+          </button>
         </div>
       </div>
     </div>

@@ -1,7 +1,14 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import * as api from '../api'
-import type { CalendarDay, CalendarViewData, CheckinInput, CheckinLog, ExternalEvent, ItemDetail } from '../api'
+import type {
+  CalendarDay,
+  CalendarViewData,
+  CheckinInput,
+  CheckinLog,
+  ExternalEvent,
+  ItemDetail,
+} from '../api'
 import { eventDates, gridRange, shiftAnchor, type CalendarMode } from '../calendar/logic'
 import { useOfflineStore } from './offline'
 import { usePrivacyStore } from './privacy'
@@ -21,7 +28,12 @@ export const redactedEventTitle = () => t('calendar.extEvent')
 /** Today's date in an IANA timezone (falls back to the browser's local date). */
 export function todayIn(tz?: string): string {
   try {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: tz || undefined, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz || undefined,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date())
   } catch {
     return new Date().toISOString().slice(0, 10)
   }
@@ -63,7 +75,11 @@ export const useCalendarStore = defineStore('calendar', () => {
     view.value = null
     items.value = []
     dayLogs.value = []
-    external.value = external.value.map((l) => ({ ...l, events: [], status: l.status === 'ok' ? 'loading' : l.status }))
+    external.value = external.value.map((l) => ({
+      ...l,
+      events: [],
+      status: l.status === 'ok' ? 'loading' : l.status,
+    }))
     loading.value = false
   }
 
@@ -113,7 +129,13 @@ export const useCalendarStore = defineStore('calendar', () => {
 
   /** One independent request per source: a slow or failing source never blocks the others or the grid. */
   async function loadExternal(my: number, start: string, end: string, redact: boolean) {
-    external.value = sources.value.map((s) => ({ id: s.id, name: s.name, status: 'loading', error: '', events: [] }))
+    external.value = sources.value.map((s) => ({
+      id: s.id,
+      name: s.name,
+      status: 'loading',
+      error: '',
+      events: [],
+    }))
     await Promise.all(
       sources.value.map(async (s) => {
         let next: Partial<ExternalLayer>
@@ -123,7 +145,9 @@ export const useCalendarStore = defineStore('calendar', () => {
           if (!src || !src.ok) next = { status: 'error', error: src?.error || 'fetch_failed' }
           else {
             // Titles are not server-redacted: swap them for a placeholder while the guard is on.
-            const events = (src.events ?? []).map((e) => (redact ? { ...e, title: redactedEventTitle() } : e))
+            const events = (src.events ?? []).map((e) =>
+              redact ? { ...e, title: redactedEventTitle() } : e,
+            )
             next = { status: 'ok', events }
           }
         } catch (e) {
@@ -151,7 +175,9 @@ export const useCalendarStore = defineStore('calendar', () => {
     return refresh()
   }
 
-  const dayByDate = computed(() => new Map<string, CalendarDay>((view.value?.days ?? []).map((d) => [d.date, d])))
+  const dayByDate = computed(
+    () => new Map<string, CalendarDay>((view.value?.days ?? []).map((d) => [d.date, d])),
+  )
 
   /** External events per date, flattened over sources that loaded. */
   const externalByDate = computed(() => {
@@ -169,7 +195,9 @@ export const useCalendarStore = defineStore('calendar', () => {
     return out
   })
 
-  const selectedDay = computed(() => (selected.value ? (dayByDate.value.get(selected.value) ?? null) : null))
+  const selectedDay = computed(() =>
+    selected.value ? (dayByDate.value.get(selected.value) ?? null) : null,
+  )
   const detailById = computed(() => new Map(items.value.map((d) => [d.id, d])))
 
   async function loadPanel() {
@@ -225,8 +253,32 @@ export const useCalendarStore = defineStore('calendar', () => {
   }
 
   return {
-    mode, anchor, weekStart, view, loading, error, external, sources, selected, selectedDay, items, dayLogs,
-    panelError, busy, range, dayByDate, externalByDate, detailById,
-    refresh, setMode, page, goToday, select, loadPanel, makeUp, removeLog, clearPlaintext,
+    mode,
+    anchor,
+    weekStart,
+    view,
+    loading,
+    error,
+    external,
+    sources,
+    selected,
+    selectedDay,
+    items,
+    dayLogs,
+    panelError,
+    busy,
+    range,
+    dayByDate,
+    externalByDate,
+    detailById,
+    refresh,
+    setMode,
+    page,
+    goToday,
+    select,
+    loadPanel,
+    makeUp,
+    removeLog,
+    clearPlaintext,
   }
 })

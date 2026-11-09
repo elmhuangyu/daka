@@ -32,7 +32,10 @@ export function countsInRing(d: ItemDetail): boolean {
   )
 }
 
-export function ringStats(items: Array<{ detail: ItemDetail; today: TodayItem | null }>): { done: number; total: number } {
+export function ringStats(items: Array<{ detail: ItemDetail; today: TodayItem | null }>): {
+  done: number
+  total: number
+} {
   let done = 0
   let total = 0
   for (const { detail, today } of items) {
@@ -68,7 +71,12 @@ function aggregate(values: number[], how: string): number | null {
   return values[values.length - 1] // latest (logs are ordered by id)
 }
 
-function rowValue(d: ItemDetail, logs: CheckinLog[], optionId: number | null, how: string): number | null {
+function rowValue(
+  d: ItemDetail,
+  logs: CheckinLog[],
+  optionId: number | null,
+  how: string,
+): number | null {
   const vals = logs.filter((l) => (l.option_id ?? null) === optionId).map((l) => l.value)
   if (d.tracker_type === 'counter') return vals.reduce((a, b) => a + b, 0)
   return aggregate(vals, how)
@@ -78,7 +86,9 @@ export function valueRows(d: ItemDetail, logs: CheckinLog[]): ValueRow[] {
   if (d.tracker_type !== 'counter' && d.tracker_type !== 'metric') return []
   const sorted = (logs: CheckinLog[]) => [...logs].sort((a, b) => a.id - b.id)
   const ls = sorted(logs)
-  const opts: OptionDetail[] = [...d.options].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
+  const opts: OptionDetail[] = [...d.options].sort(
+    (a, b) => a.sort_order - b.sort_order || a.id - b.id,
+  )
   if (opts.length === 0) {
     return [
       {
@@ -115,7 +125,11 @@ export function adhocLogs(d: ItemDetail, logs: CheckinLog[]): CheckinLog[] {
 /** Rolling item whose maintenance state calls for attention. */
 export function needsAttention(d: ItemDetail): boolean {
   const m = d.stats?.maintenance
-  return d.current_rule.schedule_type === 'rolling' && !!m && (m.state === 'overdue' || m.state === 'warning')
+  return (
+    d.current_rule.schedule_type === 'rolling' &&
+    !!m &&
+    (m.state === 'overdue' || m.state === 'warning')
+  )
 }
 
 const days = (n: number) => tn('common.days', n)
@@ -125,7 +139,11 @@ export function maintenanceText(d: ItemDetail): string {
   if (!m) return ''
   const last = d.stats?.days_since_last
   const lastText =
-    last == null ? t('today.maint.never') : last === 0 ? t('today.maint.lastToday') : t('today.maint.lastAgo', { days: days(last) })
+    last == null
+      ? t('today.maint.never')
+      : last === 0
+        ? t('today.maint.lastToday')
+        : t('today.maint.lastAgo', { days: days(last) })
   const state =
     m.state === 'overdue'
       ? t('today.maint.overdue', { days: days(m.overdue_days) })
@@ -140,7 +158,10 @@ export function quotaText(d: ItemDetail): string {
   if (!q) return ''
   const cmp = q.comparator === 'at_most' ? t('today.quota.atMost') : t('today.quota.atLeast')
   const period = q.period || q.window
-  const periodText = period === 'week' || period === 'month' || period === 'year' ? t(`today.quota.${period}`) : period
+  const periodText =
+    period === 'week' || period === 'month' || period === 'year'
+      ? t(`today.quota.${period}`)
+      : period
   return t('today.quota.text', { used: fmt(q.used), limit: fmt(q.limit), cmp, period: periodText })
 }
 

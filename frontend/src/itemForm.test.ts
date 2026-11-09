@@ -1,24 +1,55 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError, type ItemDto } from './api'
 import {
-  allowedPolarities, allowedSchedules, buildCreateBody, buildEditPlan, describeItemError, emptyForm, formFromItem,
-  holidayAllowed, normalizeForm, previewRule, validateForm,
+  allowedPolarities,
+  allowedSchedules,
+  buildCreateBody,
+  buildEditPlan,
+  describeItemError,
+  emptyForm,
+  formFromItem,
+  holidayAllowed,
+  normalizeForm,
+  previewRule,
+  validateForm,
 } from './itemForm'
 
 function item(over: Partial<ItemDto> = {}): ItemDto {
   return {
-    id: 1, name: 'Run', description: '', remind_time: null, tracker_type: 'boolean', kind: 'habit', polarity: 'positive',
-    category_id: null, is_sensitive: false, effective_sensitive: false, options: [],
+    id: 1,
+    name: 'Run',
+    description: '',
+    remind_time: null,
+    tracker_type: 'boolean',
+    kind: 'habit',
+    polarity: 'positive',
+    category_id: null,
+    is_sensitive: false,
+    effective_sensitive: false,
+    options: [],
     current_rule: {
-      schedule_type: 'fixed_rrule', rrule_string: 'FREQ=WEEKLY;BYDAY=MO,WE', dtstart: '2026-01-05', until: null,
-      holiday_mode: 'none', effective_from: '2026-01-05', option_targets: {},
+      schedule_type: 'fixed_rrule',
+      rrule_string: 'FREQ=WEEKLY;BYDAY=MO,WE',
+      dtstart: '2026-01-05',
+      until: null,
+      holiday_mode: 'none',
+      effective_from: '2026-01-05',
+      option_targets: {},
     },
     ...over,
   }
 }
 
 const opt = (id: number, name: string) => ({
-  id, name, unit: '', step: 0, min_val: null, max_val: null, aggregate: '', sort_order: id, target_value: null,
+  id,
+  name,
+  unit: '',
+  step: 0,
+  min_val: null,
+  max_val: null,
+  aggregate: '',
+  sort_order: id,
+  target_value: null,
 })
 
 describe('matrix', () => {
@@ -59,15 +90,23 @@ describe('buildCreateBody', () => {
     f.holidayMode = 'workdays_only'
     const b = buildCreateBody(f) as { name: string; rule: Record<string, unknown> }
     expect(b.name).toBe('Run')
-    expect(b.rule).toEqual({ schedule_type: 'fixed_rrule', rrule_string: 'FREQ=WEEKLY;BYDAY=MO,WE', holiday_mode: 'workdays_only' })
+    expect(b.rule).toEqual({
+      schedule_type: 'fixed_rrule',
+      rrule_string: 'FREQ=WEEKLY;BYDAY=MO,WE',
+      holiday_mode: 'workdays_only',
+    })
   })
   it('quota carries no rrule or holiday fields', () => {
     const f = emptyForm()
     f.scheduleType = 'quota'
     const rule = (buildCreateBody(f) as { rule: Record<string, unknown> }).rule
     expect(rule).toEqual({
-      schedule_type: 'quota', quota_comparator: 'at_least', quota_count: 3, quota_period: 'week',
-      quota_window: 'calendar', quota_measure: 'days',
+      schedule_type: 'quota',
+      quota_comparator: 'at_least',
+      quota_count: 3,
+      quota_period: 'week',
+      quota_window: 'calendar',
+      quota_measure: 'days',
     })
   })
   it('unscheduled and rolling', () => {
@@ -75,7 +114,11 @@ describe('buildCreateBody', () => {
     f.scheduleType = 'none'
     expect((buildCreateBody(f) as { rule: object }).rule).toEqual({ schedule_type: 'none' })
     f.scheduleType = 'rolling'
-    expect((buildCreateBody(f) as { rule: object }).rule).toEqual({ schedule_type: 'rolling', rolling_interval: 30, rolling_unit: 'day' })
+    expect((buildCreateBody(f) as { rule: object }).rule).toEqual({
+      schedule_type: 'rolling',
+      rolling_interval: 30,
+      rolling_unit: 'day',
+    })
   })
   it('counter with options sends per-option targets and quota option index', () => {
     const f = emptyForm()
@@ -90,7 +133,10 @@ describe('buildCreateBody', () => {
     f.quotaOption = 1
     f.completionRule = 'at_least_n'
     f.completionN = '1'
-    const b = buildCreateBody(f) as { options: Record<string, unknown>[]; rule: Record<string, unknown> }
+    const b = buildCreateBody(f) as {
+      options: Record<string, unknown>[]
+      rule: Record<string, unknown>
+    }
     expect(b.options[0].target_value).toBe(5)
     expect(b.options[1]).not.toHaveProperty('target_value')
     expect(b.rule.quota_option_index).toBe(1)
@@ -138,7 +184,11 @@ describe('edit plan', () => {
     const p = buildEditPlan(it, f, '', '2026-11-08')
     expect(p.ruleChanged).toBe(true)
     expect(p.patch).not.toHaveProperty('tracker_type')
-    expect(p.patch.rule).toMatchObject({ rrule_string: 'FREQ=WEEKLY;BYDAY=FR', dtstart: '2026-11-08', until: '' })
+    expect(p.patch.rule).toMatchObject({
+      rrule_string: 'FREQ=WEEKLY;BYDAY=FR',
+      dtstart: '2026-11-08',
+      until: '',
+    })
   })
   it('retroactive date forces a version with effective_from', () => {
     const it = item()
@@ -183,7 +233,9 @@ describe('previewRule', () => {
     f.scheduleType = 'quota'
     expect(previewRule(f, '2026-11-08').sentence).toBe('At least 3 day(s) per calendar week.')
     f.scheduleType = 'rolling'
-    expect(previewRule(f, '2026-11-08').sentence).toBe('Due again 30 days after the last completion.')
+    expect(previewRule(f, '2026-11-08').sentence).toBe(
+      'Due again 30 days after the last completion.',
+    )
   })
 })
 
@@ -194,6 +246,8 @@ describe('describeItemError', () => {
     expect(describeItemError(e)).toContain('Choose which option')
     e.reason = 'something_new'
     expect(describeItemError(e)).toContain('something_new')
-    expect(describeItemError(new ApiError('name is required', 400, 'name is required'))).toBe('Name is required')
+    expect(describeItemError(new ApiError('name is required', 400, 'name is required'))).toBe(
+      'Name is required',
+    )
   })
 })

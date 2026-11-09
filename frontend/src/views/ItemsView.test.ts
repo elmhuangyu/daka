@@ -10,13 +10,32 @@ import { badgesOf, groupItems, heatmapColumns, monthRange, shiftMonth } from '..
 import type { ItemDetail } from '../api'
 
 function jsonRes(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
-const rule = { schedule_type: 'fixed_rrule', rrule_string: 'FREQ=DAILY', effective_from: '2026-01-01', option_targets: {} }
+const rule = {
+  schedule_type: 'fixed_rrule',
+  rrule_string: 'FREQ=DAILY',
+  effective_from: '2026-01-01',
+  option_targets: {},
+}
 const item = (id: number, name: string, extra: Record<string, unknown> = {}) => ({
-  id, name, tracker_type: 'boolean', kind: 'habit', polarity: 'positive', category_id: null, effective_sensitive: false,
-  pinned: false, archived: false, options: [], current_rule: rule, stats: {}, ...extra,
+  id,
+  name,
+  tracker_type: 'boolean',
+  kind: 'habit',
+  polarity: 'positive',
+  category_id: null,
+  effective_sensitive: false,
+  pinned: false,
+  archived: false,
+  options: [],
+  current_rule: rule,
+  stats: {},
+  ...extra,
 })
 
 let calls: { url: string; method: string; body?: unknown }[]
@@ -26,29 +45,89 @@ let hist: unknown
 beforeEach(() => {
   localStorage.clear()
   calls = []
-  listed = [item(1, 'Run'), item(2, 'Cola', { polarity: 'negative', pinned: true, stats: { quota: { used: 1, limit: 4, exceeded: false, traffic: 'green' } } })]
-  hist = { checkins: [{ id: 9, item_id: 1, option_id: null, date: '2026-11-05', time: '', value: 1, note: '', source: 'web', is_supplement: false }], next_cursor: 'abc' }
+  listed = [
+    item(1, 'Run'),
+    item(2, 'Cola', {
+      polarity: 'negative',
+      pinned: true,
+      stats: { quota: { used: 1, limit: 4, exceeded: false, traffic: 'green' } },
+    }),
+  ]
+  hist = {
+    checkins: [
+      {
+        id: 9,
+        item_id: 1,
+        option_id: null,
+        date: '2026-11-05',
+        time: '',
+        value: 1,
+        note: '',
+        source: 'web',
+        is_supplement: false,
+      },
+    ],
+    next_cursor: 'abc',
+  }
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
     calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined })
-    if (url === '/api/auth/status') return jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
+    if (url === '/api/auth/status')
+      return jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
     if (url.startsWith('/api/items?')) return jsonRes({ items: listed })
     if (url === '/api/categories') return jsonRes({ categories: [] })
     if (/^\/api\/items\/1\/stats/.test(url)) {
       return jsonRes({
-        item_id: 1, name: 'Run', today: '2026-11-07', last_at: null, last_date: '2026-11-05', days_since_last: 2, summary: '',
-        counts: { last_30_days: 3, this_year: 9, total: 12 }, active_days: {}, options: [],
-        streak: { applicable: true, unit: 'days', current: 4, longest: 7 }, completion_rate_90: 0.5,
-        heatmap: [{ date: '2026-11-05', level: 1, value: 1 }, { date: '2026-11-06', level: 0, value: 0 }], quota: null, maintenance: null,
+        item_id: 1,
+        name: 'Run',
+        today: '2026-11-07',
+        last_at: null,
+        last_date: '2026-11-05',
+        days_since_last: 2,
+        summary: '',
+        counts: { last_30_days: 3, this_year: 9, total: 12 },
+        active_days: {},
+        options: [],
+        streak: { applicable: true, unit: 'days', current: 4, longest: 7 },
+        completion_rate_90: 0.5,
+        heatmap: [
+          { date: '2026-11-05', level: 1, value: 1 },
+          { date: '2026-11-06', level: 0, value: 0 },
+        ],
+        quota: null,
+        maintenance: null,
       })
     }
     if (/^\/api\/items\/1(\?|$)/.test(url) && method === 'GET') return jsonRes(item(1, 'Run'))
     if (/^\/api\/items\/1$/.test(url) && method === 'PATCH') return jsonRes(item(1, 'Run'))
-    if (/^\/api\/items\/1$/.test(url) && method === 'DELETE') return new Response(null, { status: 204 })
+    if (/^\/api\/items\/1$/.test(url) && method === 'DELETE')
+      return new Response(null, { status: 204 })
     if (url.startsWith('/api/checkins?')) return jsonRes(hist)
     if (/^\/api\/checkins\/9$/.test(url)) return new Response(null, { status: 204 })
     if (url.startsWith('/api/view/calendar')) {
-      return jsonRes({ today: '2026-11-07', week_start: 0, days: [{ date: '2026-11-01', weekday: 0, status: '', frozen: false, items: [{ item_id: 1, due: true, status: 'done', done: true, forecast: false, overdue: false, log_count: 1 }] }] })
+      return jsonRes({
+        today: '2026-11-07',
+        week_start: 0,
+        days: [
+          {
+            date: '2026-11-01',
+            weekday: 0,
+            status: '',
+            frozen: false,
+            items: [
+              {
+                item_id: 1,
+                due: true,
+                status: 'done',
+                done: true,
+                forecast: false,
+                overdue: false,
+                log_count: 1,
+              },
+            ],
+          },
+        ],
+      })
     }
     return jsonRes({})
   })
@@ -96,7 +175,10 @@ describe('items panel', () => {
     const { w } = await mountAt('/items')
     await w.get('[data-testid=pin-1]').trigger('click')
     await flushPromises()
-    expect(calls.find((c) => c.method === 'PATCH')).toMatchObject({ url: '/api/items/1', body: { pinned: true } })
+    expect(calls.find((c) => c.method === 'PATCH')).toMatchObject({
+      url: '/api/items/1',
+      body: { pinned: true },
+    })
     await w.get('[data-testid=archived-toggle]').setValue(true)
     await flushPromises()
     expect(calls.at(-2)!.url + calls.at(-1)!.url).toContain('archived=true')
@@ -124,11 +206,27 @@ describe('item detail', () => {
     expect(w.get('[data-testid=stat-streak]').text()).toContain('4')
     expect(w.get('[data-testid=stat-completion]').text()).toBe('50%')
     expect(w.findAll('[data-testid=heatmap] [data-date]')).toHaveLength(2)
-    expect(w.find('[data-testid=calendar] [data-date="2026-11-01"]').classes()).toContain('bg-success')
+    expect(w.find('[data-testid=calendar] [data-date="2026-11-01"]').classes()).toContain(
+      'bg-success',
+    )
     expect(w.find('[data-testid=log-9]').exists()).toBe(true)
     expect(w.get('[data-testid=edit]').attributes('href')).toBe('/items/1/edit')
     expect(w.get('[data-testid=rule-note]').text()).toContain('takes effect today')
-    hist = { checkins: [{ id: 8, item_id: 1, option_id: null, date: '2026-11-04', time: '', value: 1, note: '', source: 'web', is_supplement: false }] }
+    hist = {
+      checkins: [
+        {
+          id: 8,
+          item_id: 1,
+          option_id: null,
+          date: '2026-11-04',
+          time: '',
+          value: 1,
+          note: '',
+          source: 'web',
+          is_supplement: false,
+        },
+      ],
+    }
     await w.get('[data-testid=more]').trigger('click')
     await flushPromises()
     expect(calls.at(-1)!.url).toContain('cursor=abc')
@@ -174,7 +272,13 @@ describe('item detail', () => {
 
 describe('items logic', () => {
   it('badges, grouping, heatmap and month helpers', () => {
-    const d = { id: 1, name: 'x', category_id: 3, pinned: false, stats: { maintenance: { state: 'overdue', overdue_days: 5 } } } as unknown as ItemDetail
+    const d = {
+      id: 1,
+      name: 'x',
+      category_id: 3,
+      pinned: false,
+      stats: { maintenance: { state: 'overdue', overdue_days: 5 } },
+    } as unknown as ItemDetail
     expect(badgesOf(d)).toEqual([{ text: 'overdue 5d', tone: 'bad' }])
     const cats = [{ id: 3, name: 'Home', color: '', icon: '', is_sensitive: true, sort_order: 0 }]
     expect(groupItems([d], cats, 'all')[0]).toMatchObject({ title: 'Home', sensitive: true })

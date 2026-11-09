@@ -39,9 +39,18 @@ export type Sender = (input: CheckinInput, key: string) => Promise<unknown>
 /** YYYY-MM-DD of now in an IANA timezone (browser-local when absent or invalid). */
 export function dateIn(tz?: string, now: Date = new Date()): string {
   try {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: tz || undefined, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz || undefined,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now)
   } catch {
-    return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+    return new Intl.DateTimeFormat('en-CA', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now)
   }
 }
 
@@ -84,14 +93,19 @@ export function idbStore(): QueueStore {
   const db = () =>
     (dbp ??= new Promise<IDBDatabase>((resolve, reject) => {
       const open = indexedDB.open(DB_NAME, 1)
-      open.onupgradeneeded = () => open.result.createObjectStore(STORE, { keyPath: 'seq', autoIncrement: true })
+      open.onupgradeneeded = () =>
+        open.result.createObjectStore(STORE, { keyPath: 'seq', autoIncrement: true })
       open.onsuccess = () => resolve(open.result)
       open.onerror = () => reject(open.error)
     }))
-  const os = async (mode: IDBTransactionMode) => (await db()).transaction(STORE, mode).objectStore(STORE)
+  const os = async (mode: IDBTransactionMode) =>
+    (await db()).transaction(STORE, mode).objectStore(STORE)
   return {
     add: async (e) => Number(await reqP((await os('readwrite')).add(e))),
-    all: async () => ((await reqP((await os('readonly')).getAll())) as QueuedCheckin[]).sort((a, b) => a.seq! - b.seq!),
+    all: async () =>
+      ((await reqP((await os('readonly')).getAll())) as QueuedCheckin[]).sort(
+        (a, b) => a.seq! - b.seq!,
+      ),
     remove: async (seq) => void (await reqP((await os('readwrite')).delete(seq))),
     update: async (e) => void (await reqP((await os('readwrite')).put(e))),
     clear: async () => void (await reqP((await os('readwrite')).clear())),
@@ -128,7 +142,8 @@ export class OfflineQueue {
     private store: QueueStore,
     private send: Sender,
     private beforeReplay: () => void = () => {},
-    private schedule: (fn: () => void, ms: number) => ReturnType<typeof setTimeout> = (fn, ms) => setTimeout(fn, ms),
+    private schedule: (fn: () => void, ms: number) => ReturnType<typeof setTimeout> = (fn, ms) =>
+      setTimeout(fn, ms),
   ) {}
 
   async load(): Promise<void> {
@@ -138,7 +153,12 @@ export class OfflineQueue {
 
   async enqueue(input: CheckinInput, key: string): Promise<void> {
     if (input.adhoc) throw new Error(t('offline.adhocNeedsConnection'))
-    const e: Omit<QueuedCheckin, 'seq'> = { key, input: pickInput(input), createdAt: Date.now(), attempts: 0 }
+    const e: Omit<QueuedCheckin, 'seq'> = {
+      key,
+      input: pickInput(input),
+      createdAt: Date.now(),
+      attempts: 0,
+    }
     const seq = await this.store.add(e)
     this.pending = [...this.pending, { ...e, seq }]
     this.onChange()
@@ -210,14 +230,20 @@ export class OfflineQueue {
         } else if (err instanceof ApiError && isDefinitive(status)) {
           await this.store.remove(e.seq!)
           this.pending = this.pending.filter((p) => p.seq !== e.seq)
-          this.failures = [...this.failures, { key: e.key, item_id: e.input.item_id, message: describeError(err) }]
+          this.failures = [
+            ...this.failures,
+            { key: e.key, item_id: e.input.item_id, message: describeError(err) },
+          ]
           continue
         } else {
           // Offline or transient: keep order, back off and try again.
           e.attempts++
           await this.store.update(e)
           this.stalled = true
-          this.timer = this.schedule(() => void this.replay(), Math.min(60_000, 1000 * 2 ** Math.min(e.attempts, 6)))
+          this.timer = this.schedule(
+            () => void this.replay(),
+            Math.min(60_000, 1000 * 2 ** Math.min(e.attempts, 6)),
+          )
         }
         this.onChange()
         return

@@ -43,7 +43,9 @@ describe('format helpers (zh-CN)', () => {
       expect(describeRRule('FREQ=DAILY')).toBe('每天')
       expect(describeRRule('FREQ=WEEKLY;BYDAY=MO,FR')).toBe('每周星期一、星期五')
       expect(describeRRule('FREQ=YEARLY;BYMONTH=3;BYMONTHDAY=8')).toBe('每年三月8日')
-      expect(describeRule({ schedule_type: 'rolling', rolling_interval: 7, rolling_unit: 'day' })).toBe('每 7 天')
+      expect(
+        describeRule({ schedule_type: 'rolling', rolling_interval: 7, rolling_unit: 'day' }),
+      ).toBe('每 7 天')
     } finally {
       await setLocale('en')
     }

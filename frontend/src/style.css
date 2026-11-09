@@ -1,10 +1,21 @@
 @import 'tailwindcss';
 @plugin 'daisyui';
 
-.error { color: var(--color-error); }
+.error {
+  color: var(--color-error);
+}
 
 /* Privacy guard: names are already placeholders when redacted server-side; blur adds a visual layer. */
-.name.sensitive { transition: filter 0.15s; }
-[data-privacy='on'] .name.sensitive { filter: blur(6px); }
-[data-privacy='on'] .name.sensitive:hover { filter: blur(2px); }
-.done .name { text-decoration: line-through; opacity: 0.6; }
+.name.sensitive {
+  transition: filter 0.15s;
+}
+[data-privacy='on'] .name.sensitive {
+  filter: blur(6px);
+}
+[data-privacy='on'] .name.sensitive:hover {
+  filter: blur(2px);
+}
+.done .name {
+  text-decoration: line-through;
+  opacity: 0.6;
+}

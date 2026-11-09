@@ -84,7 +84,9 @@ async function signOut() {
       data-testid="avatar-menu"
     >
       <div v-if="auth.user" class="flex items-center gap-2.5 px-3 py-2" data-testid="avatar-header">
-        <div class="size-8 shrink-0 overflow-hidden rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-xs">
+        <div
+          class="size-8 shrink-0 overflow-hidden rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-xs"
+        >
           <img
             v-if="showImage"
             :src="auth.user.avatar_url"
@@ -94,11 +96,20 @@ async function signOut() {
           <span v-else>{{ initial }}</span>
         </div>
         <div class="min-w-0 flex-1">
-          <p class="truncate text-sm font-semibold" data-testid="avatar-name">{{ auth.user.name }}</p>
+          <p class="truncate text-sm font-semibold" data-testid="avatar-name">
+            {{ auth.user.name }}
+          </p>
           <p v-if="auth.user.email" class="truncate text-xs opacity-70">{{ auth.user.email }}</p>
         </div>
       </div>
-      <button v-if="auth.loginRequired" type="button" role="menuitem" class="btn btn-ghost btn-sm justify-start" data-testid="logout" @click="signOut">
+      <button
+        v-if="auth.loginRequired"
+        type="button"
+        role="menuitem"
+        class="btn btn-ghost btn-sm justify-start"
+        data-testid="logout"
+        @click="signOut"
+      >
         <Icon icon="lucide:log-out" aria-hidden="true" /> {{ t('layout.signOut') }}
       </button>
       <p v-else class="px-3 py-1 text-xs opacity-70">{{ t('layout.singleUser') }}</p>

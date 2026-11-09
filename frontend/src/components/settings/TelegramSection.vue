@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import {
-  ApiError, createTelegramLinkCode, describeError, getTelegram, patchTelegram, unlinkTelegram, type TelegramStatus,
+  ApiError,
+  createTelegramLinkCode,
+  describeError,
+  getTelegram,
+  patchTelegram,
+  unlinkTelegram,
+  type TelegramStatus,
 } from '../../api'
 import { useI18n } from '../../i18n'
 
@@ -58,7 +64,11 @@ async function unlink() {
   }
 }
 
-async function patch(body: { enabled?: boolean; remind_sensitive?: boolean; digest_time?: string }) {
+async function patch(body: {
+  enabled?: boolean
+  remind_sensitive?: boolean
+  digest_time?: string
+}) {
   error.value = ''
   try {
     apply(await patchTelegram(body))
@@ -79,17 +89,29 @@ async function patch(body: { enabled?: boolean; remind_sensitive?: boolean; dige
       </p>
       <template v-else-if="st">
         <template v-if="st.linked">
-          <p data-testid="tg-linked">{{ st.linked_at ? t('settings.telegram.linkedSince', { date: st.linked_at.slice(0, 10) }) : t('settings.telegram.linked') }}</p>
+          <p data-testid="tg-linked">
+            {{
+              st.linked_at
+                ? t('settings.telegram.linkedSince', { date: st.linked_at.slice(0, 10) })
+                : t('settings.telegram.linked')
+            }}
+          </p>
           <label class="label cursor-pointer justify-start gap-3">
             <input
-              type="checkbox" class="checkbox" :checked="st.enabled" data-testid="tg-enabled"
+              type="checkbox"
+              class="checkbox"
+              :checked="st.enabled"
+              data-testid="tg-enabled"
               @change="patch({ enabled: ($event.target as HTMLInputElement).checked })"
             />
             <span class="label-text">{{ t('settings.telegram.enabled') }}</span>
           </label>
           <label class="label cursor-pointer justify-start gap-3">
             <input
-              type="checkbox" class="checkbox" :checked="st.remind_sensitive" data-testid="tg-sensitive"
+              type="checkbox"
+              class="checkbox"
+              :checked="st.remind_sensitive"
+              data-testid="tg-sensitive"
               @change="patch({ remind_sensitive: ($event.target as HTMLInputElement).checked })"
             />
             <span class="label-text">{{ t('settings.telegram.remindSensitive') }}</span>
@@ -97,28 +119,67 @@ async function patch(body: { enabled?: boolean; remind_sensitive?: boolean; dige
           <form class="flex items-end gap-2" @submit.prevent="patch({ digest_time: digest })">
             <label class="form-control">
               <span class="label-text">{{ t('settings.telegram.digestTime') }}</span>
-              <input v-model="digest" type="time" class="input input-bordered input-sm" data-testid="tg-digest" />
+              <input
+                v-model="digest"
+                type="time"
+                class="input input-bordered input-sm"
+                data-testid="tg-digest"
+              />
             </label>
-            <button class="btn btn-sm btn-primary" type="submit" data-testid="tg-digest-save">{{ t('settings.telegram.save') }}</button>
+            <button class="btn btn-sm btn-primary" type="submit" data-testid="tg-digest-save">
+              {{ t('settings.telegram.save') }}
+            </button>
           </form>
-          <button class="btn btn-sm btn-ghost text-error self-start" data-testid="tg-unlink" @click="unlink">{{ t('settings.telegram.unlink') }}</button>
+          <button
+            class="btn btn-sm btn-ghost text-error self-start"
+            data-testid="tg-unlink"
+            @click="unlink"
+          >
+            {{ t('settings.telegram.unlink') }}
+          </button>
         </template>
         <template v-else>
           <p>{{ t('settings.telegram.notLinked') }}</p>
-          <button v-if="!link" class="btn btn-sm btn-primary self-start" data-testid="tg-connect" @click="connect">{{ t('settings.telegram.connect') }}</button>
+          <button
+            v-if="!link"
+            class="btn btn-sm btn-primary self-start"
+            data-testid="tg-connect"
+            @click="connect"
+          >
+            {{ t('settings.telegram.connect') }}
+          </button>
           <div v-else class="flex flex-col gap-2" data-testid="tg-code-box">
             <p>
               <template v-for="(p, i) in tParts('settings.telegram.sendCode')" :key="i">
-                <code v-if="'slot' in p && p.slot === 'code'" data-testid="tg-code">/start {{ link.code }}</code>
-                <template v-else-if="'slot' in p && p.slot === 'bot'">{{ st.bot_username ? `(@${st.bot_username})` : '' }}</template>
-                <template v-else-if="'slot' in p">{{ new Date(link.expires_at).toLocaleTimeString(locale) }}</template>
+                <code v-if="'slot' in p && p.slot === 'code'" data-testid="tg-code"
+                  >/start {{ link.code }}</code
+                >
+                <template v-else-if="'slot' in p && p.slot === 'bot'">{{
+                  st.bot_username ? `(@${st.bot_username})` : ''
+                }}</template>
+                <template v-else-if="'slot' in p">{{
+                  new Date(link.expires_at).toLocaleTimeString(locale)
+                }}</template>
                 <template v-else>{{ p.text }}</template>
               </template>
             </p>
-            <a v-if="link.deep_link" :href="link.deep_link" target="_blank" rel="noopener noreferrer" class="link" data-testid="tg-deeplink">
+            <a
+              v-if="link.deep_link"
+              :href="link.deep_link"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="link"
+              data-testid="tg-deeplink"
+            >
               {{ t('settings.telegram.openTelegram') }}
             </a>
-            <button class="btn btn-sm btn-outline self-start" data-testid="tg-refresh" @click="refresh">{{ t('settings.telegram.sent') }}</button>
+            <button
+              class="btn btn-sm btn-outline self-start"
+              data-testid="tg-refresh"
+              @click="refresh"
+            >
+              {{ t('settings.telegram.sent') }}
+            </button>
           </div>
         </template>
       </template>

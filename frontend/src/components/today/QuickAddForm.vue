@@ -47,17 +47,33 @@ async function submit() {
   <details class="mt-6">
     <summary class="cursor-pointer text-lg font-semibold">{{ t('quickAdd.title') }}</summary>
     <form class="mt-2 flex flex-wrap items-center gap-2" @submit.prevent="submit">
-      <input v-model="name" class="input input-sm input-bordered" :aria-label="t('quickAdd.name')" :placeholder="t('quickAdd.name')" />
-      <select v-model="presetKind" class="select select-sm select-bordered" :aria-label="t('quickAdd.repeat')">
+      <input
+        v-model="name"
+        class="input input-sm input-bordered"
+        :aria-label="t('quickAdd.name')"
+        :placeholder="t('quickAdd.name')"
+      />
+      <select
+        v-model="presetKind"
+        class="select select-sm select-bordered"
+        :aria-label="t('quickAdd.repeat')"
+      >
         <option value="days">{{ t('quickAdd.everyN') }}</option>
         <option value="weekly">{{ t('quickAdd.weeklyOn') }}</option>
       </select>
       <input
-        v-if="presetKind === 'days'" v-model.number="interval" type="number" class="input input-sm input-bordered w-20"
-        min="1" :aria-label="t('quickAdd.interval')"
+        v-if="presetKind === 'days'"
+        v-model.number="interval"
+        type="number"
+        class="input input-sm input-bordered w-20"
+        min="1"
+        :aria-label="t('quickAdd.interval')"
       />
       <fieldset v-else>
-        <label v-for="(d, i) in WEEKDAYS" :key="d"><input v-model="days" type="checkbox" :value="d" /> {{ weekdayName((i + 1) % 7, 'short') }}</label>
+        <label v-for="(d, i) in WEEKDAYS" :key="d"
+          ><input v-model="days" type="checkbox" :value="d" />
+          {{ weekdayName((i + 1) % 7, 'short') }}</label
+        >
       </fieldset>
       <button type="submit" class="btn btn-sm btn-primary">{{ t('quickAdd.create') }}</button>
     </form>

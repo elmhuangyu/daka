@@ -7,7 +7,10 @@ import ItemEditorView from './ItemEditorView.vue'
 import { usePrivacyStore } from '../stores/privacy'
 
 function jsonRes(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
 let calls: { url: string; method: string; body?: unknown }[]
@@ -18,7 +21,8 @@ beforeEach(() => {
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
     calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined })
-    if (url === '/api/auth/status') return jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
+    if (url === '/api/auth/status')
+      return jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
     if (url === '/api/categories' && method === 'GET') return jsonRes({ categories: [] })
     if (url === '/api/items' && method === 'POST') {
       return (calls.at(-1)!.body as { name: string }).name === 'bad'
@@ -50,7 +54,10 @@ describe('ItemEditorView', () => {
     await w.get('form').trigger('submit')
     await flushPromises()
     const post = calls.find((c) => c.url === '/api/items' && c.method === 'POST')!
-    expect(post.body).toMatchObject({ name: 'Run', rule: { schedule_type: 'fixed_rrule', rrule_string: 'FREQ=WEEKLY;BYDAY=MO,WE' } })
+    expect(post.body).toMatchObject({
+      name: 'Run',
+      rule: { schedule_type: 'fixed_rrule', rrule_string: 'FREQ=WEEKLY;BYDAY=MO,WE' },
+    })
   })
 
   it('hides the holiday policy for quota schedules', async () => {

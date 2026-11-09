@@ -42,13 +42,18 @@ async function logout() {
       <h2 class="card-title">{{ t('settings.privacy.title') }}</h2>
       <p class="text-sm opacity-80">
         <template v-for="(p, i) in tParts('settings.privacy.guardStatus')" :key="i">
-          <strong v-if="'slot' in p">{{ privacy.redact ? t('settings.privacy.on') : t('settings.privacy.off') }}</strong>
+          <strong v-if="'slot' in p">{{
+            privacy.redact ? t('settings.privacy.on') : t('settings.privacy.off')
+          }}</strong>
           <template v-else>{{ p.text }}</template>
         </template>
       </p>
       <label class="label cursor-pointer justify-start gap-3">
         <input
-          type="checkbox" class="checkbox" :checked="settings.maskCategories" data-testid="p-mask"
+          type="checkbox"
+          class="checkbox"
+          :checked="settings.maskCategories"
+          data-testid="p-mask"
           @change="settings.setMaskCategories(($event.target as HTMLInputElement).checked)"
         />
         <span class="label-text">{{ t('settings.privacy.mask') }}</span>
@@ -59,7 +64,9 @@ async function logout() {
     <div class="card-body gap-3">
       <h2 class="card-title">{{ t('settings.account.title') }}</h2>
       <div v-if="auth.user" class="flex items-center gap-3">
-        <div class="size-12 shrink-0 overflow-hidden rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-base">
+        <div
+          class="size-12 shrink-0 overflow-hidden rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-base"
+        >
           <img
             v-if="showAvatar"
             :src="auth.user.avatar_url"
@@ -68,7 +75,9 @@ async function logout() {
             data-testid="account-avatar-image"
             @error="imgFailed = true"
           />
-          <span v-else data-testid="account-avatar-initial">{{ (auth.user.name ?? '?').trim().charAt(0).toUpperCase() || '?' }}</span>
+          <span v-else data-testid="account-avatar-initial">{{
+            (auth.user.name ?? '?').trim().charAt(0).toUpperCase() || '?'
+          }}</span>
         </div>
         <div>
           <p class="font-semibold">{{ auth.user.name }}</p>
@@ -79,7 +88,14 @@ async function logout() {
         {{ t('settings.account.noLogin') }}
       </p>
       <p v-if="error" class="text-error" role="alert">{{ error }}</p>
-      <button v-if="auth.loginRequired" class="btn btn-outline self-start" data-testid="logout" @click="logout">{{ t('settings.account.logout') }}</button>
+      <button
+        v-if="auth.loginRequired"
+        class="btn btn-outline self-start"
+        data-testid="logout"
+        @click="logout"
+      >
+        {{ t('settings.account.logout') }}
+      </button>
     </div>
   </section>
 </template>

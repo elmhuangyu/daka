@@ -40,11 +40,12 @@ export function monthName(month: number, width: Width = 'long'): string {
 
 /** For example "Monday, March 3, 2025". */
 export function formatLongDate(iso: string): string {
-  return fmt({ weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(isoToDate(iso))
+  return fmt({ weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(
+    isoToDate(iso),
+  )
 }
 
 /** For example "March 2025". */
 export function formatMonthYear(iso: string): string {
   return fmt({ year: 'numeric', month: 'long' }).format(isoToDate(iso))
 }
-

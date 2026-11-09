@@ -15,22 +15,61 @@ export function makeRouter(history: RouterHistory = createWebHistory()) {
   const router = createRouter({
     history,
     routes: [
-      { path: '/login', name: 'login', component: () => import('./views/LoginView.vue'), meta: { public: true } },
-      { path: '/', name: 'today', component: () => import('./views/TodayView.vue'), meta: { title: 'Today' } },
-      { path: '/calendar', name: 'calendar', component: () => import('./views/CalendarView.vue'), meta: { title: 'Calendar' } },
       {
-        path: '/items', component: () => import('./views/ItemsView.vue'), meta: { title: 'Items' },
+        path: '/login',
+        name: 'login',
+        component: () => import('./views/LoginView.vue'),
+        meta: { public: true },
+      },
+      {
+        path: '/',
+        name: 'today',
+        component: () => import('./views/TodayView.vue'),
+        meta: { title: 'Today' },
+      },
+      {
+        path: '/calendar',
+        name: 'calendar',
+        component: () => import('./views/CalendarView.vue'),
+        meta: { title: 'Calendar' },
+      },
+      {
+        path: '/items',
+        component: () => import('./views/ItemsView.vue'),
+        meta: { title: 'Items' },
         children: [
-          { path: '', name: 'items', component: () => import('./views/ItemsEmpty.vue'), meta: { title: 'Items' } },
-          { path: ':id(\\d+)', name: 'item-detail', component: () => import('./views/ItemDetailView.vue'), meta: { title: 'Item' } },
+          {
+            path: '',
+            name: 'items',
+            component: () => import('./views/ItemsEmpty.vue'),
+            meta: { title: 'Items' },
+          },
+          {
+            path: ':id(\\d+)',
+            name: 'item-detail',
+            component: () => import('./views/ItemDetailView.vue'),
+            meta: { title: 'Item' },
+          },
         ],
       },
-      { path: '/items/new', name: 'item-new', component: () => import('./views/ItemEditorView.vue'), meta: { title: 'New item' } },
       {
-        path: '/items/:id(\\d+)/edit', name: 'item-edit',
-        component: () => import('./views/ItemEditorView.vue'), meta: { title: 'Edit item' },
+        path: '/items/new',
+        name: 'item-new',
+        component: () => import('./views/ItemEditorView.vue'),
+        meta: { title: 'New item' },
       },
-      { path: '/settings', name: 'settings', component: () => import('./views/SettingsView.vue'), meta: { title: 'Settings' } },
+      {
+        path: '/items/:id(\\d+)/edit',
+        name: 'item-edit',
+        component: () => import('./views/ItemEditorView.vue'),
+        meta: { title: 'Edit item' },
+      },
+      {
+        path: '/settings',
+        name: 'settings',
+        component: () => import('./views/SettingsView.vue'),
+        meta: { title: 'Settings' },
+      },
       { path: '/:pathMatch(.*)*', redirect: '/' },
     ],
   })

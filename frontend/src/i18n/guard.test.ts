@@ -5,7 +5,11 @@ import { parse } from 'vue/compiler-sfc'
 // node and every text-bearing attribute must come from t(), not a literal.
 
 // Every component and view, as raw source text.
-const FILES = import.meta.glob<string>('../**/*.vue', { query: '?raw', import: 'default', eager: true })
+const FILES = import.meta.glob<string>('../**/*.vue', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+})
 const ATTRS = new Set(['placeholder', 'title', 'aria-label', 'alt', 'label'])
 // Literal text that is not translatable prose.
 const ALLOWED_TEXT = new Set(['Daka'])
@@ -24,7 +28,8 @@ interface Node {
 function scan(node: Node, found: string[]): void {
   if (node.type === 2 && typeof node.content === 'string') {
     const text = node.content.trim()
-    if (LETTERS.test(text) && !ALLOWED_TEXT.has(text) && !COMMAND.test(text)) found.push(`text "${text}"`)
+    if (LETTERS.test(text) && !ALLOWED_TEXT.has(text) && !COMMAND.test(text))
+      found.push(`text "${text}"`)
   }
   if (node.type === 1) {
     for (const p of node.props ?? []) {

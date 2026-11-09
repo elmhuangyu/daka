@@ -46,7 +46,8 @@ export function buildRRule(p: Preset): string {
       return `FREQ=MONTHLY${n > 1 ? `;INTERVAL=${n}` : ''};BYMONTHDAY=${p.day}`
     }
     case 'yearly': {
-      if (!Number.isInteger(p.month) || p.month < 1 || p.month > 12) throw new Error(t('rrule.err.month'))
+      if (!Number.isInteger(p.month) || p.month < 1 || p.month > 12)
+        throw new Error(t('rrule.err.month'))
       if (!Number.isInteger(p.day) || p.day < 1 || p.day > DAYS_IN_MONTH[p.month - 1]) {
         throw new Error(t('rrule.err.dayInMonth'))
       }
@@ -59,7 +60,17 @@ export function buildRRule(p: Preset): string {
 
 // Parts and frequencies the backend accepts (backend/lib/schedule/rrule.go).
 const ALLOWED_PARTS = new Set([
-  'FREQ', 'INTERVAL', 'COUNT', 'UNTIL', 'WKST', 'BYDAY', 'BYMONTHDAY', 'BYMONTH', 'BYYEARDAY', 'BYWEEKNO', 'BYSETPOS',
+  'FREQ',
+  'INTERVAL',
+  'COUNT',
+  'UNTIL',
+  'WKST',
+  'BYDAY',
+  'BYMONTHDAY',
+  'BYMONTH',
+  'BYYEARDAY',
+  'BYWEEKNO',
+  'BYSETPOS',
 ])
 const FREQS = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as const
 type Freq = (typeof FREQS)[number]
@@ -178,7 +189,12 @@ function weekdayOf(day: number): number {
  * `dtstart` (which sets the INTERVAL phase). Holiday policy is not applied.
  * Returns null when the rule cannot be evaluated client-side.
  */
-export function nextOccurrences(rrule: string, dtstart: string, from: string, limit = 5): string[] | null {
+export function nextOccurrences(
+  rrule: string,
+  dtstart: string,
+  from: string,
+  limit = 5,
+): string[] | null {
   const r = parseRRule(rrule)
   if (!r) return null
   const start = isoToDay(dtstart)
@@ -229,7 +245,14 @@ function nth(n: number): string {
   } catch {
     // Unknown locale tag: use the generic form.
   }
-  const key = cat === 'one' ? 'rrule.nth.one' : cat === 'two' ? 'rrule.nth.two' : cat === 'few' ? 'rrule.nth.few' : 'rrule.nth.other'
+  const key =
+    cat === 'one'
+      ? 'rrule.nth.one'
+      : cat === 'two'
+        ? 'rrule.nth.two'
+        : cat === 'few'
+          ? 'rrule.nth.few'
+          : 'rrule.nth.other'
   return t(key, { n })
 }
 
@@ -253,14 +276,18 @@ export function describeRRule(rrule: string): string {
   const days = list(r.byday.map((d) => weekdayName(WEEKDAY_INDEX[d])))
   const md = list(r.bymonthday.map((x) => (x === -1 ? t('rrule.lastDay') : nth(x))))
   // Interval 1 uses the singular form explicitly: some languages (zh) have no plural category for it.
-  let s = r.interval === 1 ? t(`${EVERY[r.freq]}.one` as MessageKey) : t(`${EVERY[r.freq]}.other` as MessageKey, { count: r.interval })
+  let s =
+    r.interval === 1
+      ? t(`${EVERY[r.freq]}.one` as MessageKey)
+      : t(`${EVERY[r.freq]}.other` as MessageKey, { count: r.interval })
   if (r.freq === 'WEEKLY') {
     if (r.byday.length) s = t('rrule.on', { head: s, what: days })
   } else if (r.freq === 'MONTHLY') {
     if (r.bymonthday.length) s = t('rrule.on', { head: s, what: md })
     if (r.byday.length) s = t('rrule.on', { head: s, what: days })
   } else if (r.freq === 'YEARLY') {
-    if (r.bymonth.length) s = t('rrule.in', { head: s, what: list(r.bymonth.map((x) => monthName(x))) })
+    if (r.bymonth.length)
+      s = t('rrule.in', { head: s, what: list(r.bymonth.map((x) => monthName(x))) })
     if (r.bymonthday.length) s = t('rrule.on', { head: s, what: md })
   }
   if (r.count !== undefined) s = tn('rrule.count', r.count, { head: s })
@@ -272,14 +299,23 @@ export function describeRRule(rrule: string): string {
 export function presetFromRRule(rrule: string): Preset | null {
   const r = parseRRule(rrule)
   if (!r || r.count !== undefined || r.until !== undefined) return null
-  const keys = [...splitParts(normalizeCustom(rrule)).keys()].filter((k) => k !== 'FREQ' && k !== 'INTERVAL')
+  const keys = [...splitParts(normalizeCustom(rrule)).keys()].filter(
+    (k) => k !== 'FREQ' && k !== 'INTERVAL',
+  )
   const only = (...allowed: string[]) => keys.every((k) => allowed.includes(k))
   if (r.freq === 'DAILY' && keys.length === 0) return { kind: 'days', interval: r.interval }
-  if (r.freq === 'WEEKLY' && only('BYDAY') && r.byday.length > 0) return { kind: 'weekly', days: r.byday, interval: r.interval }
+  if (r.freq === 'WEEKLY' && only('BYDAY') && r.byday.length > 0)
+    return { kind: 'weekly', days: r.byday, interval: r.interval }
   if (r.freq === 'MONTHLY' && only('BYMONTHDAY') && r.bymonthday.length === 1) {
     return { kind: 'monthly', day: r.bymonthday[0], interval: r.interval }
   }
-  if (r.freq === 'YEARLY' && r.interval === 1 && only('BYMONTH', 'BYMONTHDAY') && r.bymonth.length === 1 && r.bymonthday.length === 1) {
+  if (
+    r.freq === 'YEARLY' &&
+    r.interval === 1 &&
+    only('BYMONTH', 'BYMONTHDAY') &&
+    r.bymonth.length === 1 &&
+    r.bymonthday.length === 1
+  ) {
     return { kind: 'yearly', month: r.bymonth[0], day: r.bymonthday[0] }
   }
   return null

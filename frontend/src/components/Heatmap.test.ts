@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import Heatmap from './Heatmap.vue'
-import { buildGrid, cellLabel, levelBucket, monthLabels, weekdayNames, type HeatmapCell } from '../items/heatmap'
+import {
+  buildGrid,
+  cellLabel,
+  levelBucket,
+  monthLabels,
+  weekdayNames,
+  type HeatmapCell,
+} from '../items/heatmap'
 
-const day = (date: string, level = 0, extra: Partial<HeatmapCell> = {}): HeatmapCell => ({ date, level, value: 0, ...extra })
+const day = (date: string, level = 0, extra: Partial<HeatmapCell> = {}): HeatmapCell => ({
+  date,
+  level,
+  value: 0,
+  ...extra,
+})
 
 describe('heatmap logic', () => {
   it('pads the first column by week start', () => {
@@ -38,7 +50,9 @@ describe('heatmap logic', () => {
   it('names weekdays and month labels', () => {
     expect(weekdayNames(1)).toEqual(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])
     expect(weekdayNames(0)[0]).toBe('Sun')
-    const days = Array.from({ length: 70 }, (_, i) => day(new Date(Date.UTC(2026, 8, 1 + i)).toISOString().slice(0, 10)))
+    const days = Array.from({ length: 70 }, (_, i) =>
+      day(new Date(Date.UTC(2026, 8, 1 + i)).toISOString().slice(0, 10)),
+    )
     const labels = monthLabels(buildGrid(days, 1)).filter(Boolean)
     expect(labels).toEqual(['Sep', 'Oct', 'Nov'])
   })
@@ -48,7 +62,9 @@ describe('heatmap logic', () => {
     expect(cellLabel(c)).toBe('2026-11-05: partly completed, 1 of 2 options')
     expect(cellLabel(c, { redact: true })).toBe('2026-11-05: partly completed')
     expect(cellLabel(day('2026-11-06'))).toBe('2026-11-06: no check-in')
-    expect(cellLabel(day('2026-11-07', 1, { value: 1, options_met: 1, options_total: 1 }))).toBe('2026-11-07: completed')
+    expect(cellLabel(day('2026-11-07', 1, { value: 1, options_met: 1, options_total: 1 }))).toBe(
+      '2026-11-07: completed',
+    )
     const neg = day('2026-11-08', 1, { value: 3 })
     expect(cellLabel(neg, { negative: true })).toBe('2026-11-08: occurred 3 times')
     expect(cellLabel(neg, { negative: true, redact: true })).toBe('2026-11-08: occurred')
@@ -57,7 +73,11 @@ describe('heatmap logic', () => {
 })
 
 describe('Heatmap component', () => {
-  const days = [day('2026-11-05', 1, { options_met: 1, options_total: 1 }), day('2026-11-06', 0.5, { options_met: 1, options_total: 2 }), day('2026-11-07')]
+  const days = [
+    day('2026-11-05', 1, { options_met: 1, options_total: 1 }),
+    day('2026-11-06', 0.5, { options_met: 1, options_total: 2 }),
+    day('2026-11-07'),
+  ]
 
   it('renders cells with aria labels, one tab stop and levels', () => {
     const w = mount(Heatmap, { props: { days, weekStart: 1 } })
@@ -84,7 +104,9 @@ describe('Heatmap component', () => {
   it('redacts counts and uses negative colours', async () => {
     const w = mount(Heatmap, { props: { days, redact: true } })
     expect(w.find('[data-date="2026-11-06"]').attributes('aria-label')).not.toContain('options')
-    const n = mount(Heatmap, { props: { days: [day('2026-11-05', 1, { value: 2 })], negative: true } })
+    const n = mount(Heatmap, {
+      props: { days: [day('2026-11-05', 1, { value: 2 })], negative: true },
+    })
     expect(n.find('[data-date]').classes()).toContain('bg-error')
   })
 })

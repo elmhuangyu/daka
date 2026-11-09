@@ -62,7 +62,9 @@ function onGridKey(e: KeyboardEvent) {
     e.preventDefault()
     const n = e.key === 'PageUp' ? -1 : 1
     void store.page(n).then(() => {
-      focusDate.value = store.range.dates.includes(focusDate.value) ? focusDate.value : (store.range.dates[0] ?? store.anchor)
+      focusDate.value = store.range.dates.includes(focusDate.value)
+        ? focusDate.value
+        : (store.range.dates[0] ?? store.anchor)
     })
   } else if (e.key === 'Escape' && store.selected) {
     const d = store.selected
@@ -82,18 +84,27 @@ function setMode(m: CalendarMode) {
 
 onMounted(() => {
   void store.refresh().then(() => {
-    focusDate.value = store.view?.today && inRange(store.view.today) ? store.view.today : store.range.dates[0] ?? store.anchor
+    focusDate.value =
+      store.view?.today && inRange(store.view.today)
+        ? store.view.today
+        : (store.range.dates[0] ?? store.anchor)
   })
 })
 // The store drops all plaintext synchronously when redact turns on; refetch afterwards.
-watch(() => useOfflineStore().syncedTick, () => {
-  void store.refresh()
-  void store.loadPanel()
-})
-watch(() => privacy.redact, () => {
-  void store.refresh()
-  void store.loadPanel()
-})
+watch(
+  () => useOfflineStore().syncedTick,
+  () => {
+    void store.refresh()
+    void store.loadPanel()
+  },
+)
+watch(
+  () => privacy.redact,
+  () => {
+    void store.refresh()
+    void store.loadPanel()
+  },
+)
 </script>
 
 <template>
@@ -103,17 +114,38 @@ watch(() => privacy.redact, () => {
       <div class="flex flex-wrap items-center gap-2">
         <div class="join" role="group" :aria-label="t('calendar.view')">
           <button
-            v-for="m in (['month', 'week'] as const)" :key="m" type="button" class="btn btn-sm join-item"
-            :class="store.mode === m ? 'btn-primary' : ''" :aria-pressed="store.mode === m" :data-testid="`mode-${m}`"
+            v-for="m in ['month', 'week'] as const"
+            :key="m"
+            type="button"
+            class="btn btn-sm join-item"
+            :class="store.mode === m ? 'btn-primary' : ''"
+            :aria-pressed="store.mode === m"
+            :data-testid="`mode-${m}`"
             @click="setMode(m)"
-          >{{ t(m === 'month' ? 'calendar.month' : 'calendar.week') }}</button>
+          >
+            {{ t(m === 'month' ? 'calendar.month' : 'calendar.week') }}
+          </button>
         </div>
-        <button type="button" class="btn btn-sm" data-testid="go-today" @click="store.goToday()">{{ t('nav.today') }}</button>
+        <button type="button" class="btn btn-sm" data-testid="go-today" @click="store.goToday()">
+          {{ t('nav.today') }}
+        </button>
         <div class="join">
-          <button type="button" class="btn btn-sm btn-square join-item" :aria-label="t(store.mode === 'month' ? 'calendar.prev.month' : 'calendar.prev.week')" data-testid="prev" @click="navigate(-1)">
+          <button
+            type="button"
+            class="btn btn-sm btn-square join-item"
+            :aria-label="t(store.mode === 'month' ? 'calendar.prev.month' : 'calendar.prev.week')"
+            data-testid="prev"
+            @click="navigate(-1)"
+          >
             <Icon icon="lucide:chevron-left" aria-hidden="true" />
           </button>
-          <button type="button" class="btn btn-sm btn-square join-item" :aria-label="t(store.mode === 'month' ? 'calendar.next.month' : 'calendar.next.week')" data-testid="next" @click="navigate(1)">
+          <button
+            type="button"
+            class="btn btn-sm btn-square join-item"
+            :aria-label="t(store.mode === 'month' ? 'calendar.next.month' : 'calendar.next.week')"
+            data-testid="next"
+            @click="navigate(1)"
+          >
             <Icon icon="lucide:chevron-right" aria-hidden="true" />
           </button>
         </div>
@@ -122,21 +154,43 @@ watch(() => privacy.redact, () => {
 
     <h2 class="text-lg font-semibold" aria-live="polite" data-testid="period-title">{{ title }}</h2>
 
-    <p v-if="store.loading && !store.view" role="status" class="py-8 text-center opacity-70" data-testid="loading">
-      <span class="loading loading-spinner loading-sm" aria-hidden="true"></span> {{ t('common.loading') }}
+    <p
+      v-if="store.loading && !store.view"
+      role="status"
+      class="py-8 text-center opacity-70"
+      data-testid="loading"
+    >
+      <span class="loading loading-spinner loading-sm" aria-hidden="true"></span>
+      {{ t('common.loading') }}
     </p>
 
     <div v-if="store.error" class="alert alert-error" role="alert" data-testid="error">
       <span>{{ store.error }}</span>
-      <button type="button" class="btn btn-sm" data-testid="retry" @click="store.refresh()">{{ t('common.retry') }}</button>
+      <button type="button" class="btn btn-sm" data-testid="retry" @click="store.refresh()">
+        {{ t('common.retry') }}
+      </button>
     </div>
 
-    <p v-if="store.view && !store.view.holiday_published" class="text-sm opacity-70" data-testid="holiday-unpublished">
+    <p
+      v-if="store.view && !store.view.holiday_published"
+      class="text-sm opacity-70"
+      data-testid="holiday-unpublished"
+    >
       {{ t('calendar.holidayUnpublished') }}
     </p>
 
-    <div v-if="failedSources.length || loadingSources.length" class="space-y-1 text-sm" data-testid="external-status">
-      <p v-for="l in failedSources" :key="l.id" class="text-warning" role="status" :data-testid="`ext-error-${l.id}`">
+    <div
+      v-if="failedSources.length || loadingSources.length"
+      class="space-y-1 text-sm"
+      data-testid="external-status"
+    >
+      <p
+        v-for="l in failedSources"
+        :key="l.id"
+        class="text-warning"
+        role="status"
+        :data-testid="`ext-error-${l.id}`"
+      >
         <Icon icon="lucide:triangle-alert" aria-hidden="true" class="inline" />
         {{ t('calendar.extFailed', { name: l.name, reason: t(extCalErrorKey(l.error ?? '')) }) }}
       </p>
@@ -148,30 +202,67 @@ watch(() => privacy.redact, () => {
     <div class="grid gap-3 lg:grid-cols-[1fr_22rem]">
       <div v-if="store.view" class="min-w-0" :class="store.loading ? 'opacity-70' : ''">
         <div
-          ref="gridEl" role="grid" :aria-label="t('calendar.gridLabel', { title })" :aria-busy="store.loading" data-testid="grid"
+          ref="gridEl"
+          role="grid"
+          :aria-label="t('calendar.gridLabel', { title })"
+          :aria-busy="store.loading"
+          data-testid="grid"
           @keydown="onGridKey"
         >
           <div role="row" class="grid grid-cols-7">
-            <div v-for="h in headers" :key="h.long" role="columnheader" class="py-1 text-center text-xs font-semibold opacity-70">
+            <div
+              v-for="h in headers"
+              :key="h.long"
+              role="columnheader"
+              class="py-1 text-center text-xs font-semibold opacity-70"
+            >
               <abbr :title="h.long" class="no-underline">{{ h.short }}</abbr>
             </div>
           </div>
           <div v-for="(r, ri) in rows" :key="ri" role="row" class="grid grid-cols-7">
             <DayCell
-              v-for="d in r" :key="d" :date="d" :day="store.dayByDate.get(d) ?? null" :today="todayStr"
-              :in-month="store.mode === 'week' || d.startsWith(monthPrefix)" :selected="store.selected === d"
-              :focusable="focusDate === d" :expanded="store.mode === 'week'" :external="store.externalByDate.get(d) ?? []"
+              v-for="d in r"
+              :key="d"
+              :date="d"
+              :day="store.dayByDate.get(d) ?? null"
+              :today="todayStr"
+              :in-month="store.mode === 'week' || d.startsWith(monthPrefix)"
+              :selected="store.selected === d"
+              :focusable="focusDate === d"
+              :expanded="store.mode === 'week'"
+              :external="store.externalByDate.get(d) ?? []"
               @select="select"
             />
           </div>
         </div>
-        <ul class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs opacity-80" :aria-label="t('calendar.legend.label')">
-          <li><span class="inline-block size-2 rounded-full bg-success"></span> {{ t('calendar.legend.done') }}</li>
-          <li><span class="inline-block size-2 rounded-full bg-warning"></span> {{ t('calendar.legend.partial') }}</li>
-          <li><span class="inline-block size-2 rounded-full bg-base-content/40"></span> {{ t('calendar.legend.missed') }}</li>
-          <li><span class="inline-block size-2 rounded-full bg-primary"></span> {{ t('calendar.legend.open') }}</li>
-          <li><span class="inline-block size-2 rounded-full border border-base-content/50"></span> {{ t('calendar.legend.forecast') }}</li>
-          <li><span class="inline-block size-2 rounded-full bg-error"></span> {{ t('calendar.legend.overdue') }}</li>
+        <ul
+          class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs opacity-80"
+          :aria-label="t('calendar.legend.label')"
+        >
+          <li>
+            <span class="inline-block size-2 rounded-full bg-success"></span>
+            {{ t('calendar.legend.done') }}
+          </li>
+          <li>
+            <span class="inline-block size-2 rounded-full bg-warning"></span>
+            {{ t('calendar.legend.partial') }}
+          </li>
+          <li>
+            <span class="inline-block size-2 rounded-full bg-base-content/40"></span>
+            {{ t('calendar.legend.missed') }}
+          </li>
+          <li>
+            <span class="inline-block size-2 rounded-full bg-primary"></span>
+            {{ t('calendar.legend.open') }}
+          </li>
+          <li>
+            <span class="inline-block size-2 rounded-full border border-base-content/50"></span>
+            {{ t('calendar.legend.forecast') }}
+          </li>
+          <li>
+            <span class="inline-block size-2 rounded-full bg-error"></span>
+            {{ t('calendar.legend.overdue') }}
+          </li>
           <li>{{ t(store.mode === 'month' ? 'calendar.hint.month' : 'calendar.hint.week') }}</li>
         </ul>
       </div>

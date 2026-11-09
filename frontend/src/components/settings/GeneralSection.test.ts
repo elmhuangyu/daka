@@ -6,11 +6,19 @@ import { LOCALE_STORAGE_KEY } from '../../i18n/locales'
 
 beforeEach(() => {
   localStorage.clear()
-  vi.stubGlobal('fetch', async () =>
-    new Response(
-      JSON.stringify({ timezone: 'UTC', week_start: 1, holiday_region: '', streak_holiday_freeze: false, external_calendars: [] }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } },
-    ),
+  vi.stubGlobal(
+    'fetch',
+    async () =>
+      new Response(
+        JSON.stringify({
+          timezone: 'UTC',
+          week_start: 1,
+          holiday_region: '',
+          streak_holiday_freeze: false,
+          external_calendars: [],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
   )
 })
 

@@ -9,8 +9,12 @@ const ICONS: Record<string, string> = {
   'lucide:calendar-check': wrap(
     '<path d="M8 2v4M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18m-11 6 2 2 4-4"/>',
   ),
-  'lucide:cloud-off': wrap('<path d="m2 2 20 20M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7 7 0 0 0 8.1 4.1"/>'),
-  'lucide:calendar': wrap('<path d="M8 2v4m8-4v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>'),
+  'lucide:cloud-off': wrap(
+    '<path d="m2 2 20 20M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7 7 0 0 0 8.1 4.1"/>',
+  ),
+  'lucide:calendar': wrap(
+    '<path d="M8 2v4m8-4v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+  ),
   'lucide:list-checks': wrap('<path d="m3 17 2 2 4-4M3 7l2 2 4-4M13 6h8M13 12h8M13 18h8"/>'),
   'lucide:settings': wrap(
     '<path d="M21 4h-7m-4 0H3m18 8h-9m-4 0H3m18 8h-5m-4 0H3M14 2v4m-6 6v4m8 4v4"/>',
@@ -29,20 +33,28 @@ const ICONS: Record<string, string> = {
   'lucide:minus': wrap('<path d="M5 12h14"/>'),
   'lucide:check': wrap('<path d="M20 6 9 17l-5-5"/>'),
   'lucide:x': wrap('<path d="M18 6 6 18M6 6l12 12"/>'),
-  'lucide:undo-2': wrap('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/>'),
+  'lucide:undo-2': wrap(
+    '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/>',
+  ),
   'lucide:triangle-alert': wrap(
     '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3M12 9v4m0 4h.01"/>',
   ),
   'lucide:copy': wrap(
     '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
   ),
-  'lucide:lock': wrap('<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'),
+  'lucide:lock': wrap(
+    '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  ),
   'lucide:search': wrap('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'),
   'lucide:pin': wrap(
     '<path d="M12 17v5m-3-12.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
   ),
-  'lucide:archive': wrap('<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8m-10 4h4"/>'),
-  'lucide:pencil': wrap('<path d="M21.2 5.9 18.1 2.8a1.9 1.9 0 0 0-2.7 0L3 15.2V21h5.8L21.2 8.6a1.9 1.9 0 0 0 0-2.7M15 5l4 4"/>'),
+  'lucide:archive': wrap(
+    '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8m-10 4h4"/>',
+  ),
+  'lucide:pencil': wrap(
+    '<path d="M21.2 5.9 18.1 2.8a1.9 1.9 0 0 0-2.7 0L3 15.2V21h5.8L21.2 8.6a1.9 1.9 0 0 0 0-2.7M15 5l4 4"/>',
+  ),
   'lucide:chevron-left': wrap('<path d="m15 18-6-6 6-6"/>'),
   'lucide:chevron-right': wrap('<path d="m9 18 6-6-6-6"/>'),
 }

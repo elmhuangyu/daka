@@ -16,8 +16,8 @@ Run from the repo root (needs Go, [just](https://github.com/casey/just), pnpm):
 
 | Command | Purpose |
 | --- | --- |
-| `just fmt` | goimports (backend) + eslint --fix (frontend) |
-| `just lint` | golangci-lint + eslint/vue-tsc |
+| `just fmt` | goimports (backend) + oxfmt (frontend) |
+| `just lint` | golangci-lint + oxlint/vue-tsc |
 | `just build` | Backend binary into `build/`, frontend into `frontend/dist` |
 | `just test` | `go test -race ./...` (includes `backend/e2e`) + Vitest |
 | `just build-image` | Docker image |

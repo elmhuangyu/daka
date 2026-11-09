@@ -12,19 +12,29 @@ export interface PanelGroup {
 }
 
 /** Groups for the panel: pinned first, then one group per category, then uncategorized. */
-export function groupItems(items: ItemDetail[], categories: Category[], filter: CategoryFilter): PanelGroup[] {
-  const shown = items.filter((i) => filter === 'all' || (filter === 'none' ? i.category_id === null : i.category_id === filter))
+export function groupItems(
+  items: ItemDetail[],
+  categories: Category[],
+  filter: CategoryFilter,
+): PanelGroup[] {
+  const shown = items.filter(
+    (i) =>
+      filter === 'all' || (filter === 'none' ? i.category_id === null : i.category_id === filter),
+  )
   const groups: PanelGroup[] = []
   const pinned = shown.filter((i) => i.pinned)
-  if (pinned.length) groups.push({ key: 'pinned', title: t('items.pinned'), sensitive: false, items: pinned })
+  if (pinned.length)
+    groups.push({ key: 'pinned', title: t('items.pinned'), sensitive: false, items: pinned })
   const rest = shown.filter((i) => !i.pinned)
   for (const c of categories) {
     const its = rest.filter((i) => i.category_id === c.id)
-    if (its.length) groups.push({ key: `c${c.id}`, title: c.name, sensitive: c.is_sensitive, items: its })
+    if (its.length)
+      groups.push({ key: `c${c.id}`, title: c.name, sensitive: c.is_sensitive, items: its })
   }
   const known = new Set(categories.map((c) => c.id))
   const other = rest.filter((i) => i.category_id === null || !known.has(i.category_id))
-  if (other.length) groups.push({ key: 'none', title: t('items.uncategorized'), sensitive: false, items: other })
+  if (other.length)
+    groups.push({ key: 'none', title: t('items.uncategorized'), sensitive: false, items: other })
   return groups
 }
 
@@ -41,12 +51,15 @@ export function badgesOf(d: ItemDetail): Badge[] {
   const out: Badge[] = []
   const q = d.stats?.quota
   if (q) {
-    const tone: BadgeTone = q.exceeded || q.traffic === 'red' ? 'bad' : q.traffic === 'yellow' ? 'warn' : 'ok'
+    const tone: BadgeTone =
+      q.exceeded || q.traffic === 'red' ? 'bad' : q.traffic === 'yellow' ? 'warn' : 'ok'
     out.push({ text: `${fmt(q.used)}/${fmt(q.limit)}`, tone })
   }
   const m = d.stats?.maintenance
-  if (m?.state === 'overdue') out.push({ text: t('items.badge.overdue', { days: m.overdue_days }), tone: 'bad' })
-  else if (m?.state === 'warning') out.push({ text: t('items.badge.due', { days: m.days_until_due }), tone: 'warn' })
+  if (m?.state === 'overdue')
+    out.push({ text: t('items.badge.overdue', { days: m.overdue_days }), tone: 'bad' })
+  else if (m?.state === 'warning')
+    out.push({ text: t('items.badge.due', { days: m.days_until_due }), tone: 'warn' })
   return out
 }
 
@@ -84,7 +97,11 @@ export interface RuleLike {
   rolling_unit?: string
 }
 
-const SPAN: Record<string, PluralBase> = { day: 'items.span.day', month: 'items.span.month', year: 'items.span.year' }
+const SPAN: Record<string, PluralBase> = {
+  day: 'items.span.day',
+  month: 'items.span.month',
+  year: 'items.span.year',
+}
 
 export function describeRule(r: RuleLike): string {
   const since = r.effective_from ? ' ' + t('items.rule.since', { date: r.effective_from }) : ''
@@ -99,7 +116,10 @@ export function describeRule(r: RuleLike): string {
     case 'quota': {
       const cmp = t(r.quota_comparator === 'at_most' ? 'today.quota.atMost' : 'today.quota.atLeast')
       const p = r.quota_period
-      const period = p === 'week' || p === 'month' || p === 'year' ? t(`today.quota.${p}`) : t('items.rule.period')
+      const period =
+        p === 'week' || p === 'month' || p === 'year'
+          ? t(`today.quota.${p}`)
+          : t('items.rule.period')
       return t('items.rule.quota', { cmp, count: r.quota_count ?? '?', period, since })
     }
     default:

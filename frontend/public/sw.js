@@ -51,7 +51,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (cacheable(url)) {
-    // Hashed assets are immutable: cache-first. 
+    // Hashed assets are immutable: cache-first.
     event.respondWith(
       caches.match(req).then(
         (hit) =>

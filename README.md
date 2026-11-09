@@ -14,8 +14,8 @@ A habit tracker with a Go backend and a Vue frontend.
 
 Requires Go and [just](https://github.com/casey/just).
 
-- `just fmt` - goimports (backend) and eslint --fix (frontend)
-- `just lint` - golangci-lint and eslint/vue-tsc
+- `just fmt` - goimports (backend) and oxfmt (frontend)
+- `just lint` - golangci-lint and oxlint/vue-tsc
 - `just build` - backend binary into `build/`, frontend into `frontend/dist`
 - `just test` - backend tests (including the e2e tests over the real router, temp SQLite DB, injected clock, fake OIDC provider) and Vitest
 - `just build-image` - build the Docker image

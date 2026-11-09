@@ -123,7 +123,12 @@ async function doDelete() {
       <div class="flex flex-col gap-2">
         <h3 class="font-semibold">{{ t('data.export.title') }}</h3>
         <p class="text-sm opacity-80">{{ t('data.export.help') }}</p>
-        <button class="btn btn-sm btn-outline self-start" :disabled="busy" data-testid="data-export" @click="doExport">
+        <button
+          class="btn btn-sm btn-outline self-start"
+          :disabled="busy"
+          data-testid="data-export"
+          @click="doExport"
+        >
           {{ t('data.export.button') }}
         </button>
       </div>
@@ -133,20 +138,42 @@ async function doDelete() {
         <p class="text-sm opacity-80">{{ t('data.import.help') }}</p>
         <label class="form-control">
           <span class="label-text">{{ t('data.import.choose') }}</span>
-          <input type="file" accept="application/json,.json" class="file-input file-input-bordered file-input-sm" data-testid="data-file" @change="onFile" />
+          <input
+            type="file"
+            accept="application/json,.json"
+            class="file-input file-input-bordered file-input-sm"
+            data-testid="data-file"
+            @change="onFile"
+          />
         </label>
         <template v-if="summary">
           <p class="text-sm" data-testid="data-summary">
-            {{ t('data.import.summary', {
-              items: summary.items, options: summary.options, versions: summary.rule_versions,
-              checkins: summary.checkins, categories: summary.categories, freezes: summary.freezes,
-            }) }}
+            {{
+              t('data.import.summary', {
+                items: summary.items,
+                options: summary.options,
+                versions: summary.rule_versions,
+                checkins: summary.checkins,
+                categories: summary.categories,
+                freezes: summary.freezes,
+              })
+            }}
           </p>
           <label class="label cursor-pointer justify-start gap-2">
-            <input v-model="applySettings" type="checkbox" class="checkbox checkbox-sm" data-testid="data-apply-settings" />
+            <input
+              v-model="applySettings"
+              type="checkbox"
+              class="checkbox checkbox-sm"
+              data-testid="data-apply-settings"
+            />
             <span class="label-text">{{ t('data.import.applySettings') }}</span>
           </label>
-          <button class="btn btn-sm btn-primary self-start" :disabled="busy" data-testid="data-import" @click="doImport">
+          <button
+            class="btn btn-sm btn-primary self-start"
+            :disabled="busy"
+            data-testid="data-import"
+            @click="doImport"
+          >
             {{ t('data.import.button') }}
           </button>
         </template>
@@ -157,9 +184,19 @@ async function doDelete() {
         <p class="text-sm opacity-80">{{ t('data.delete.help') }}</p>
         <label class="form-control">
           <span class="label-text">{{ t('data.delete.prompt', { word: CONFIRM_WORD }) }}</span>
-          <input v-model="confirmText" class="input input-bordered input-sm w-48" autocomplete="off" data-testid="data-confirm" />
+          <input
+            v-model="confirmText"
+            class="input input-bordered input-sm w-48"
+            autocomplete="off"
+            data-testid="data-confirm"
+          />
         </label>
-        <button class="btn btn-sm btn-error self-start" :disabled="!canDelete" data-testid="data-delete" @click="doDelete">
+        <button
+          class="btn btn-sm btn-error self-start"
+          :disabled="!canDelete"
+          data-testid="data-delete"
+          @click="doDelete"
+        >
           {{ t('data.delete.button') }}
         </button>
       </div>

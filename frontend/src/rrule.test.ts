@@ -6,7 +6,11 @@ describe('buildRRule', () => {
     ['every day', { kind: 'days', interval: 1 }, 'FREQ=DAILY'],
     ['every 3 days', { kind: 'days', interval: 3 }, 'FREQ=DAILY;INTERVAL=3'],
     ['mon/wed/fri', { kind: 'weekly', days: ['MO', 'WE', 'FR'] }, 'FREQ=WEEKLY;BYDAY=MO,WE,FR'],
-    ['unordered input is sorted', { kind: 'weekly', days: ['SU', 'MO'] }, 'FREQ=WEEKLY;BYDAY=MO,SU'],
+    [
+      'unordered input is sorted',
+      { kind: 'weekly', days: ['SU', 'MO'] },
+      'FREQ=WEEKLY;BYDAY=MO,SU',
+    ],
   ]
   it.each(ok)('%s', (_n, preset, want) => {
     expect(buildRRule(preset)).toBe(want)

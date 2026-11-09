@@ -23,16 +23,37 @@ const dash = computed(() => `${(pct.value / 100) * C} ${C}`)
       :aria-valuenow="pct"
     >
       <svg viewBox="0 0 100 100" class="h-full w-full -rotate-90" aria-hidden="true">
-        <circle cx="50" cy="50" :r="R" fill="none" stroke="currentColor" stroke-width="10" class="text-base-300" />
         <circle
-          cx="50" cy="50" :r="R" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round"
-          class="text-primary" :stroke-dasharray="dash"
+          cx="50"
+          cy="50"
+          :r="R"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="10"
+          class="text-base-300"
+        />
+        <circle
+          cx="50"
+          cy="50"
+          :r="R"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="10"
+          stroke-linecap="round"
+          class="text-primary"
+          :stroke-dasharray="dash"
         />
       </svg>
-      <span class="absolute inset-0 flex items-center justify-center text-lg font-bold" data-testid="ring-percent">{{ pct }}%</span>
+      <span
+        class="absolute inset-0 flex items-center justify-center text-lg font-bold"
+        data-testid="ring-percent"
+        >{{ pct }}%</span
+      >
     </div>
     <div>
-      <p class="font-semibold"><span data-testid="progress">{{ done }}/{{ total }}</span> {{ t('today.ring.doneSuffix') }}</p>
+      <p class="font-semibold">
+        <span data-testid="progress">{{ done }}/{{ total }}</span> {{ t('today.ring.doneSuffix') }}
+      </p>
       <p class="text-sm opacity-70">
         {{ total === 0 ? t('today.ring.none') : t('today.ring.note') }}
       </p>

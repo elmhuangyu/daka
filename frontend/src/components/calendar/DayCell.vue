@@ -28,18 +28,27 @@ const extraDots = computed(() => Math.max(0, dueItems.value.length - MAX_DOTS))
 function dotClass(i: CalendarDayItem): string {
   if (i.overdue) return 'bg-error ring-2 ring-error/40'
   switch (i.status) {
-    case 'done': return 'bg-success'
-    case 'partial': return 'bg-warning'
-    case 'missed': return 'bg-base-content/40'
-    case 'frozen': return 'bg-info/60'
-    case 'pending': return 'bg-primary'
-    case 'upcoming': return 'border border-base-content/50 bg-transparent'
-    default: return 'bg-secondary/60'
+    case 'done':
+      return 'bg-success'
+    case 'partial':
+      return 'bg-warning'
+    case 'missed':
+      return 'bg-base-content/40'
+    case 'frozen':
+      return 'bg-info/60'
+    case 'pending':
+      return 'bg-primary'
+    case 'upcoming':
+      return 'border border-base-content/50 bg-transparent'
+    default:
+      return 'bg-secondary/60'
   }
 }
 const label = computed(() => {
   const base = props.day ? dayLabel(props.day) : props.date
-  return props.external.length ? joinParts([base, tn('calendar.extEvents', props.external.length)]) : base
+  return props.external.length
+    ? joinParts([base, tn('calendar.extEvents', props.external.length)])
+    : base
 })
 </script>
 
@@ -65,46 +74,83 @@ const label = computed(() => {
       <span
         class="inline-flex size-6 items-center justify-center rounded-full text-sm"
         :class="isToday ? 'bg-primary font-bold text-primary-content' : ''"
-      >{{ dayNumber(date) }}</span>
+        >{{ dayNumber(date) }}</span
+      >
       <span class="flex items-center gap-0.5">
         <Icon
-          v-if="day?.has_overdue" icon="lucide:triangle-alert" class="size-4 text-error" aria-hidden="true"
+          v-if="day?.has_overdue"
+          icon="lucide:triangle-alert"
+          class="size-4 text-error"
+          aria-hidden="true"
           data-testid="overdue-mark"
         />
         <span
-          v-if="day?.day_type === 'holiday'" class="badge badge-success badge-xs" data-testid="badge-off"
-          :title="day.holiday_name || t('calendar.holiday')" aria-hidden="true"
-        >{{ t('calendar.off') }}</span>
+          v-if="day?.day_type === 'holiday'"
+          class="badge badge-success badge-xs"
+          data-testid="badge-off"
+          :title="day.holiday_name || t('calendar.holiday')"
+          aria-hidden="true"
+          >{{ t('calendar.off') }}</span
+        >
         <span
-          v-else-if="day?.day_type === 'workday'" class="badge badge-error badge-xs" data-testid="badge-work"
-          :title="t('calendar.makeupWorkday')" aria-hidden="true"
-        >{{ t('calendar.work') }}</span>
+          v-else-if="day?.day_type === 'workday'"
+          class="badge badge-error badge-xs"
+          data-testid="badge-work"
+          :title="t('calendar.makeupWorkday')"
+          aria-hidden="true"
+          >{{ t('calendar.work') }}</span
+        >
       </span>
     </span>
 
     <span v-if="expanded && day" class="flex min-w-0 flex-col gap-0.5" aria-hidden="true">
       <span v-for="i in dueItems" :key="i.item_id" class="flex min-w-0 items-center gap-1 text-xs">
         <span class="size-2 shrink-0 rounded-full" :class="dotClass(i)"></span>
-        <span class="name truncate" :class="{ sensitive: i.is_sensitive, 'opacity-70': i.forecast }">{{ i.name }}</span>
+        <span
+          class="name truncate"
+          :class="{ sensitive: i.is_sensitive, 'opacity-70': i.forecast }"
+          >{{ i.name }}</span
+        >
       </span>
     </span>
-    <span v-else-if="dots.length" class="flex flex-wrap items-center gap-1" aria-hidden="true" data-testid="dots">
-      <span v-for="i in dots" :key="i.item_id" class="size-2 rounded-full" :class="dotClass(i)"></span>
+    <span
+      v-else-if="dots.length"
+      class="flex flex-wrap items-center gap-1"
+      aria-hidden="true"
+      data-testid="dots"
+    >
+      <span
+        v-for="i in dots"
+        :key="i.item_id"
+        class="size-2 rounded-full"
+        :class="dotClass(i)"
+      ></span>
       <span v-if="extraDots" class="text-[10px] leading-none opacity-70">+{{ extraDots }}</span>
     </span>
 
-    <span v-if="external.length" class="flex min-w-0 flex-col gap-0.5" aria-hidden="true" data-testid="external-chips">
+    <span
+      v-if="external.length"
+      class="flex min-w-0 flex-col gap-0.5"
+      aria-hidden="true"
+      data-testid="external-chips"
+    >
       <template v-if="expanded">
         <span
-          v-for="(x, idx) in external.slice(0, 4)" :key="idx"
+          v-for="(x, idx) in external.slice(0, 4)"
+          :key="idx"
           class="ext-title truncate rounded bg-base-content/10 px-1 text-[11px] opacity-80"
-        >{{ eventTime(x.event) }} {{ x.event.title }}</span>
+          >{{ eventTime(x.event) }} {{ x.event.title }}</span
+        >
       </template>
-      <span v-else class="truncate rounded bg-base-content/10 px-1 text-[11px] opacity-80">{{ t('calendar.extShort', { count: external.length }) }}</span>
+      <span v-else class="truncate rounded bg-base-content/10 px-1 text-[11px] opacity-80">{{
+        t('calendar.extShort', { count: external.length })
+      }}</span>
     </span>
 
     <span
-      class="absolute inset-x-0 bottom-0 h-1.5" :class="day ? RIBBON_CLASS[day.status] : ''" aria-hidden="true"
+      class="absolute inset-x-0 bottom-0 h-1.5"
+      :class="day ? RIBBON_CLASS[day.status] : ''"
+      aria-hidden="true"
       :data-ribbon="day?.status"
     ></span>
   </button>

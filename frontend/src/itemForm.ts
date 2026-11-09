@@ -1,7 +1,15 @@
 import { ApiError, describeError, type ItemDto } from './api'
 import { t, tn, type MessageKey, type PluralBase } from './i18n'
 import { errorKeyForCode } from './i18n/errors'
-import { buildRRule, describeRRule, nextOccurrences, presetFromRRule, WEEKDAYS, type Preset, type Weekday } from './rrule'
+import {
+  buildRRule,
+  describeRRule,
+  nextOccurrences,
+  presetFromRRule,
+  WEEKDAYS,
+  type Preset,
+  type Weekday,
+} from './rrule'
 
 export type TrackerType = 'boolean' | 'counter' | 'metric' | 'maintenance'
 export type Polarity = 'positive' | 'negative'
@@ -59,14 +67,41 @@ export interface ItemForm {
 
 export function emptyForm(): ItemForm {
   return {
-    name: '', trackerType: 'boolean', polarity: 'positive', categoryId: null, isSensitive: false, remindTime: '',
-    unit: '', step: '', minVal: '', maxVal: '', aggregate: '', target: '', options: [],
-    completionRule: '', completionN: '', warningDays: '',
-    scheduleType: 'fixed_rrule', periodKind: 'daily', interval: '2', weekDays: ['MO'], monthDay: '1',
-    yearMonth: '1', yearDay: '1', custom: '', until: '', holidayMode: 'none',
-    rollingInterval: '30', rollingUnit: 'day',
-    quotaComparator: 'at_least', quotaCount: '3', quotaPeriod: 'week', quotaWindow: 'calendar', quotaMeasure: 'days',
-    quotaOption: null, staleAfterDays: '',
+    name: '',
+    trackerType: 'boolean',
+    polarity: 'positive',
+    categoryId: null,
+    isSensitive: false,
+    remindTime: '',
+    unit: '',
+    step: '',
+    minVal: '',
+    maxVal: '',
+    aggregate: '',
+    target: '',
+    options: [],
+    completionRule: '',
+    completionN: '',
+    warningDays: '',
+    scheduleType: 'fixed_rrule',
+    periodKind: 'daily',
+    interval: '2',
+    weekDays: ['MO'],
+    monthDay: '1',
+    yearMonth: '1',
+    yearDay: '1',
+    custom: '',
+    until: '',
+    holidayMode: 'none',
+    rollingInterval: '30',
+    rollingUnit: 'day',
+    quotaComparator: 'at_least',
+    quotaCount: '3',
+    quotaPeriod: 'week',
+    quotaWindow: 'calendar',
+    quotaMeasure: 'days',
+    quotaOption: null,
+    staleAfterDays: '',
   }
 }
 
@@ -112,7 +147,8 @@ export function normalizeForm(f: ItemForm): ItemForm {
     f.quotaComparator = 'at_most'
     if (f.quotaMeasure === 'days') f.quotaMeasure = 'occurrences'
   }
-  if (!allowedMeasures(f).includes(f.quotaMeasure)) f.quotaMeasure = f.polarity === 'negative' ? 'occurrences' : 'days'
+  if (!allowedMeasures(f).includes(f.quotaMeasure))
+    f.quotaMeasure = f.polarity === 'negative' ? 'occurrences' : 'days'
   if (!isNumeric(f.trackerType)) {
     if (f.options.length > 0) f.options = []
     f.target = ''
@@ -134,12 +170,18 @@ export function num(s: string): number | null {
 
 function preset(f: ItemForm): Preset {
   switch (f.periodKind) {
-    case 'daily': return { kind: 'days', interval: 1 }
-    case 'interval': return { kind: 'days', interval: Number(f.interval) }
-    case 'weekly': return { kind: 'weekly', days: f.weekDays }
-    case 'monthly': return { kind: 'monthly', day: Number(f.monthDay) }
-    case 'yearly': return { kind: 'yearly', month: Number(f.yearMonth), day: Number(f.yearDay) }
-    case 'custom': return { kind: 'custom', rrule: f.custom }
+    case 'daily':
+      return { kind: 'days', interval: 1 }
+    case 'interval':
+      return { kind: 'days', interval: Number(f.interval) }
+    case 'weekly':
+      return { kind: 'weekly', days: f.weekDays }
+    case 'monthly':
+      return { kind: 'monthly', day: Number(f.monthDay) }
+    case 'yearly':
+      return { kind: 'yearly', month: Number(f.yearMonth), day: Number(f.yearDay) }
+    case 'custom':
+      return { kind: 'custom', rrule: f.custom }
   }
 }
 
@@ -157,7 +199,8 @@ export function validateForm(f: ItemForm): string[] {
   const errs: string[] = []
   const bad = (s: string) => Number.isNaN(num(s))
   if (f.name.trim() === '') errs.push(t('errors.nameRequired'))
-  if (f.remindTime !== '' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(f.remindTime)) errs.push(t('errors.invalidRemindTime'))
+  if (f.remindTime !== '' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(f.remindTime))
+    errs.push(t('errors.invalidRemindTime'))
   if (f.scheduleType === 'fixed_rrule') {
     const r = formRRule(f)
     if ('error' in r) errs.push(r.error)
@@ -172,7 +215,9 @@ export function validateForm(f: ItemForm): string[] {
     if (!(c > 0) || !Number.isFinite(c)) errs.push(t('items.err.quotaCount'))
     if (quotaNeedsOption(f) && f.quotaOption === null) errs.push(t('items.err.quotaOption'))
   }
-  if ([f.step, f.minVal, f.maxVal, f.target, f.warningDays, f.staleAfterDays, f.completionN].some(bad)) {
+  if (
+    [f.step, f.minVal, f.maxVal, f.target, f.warningDays, f.staleAfterDays, f.completionN].some(bad)
+  ) {
     errs.push(t('items.err.numeric'))
   }
   for (const o of f.options) {
@@ -238,11 +283,23 @@ export function buildRule(f: ItemForm, patch: boolean): Json {
 
 function itemNumbers(f: ItemForm): Json {
   if (!isNumeric(f.trackerType)) return {}
-  return { unit: f.unit.trim(), step: num(f.step) ?? 0, min_val: num(f.minVal), max_val: num(f.maxVal), aggregate: f.aggregate }
+  return {
+    unit: f.unit.trim(),
+    step: num(f.step) ?? 0,
+    min_val: num(f.minVal),
+    max_val: num(f.maxVal),
+    aggregate: f.aggregate,
+  }
 }
 
 function optionBody(o: OptionForm, i: number): Json {
-  return drop({ name: o.name.trim(), unit: o.unit.trim(), step: num(o.step) ?? 0, sort_order: i, target_value: num(o.target) ?? undefined })
+  return drop({
+    name: o.name.trim(),
+    unit: o.unit.trim(),
+    step: num(o.step) ?? 0,
+    sort_order: i,
+    target_value: num(o.target) ?? undefined,
+  })
 }
 
 /** Body for POST /api/items. remind_time is applied by a follow-up PATCH (create does not accept it). */
@@ -251,9 +308,14 @@ export function buildCreateBody(f: ItemForm): Json {
   if (f.quotaOption !== null && quotaNeedsOption(f)) rule.quota_option_index = f.quotaOption
   const nums = itemNumbers(f)
   const body: Json = {
-    name: f.name.trim(), tracker_type: f.trackerType, kind: 'habit',
-    polarity: f.polarity, category_id: f.categoryId, is_sensitive: f.isSensitive,
-    options: f.options.map(optionBody), rule,
+    name: f.name.trim(),
+    tracker_type: f.trackerType,
+    kind: 'habit',
+    polarity: f.polarity,
+    category_id: f.categoryId,
+    is_sensitive: f.isSensitive,
+    options: f.options.map(optionBody),
+    rule,
   }
   if (isNumeric(f.trackerType)) {
     body.unit = nums.unit
@@ -284,7 +346,10 @@ export function formFromItem(it: ItemDto): ItemForm {
   f.aggregate = (it.aggregate ?? '') as ItemForm['aggregate']
   f.warningDays = it.warning_days ? String(it.warning_days) : ''
   f.options = it.options.map((o) => ({
-    id: o.id, name: o.name, unit: o.unit, step: o.step ? String(o.step) : '',
+    id: o.id,
+    name: o.name,
+    unit: o.unit,
+    step: o.step ? String(o.step) : '',
     target: o.target_value != null ? String(o.target_value) : '',
   }))
   f.scheduleType = r.schedule_type as ScheduleType
@@ -319,7 +384,8 @@ export function formFromItem(it: ItemDto): ItemForm {
   if (r.quota_count) f.quotaCount = String(r.quota_count)
   if (r.quota_period) f.quotaPeriod = r.quota_period as ItemForm['quotaPeriod']
   f.quotaWindow = (r.quota_window || 'calendar') as ItemForm['quotaWindow']
-  f.quotaMeasure = (r.quota_measure || (it.polarity === 'negative' ? 'occurrences' : 'days')) as ItemForm['quotaMeasure']
+  f.quotaMeasure = (r.quota_measure ||
+    (it.polarity === 'negative' ? 'occurrences' : 'days')) as ItemForm['quotaMeasure']
   if (r.quota_option_id != null) {
     const i = it.options.findIndex((o) => o.id === r.quota_option_id)
     f.quotaOption = i >= 0 ? i : null
@@ -350,7 +416,12 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
  * (tracker_type, kind, polarity) are never sent. A rule version is only
  * requested when the rule actually changed (or a retroactive date was set).
  */
-export function buildEditPlan(orig: ItemDto, f: ItemForm, effectiveFrom: string, today: string): EditPlan {
+export function buildEditPlan(
+  orig: ItemDto,
+  f: ItemForm,
+  effectiveFrom: string,
+  today: string,
+): EditPlan {
   const o = formFromItem(orig)
   const patch: Json = {}
   if (f.name.trim() !== o.name) patch.name = f.name.trim()
@@ -371,12 +442,16 @@ export function buildEditPlan(orig: ItemDto, f: ItemForm, effectiveFrom: string,
   const rule = buildRule(f, true)
   const before = buildRule(o, true)
   const quotaOpt = f.quotaOption !== null && quotaNeedsOption(f) ? f.quotaOption : null
-  const ruleDiffers = !same(rule, before) || quotaOpt !== (quotaNeedsOption(o) ? o.quotaOption : null)
+  const ruleDiffers =
+    !same(rule, before) || quotaOpt !== (quotaNeedsOption(o) ? o.quotaOption : null)
   const retro = effectiveFrom !== '' && effectiveFrom !== today
   let ruleChanged = false
   if (ruleDiffers || retro) {
     ruleChanged = true
-    if (f.scheduleType === 'fixed_rrule' && (rule.schedule_type !== before.schedule_type || rule.rrule_string !== before.rrule_string)) {
+    if (
+      f.scheduleType === 'fixed_rrule' &&
+      (rule.schedule_type !== before.schedule_type || rule.rrule_string !== before.rrule_string)
+    ) {
       rule.dtstart = effectiveFrom || today // restart the INTERVAL phase at the new rule's start
     }
     if (retro) rule.effective_from = effectiveFrom
@@ -390,12 +465,16 @@ export function buildEditPlan(orig: ItemDto, f: ItemForm, effectiveFrom: string,
   const updateOptions: number[] = []
   f.options.forEach((x, i) => {
     if (x.id === undefined) addOptions.push(i)
-    else if (!same(x, origById.get(x.id)) || i !== o.options.findIndex((y) => y.id === x.id)) updateOptions.push(i)
+    else if (!same(x, origById.get(x.id)) || i !== o.options.findIndex((y) => y.id === x.id))
+      updateOptions.push(i)
   })
   return {
-    addOptions, updateOptions,
+    addOptions,
+    updateOptions,
     removeOptionIds: o.options.filter((x) => !keep.has(x.id)).map((x) => x.id!),
-    patch, ruleChanged, hasPatch: Object.keys(patch).length > 0,
+    patch,
+    ruleChanged,
+    hasPatch: Object.keys(patch).length > 0,
   }
 }
 
@@ -417,7 +496,11 @@ const SPAN: Record<ItemForm['rollingUnit'], PluralBase> = {
   month: 'items.span.month',
   year: 'items.span.year',
 }
-const PERIOD_KEY = { week: 'today.quota.week', month: 'today.quota.month', year: 'today.quota.year' } as const
+const PERIOD_KEY = {
+  week: 'today.quota.week',
+  month: 'today.quota.month',
+  year: 'today.quota.year',
+} as const
 
 export function previewRule(f: ItemForm, today: string, dtstart?: string): RulePreview {
   switch (f.scheduleType) {
@@ -425,34 +508,60 @@ export function previewRule(f: ItemForm, today: string, dtstart?: string): RuleP
       return { sentence: t('items.preview.none'), dates: [], note: '' }
     case 'rolling': {
       const n = Number(f.rollingInterval)
-      const key = f.trackerType === 'maintenance' ? 'items.preview.dueAfter' : 'items.preview.dueAgainAfter'
+      const key =
+        f.trackerType === 'maintenance' ? 'items.preview.dueAfter' : 'items.preview.dueAgainAfter'
       return {
-        sentence: Number.isInteger(n) && n > 0 ? t(key, { span: tn(SPAN[f.rollingUnit], n) }) : t('items.preview.invalidInterval'),
-        dates: null, note: t('items.preview.rollingNote'),
+        sentence:
+          Number.isInteger(n) && n > 0
+            ? t(key, { span: tn(SPAN[f.rollingUnit], n) })
+            : t('items.preview.invalidInterval'),
+        dates: null,
+        note: t('items.preview.rollingNote'),
       }
     }
     case 'quota': {
       const c = Number(f.quotaCount)
-      const cmp = t(f.quotaComparator === 'at_least' ? 'items.preview.atLeast' : 'items.preview.atMost')
-      const unit = t(f.quotaMeasure === 'sum' ? 'items.preview.unitSum' : f.quotaMeasure === 'days' ? 'items.preview.unitDays' : 'items.preview.unitTimes', { count: c })
+      const cmp = t(
+        f.quotaComparator === 'at_least' ? 'items.preview.atLeast' : 'items.preview.atMost',
+      )
+      const unit = t(
+        f.quotaMeasure === 'sum'
+          ? 'items.preview.unitSum'
+          : f.quotaMeasure === 'days'
+            ? 'items.preview.unitDays'
+            : 'items.preview.unitTimes',
+        { count: c },
+      )
       const period = t(PERIOD_KEY[f.quotaPeriod])
-      const window = t(f.quotaWindow === 'calendar' ? 'items.preview.windowCalendar' : 'items.preview.windowRolling', { period })
+      const window = t(
+        f.quotaWindow === 'calendar'
+          ? 'items.preview.windowCalendar'
+          : 'items.preview.windowRolling',
+        { period },
+      )
       return {
-        sentence: c > 0 ? t('items.preview.quota', { cmp, unit, window }) : t('items.preview.invalidQuota'),
-        dates: null, note: t('items.preview.quotaNote'),
+        sentence:
+          c > 0 ? t('items.preview.quota', { cmp, unit, window }) : t('items.preview.invalidQuota'),
+        dates: null,
+        note: t('items.preview.quotaNote'),
       }
     }
     case 'fixed_rrule': {
       const r = formRRule(f)
       if ('error' in r) return { sentence: r.error, dates: null, note: '' }
       let sentence = describeRRule(r.rrule)
-      if (f.until !== '' && !r.rrule.includes('UNTIL=')) sentence = t('rrule.until', { head: sentence, date: f.until })
+      if (f.until !== '' && !r.rrule.includes('UNTIL='))
+        sentence = t('rrule.until', { head: sentence, date: f.until })
       sentence += t('common.sentenceEnd')
       const dates = nextOccurrences(r.rrule, dtstart || today, today, 5)
       const note =
-        f.holidayMode === 'skip_holidays' ? t('items.preview.holidaySkip')
-        : f.holidayMode === 'workdays_only' ? t('items.preview.holidayWorkdays')
-        : dates === null ? t('items.preview.customUnavailable') : ''
+        f.holidayMode === 'skip_holidays'
+          ? t('items.preview.holidaySkip')
+          : f.holidayMode === 'workdays_only'
+            ? t('items.preview.holidayWorkdays')
+            : dates === null
+              ? t('items.preview.customUnavailable')
+              : ''
       return { sentence, dates, note }
     }
   }
@@ -493,7 +602,9 @@ const REASON_KEYS = {
 /** Localized message for any error from the item endpoints. */
 export function describeItemError(e: unknown): string {
   if (e instanceof ApiError && e.reason) {
-    const key = Object.prototype.hasOwnProperty.call(REASON_KEYS, e.reason) ? REASON_KEYS[e.reason as keyof typeof REASON_KEYS] : null
+    const key = Object.prototype.hasOwnProperty.call(REASON_KEYS, e.reason)
+      ? REASON_KEYS[e.reason as keyof typeof REASON_KEYS]
+      : null
     return key ? t(key) : t('items.reason.unknown', { reason: e.reason })
   }
   if (e instanceof ApiError && e.status === 400) {

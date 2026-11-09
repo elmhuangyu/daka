@@ -24,7 +24,9 @@ const pendingLog = ref(0)
 
 const weekStart = ref(1)
 getCalendarSettings()
-  .then((s) => { if (s.week_start === 0 || s.week_start === 1) weekStart.value = s.week_start })
+  .then((s) => {
+    if (s.week_start === 0 || s.week_start === 1) weekStart.value = s.week_start
+  })
   .catch(() => {})
 const rule = computed(() => (store.item ? describeRule(store.item.current_rule) : ''))
 const optionName = (id: number | null) =>
@@ -109,19 +111,28 @@ const streakText = computed(() => {
 
     <div v-if="store.error" class="alert alert-error" role="alert" data-testid="detail-error">
       <span>{{ store.error }}</span>
-      <button v-if="!store.notFound" type="button" class="btn btn-sm" @click="load">{{ t('common.retry') }}</button>
+      <button v-if="!store.notFound" type="button" class="btn btn-sm" @click="load">
+        {{ t('common.retry') }}
+      </button>
     </div>
-    <p v-if="store.loading && !store.item" role="status" class="opacity-70">{{ t('common.loading') }}</p>
+    <p v-if="store.loading && !store.item" role="status" class="opacity-70">
+      {{ t('common.loading') }}
+    </p>
 
     <template v-if="store.item && store.stats">
       <header class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-xl font-bold" data-testid="item-name">{{ store.item.name }}</h2>
         <div class="flex flex-wrap gap-2">
           <button
-            type="button" class="btn btn-sm" :class="{ 'btn-primary': store.item.pinned }" data-testid="pin"
-            :aria-pressed="!!store.item.pinned" @click="togglePin"
+            type="button"
+            class="btn btn-sm"
+            :class="{ 'btn-primary': store.item.pinned }"
+            data-testid="pin"
+            :aria-pressed="!!store.item.pinned"
+            @click="togglePin"
           >
-            <Icon icon="lucide:pin" aria-hidden="true" /> {{ store.item.pinned ? t('items.unpin') : t('items.pin') }}
+            <Icon icon="lucide:pin" aria-hidden="true" />
+            {{ store.item.pinned ? t('items.unpin') : t('items.pin') }}
           </button>
           <RouterLink :to="`/items/${store.item.id}/edit`" class="btn btn-sm" data-testid="edit">
             <Icon icon="lucide:pencil" aria-hidden="true" /> {{ t('items.detail.editExpectation') }}
@@ -134,23 +145,38 @@ const streakText = computed(() => {
         <div class="stat">
           <div class="stat-title">{{ t('items.detail.last') }}</div>
           <div class="stat-value text-lg" data-testid="stat-last">
-            {{ store.stats.days_since_last === null ? t('items.detail.never') : tn('items.detail.daysAgo', store.stats.days_since_last) }}
+            {{
+              store.stats.days_since_last === null
+                ? t('items.detail.never')
+                : tn('items.detail.daysAgo', store.stats.days_since_last)
+            }}
           </div>
           <div class="stat-desc">{{ store.stats.last_date ?? '' }}</div>
         </div>
         <div v-if="store.stats.streak.applicable" class="stat">
           <div class="stat-title">{{ t('items.detail.streak') }}</div>
           <div class="stat-value text-lg" data-testid="stat-streak">{{ streakText }}</div>
-          <div class="stat-desc">{{ t('items.detail.longest', { count: store.stats.streak.longest }) }}</div>
+          <div class="stat-desc">
+            {{ t('items.detail.longest', { count: store.stats.streak.longest }) }}
+          </div>
         </div>
         <div class="stat">
           <div class="stat-title">{{ t('items.detail.completion') }}</div>
-          <div class="stat-value text-lg" data-testid="stat-completion">{{ pct(store.stats.completion_rate_90) }}</div>
+          <div class="stat-value text-lg" data-testid="stat-completion">
+            {{ pct(store.stats.completion_rate_90) }}
+          </div>
         </div>
         <div class="stat">
           <div class="stat-title">{{ t('items.detail.checkins') }}</div>
           <div class="stat-value text-lg">{{ store.stats.counts.total }}</div>
-          <div class="stat-desc">{{ t('items.detail.checkinsDesc', { last30: store.stats.counts.last_30_days, year: store.stats.counts.this_year }) }}</div>
+          <div class="stat-desc">
+            {{
+              t('items.detail.checkinsDesc', {
+                last30: store.stats.counts.last_30_days,
+                year: store.stats.counts.this_year,
+              })
+            }}
+          </div>
         </div>
       </div>
       <p class="text-sm opacity-80" data-testid="summary">{{ summary }}</p>
@@ -166,26 +192,45 @@ const streakText = computed(() => {
       <section>
         <h3 class="mb-1 font-semibold">{{ t('items.detail.last365') }}</h3>
         <Heatmap
-          :days="store.stats.heatmap" :week-start="weekStart" :negative="store.item?.polarity === 'negative'"
-          :redact="privacy.redact" :label="t('items.detail.heatmapLabel')"
+          :days="store.stats.heatmap"
+          :week-start="weekStart"
+          :negative="store.item?.polarity === 'negative'"
+          :redact="privacy.redact"
+          :label="t('items.detail.heatmapLabel')"
         />
       </section>
 
       <section>
         <div class="mb-1 flex items-center justify-between">
-          <h3 class="font-semibold">{{ t('items.detail.calendar', { month: formatMonthYear(`${store.month}-01`) }) }}</h3>
+          <h3 class="font-semibold">
+            {{ t('items.detail.calendar', { month: formatMonthYear(`${store.month}-01`) }) }}
+          </h3>
           <div class="join">
-            <button type="button" class="btn btn-sm join-item" :aria-label="t('items.detail.prevMonth')" data-testid="cal-prev" @click="store.setMonth(shiftMonth(store.month, -1))">
+            <button
+              type="button"
+              class="btn btn-sm join-item"
+              :aria-label="t('items.detail.prevMonth')"
+              data-testid="cal-prev"
+              @click="store.setMonth(shiftMonth(store.month, -1))"
+            >
               <Icon icon="lucide:chevron-left" aria-hidden="true" />
             </button>
-            <button type="button" class="btn btn-sm join-item" :aria-label="t('items.detail.nextMonth')" data-testid="cal-next" @click="store.setMonth(shiftMonth(store.month, 1))">
+            <button
+              type="button"
+              class="btn btn-sm join-item"
+              :aria-label="t('items.detail.nextMonth')"
+              data-testid="cal-next"
+              @click="store.setMonth(shiftMonth(store.month, 1))"
+            >
               <Icon icon="lucide:chevron-right" aria-hidden="true" />
             </button>
           </div>
         </div>
         <div class="grid grid-cols-7 gap-1 text-center text-xs" data-testid="calendar">
           <template v-for="(d, i) in calendarCells" :key="i">
-            <span v-if="d" class="rounded p-1" :class="dayClass(d)" :data-date="d.date">{{ Number(d.date.slice(8)) }}</span>
+            <span v-if="d" class="rounded p-1" :class="dayClass(d)" :data-date="d.date">{{
+              Number(d.date.slice(8))
+            }}</span>
             <span v-else></span>
           </template>
         </div>
@@ -194,37 +239,80 @@ const streakText = computed(() => {
 
       <section>
         <h3 class="mb-1 font-semibold">{{ t('items.detail.history') }}</h3>
-        <p v-if="!store.history.length" class="opacity-70" data-testid="history-empty">{{ t('items.detail.noCheckins') }}</p>
+        <p v-if="!store.history.length" class="opacity-70" data-testid="history-empty">
+          {{ t('items.detail.noCheckins') }}
+        </p>
         <ul class="divide-y" data-testid="history">
-          <li v-for="l in store.history" :key="l.id" class="flex items-center justify-between gap-2 py-1" :data-testid="`log-${l.id}`">
+          <li
+            v-for="l in store.history"
+            :key="l.id"
+            class="flex items-center justify-between gap-2 py-1"
+            :data-testid="`log-${l.id}`"
+          >
             <span class="min-w-0 truncate">
               {{ l.date }} <span v-if="optionName(l.option_id)">{{ optionName(l.option_id) }}</span>
-              <span v-if="store.item.tracker_type !== 'boolean' && store.item.tracker_type !== 'maintenance'"> {{ l.value }}</span>
+              <span
+                v-if="
+                  store.item.tracker_type !== 'boolean' && store.item.tracker_type !== 'maintenance'
+                "
+              >
+                {{ l.value }}</span
+              >
               <span v-if="l.note" class="opacity-70"> {{ l.note }}</span>
-              <span v-if="l.is_supplement" class="badge badge-ghost badge-sm ml-1">{{ t('items.detail.backfilled') }}</span>
+              <span v-if="l.is_supplement" class="badge badge-ghost badge-sm ml-1">{{
+                t('items.detail.backfilled')
+              }}</span>
             </span>
             <button
-              type="button" class="btn btn-ghost btn-xs" :class="{ 'btn-error': pendingLog === l.id }"
-              :data-testid="`del-${l.id}`" @click="removeLog(l.id)"
+              type="button"
+              class="btn btn-ghost btn-xs"
+              :class="{ 'btn-error': pendingLog === l.id }"
+              :data-testid="`del-${l.id}`"
+              @click="removeLog(l.id)"
             >
-              <Icon icon="lucide:trash-2" aria-hidden="true" /> {{ pendingLog === l.id ? t('items.detail.confirm') : t('common.delete') }}
+              <Icon icon="lucide:trash-2" aria-hidden="true" />
+              {{ pendingLog === l.id ? t('items.detail.confirm') : t('common.delete') }}
             </button>
           </li>
         </ul>
-        <button v-if="store.nextCursor" type="button" class="btn btn-sm mt-2" data-testid="more" @click="store.loadMore()">{{ t('common.loadMore') }}</button>
+        <button
+          v-if="store.nextCursor"
+          type="button"
+          class="btn btn-sm mt-2"
+          data-testid="more"
+          @click="store.loadMore()"
+        >
+          {{ t('common.loadMore') }}
+        </button>
       </section>
 
       <section class="flex flex-wrap gap-2 border-t pt-3">
         <button type="button" class="btn btn-sm" data-testid="archive" @click="toggleArchive">
-          <Icon icon="lucide:archive" aria-hidden="true" /> {{ store.item.archived ? t('items.detail.unarchive') : t('items.detail.archive') }}
+          <Icon icon="lucide:archive" aria-hidden="true" />
+          {{ store.item.archived ? t('items.detail.unarchive') : t('items.detail.archive') }}
         </button>
-        <button v-if="!confirmDelete" type="button" class="btn btn-sm btn-outline btn-error" data-testid="delete" @click="confirmDelete = true">
+        <button
+          v-if="!confirmDelete"
+          type="button"
+          class="btn btn-sm btn-outline btn-error"
+          data-testid="delete"
+          @click="confirmDelete = true"
+        >
           <Icon icon="lucide:trash-2" aria-hidden="true" /> {{ t('items.detail.deleteItem') }}
         </button>
         <template v-else>
           <span class="self-center text-sm">{{ t('items.detail.deleteAsk') }}</span>
-          <button type="button" class="btn btn-sm btn-error" data-testid="delete-confirm" @click="removeItem">{{ t('items.detail.deleteConfirm') }}</button>
-          <button type="button" class="btn btn-sm" @click="confirmDelete = false">{{ t('common.cancel') }}</button>
+          <button
+            type="button"
+            class="btn btn-sm btn-error"
+            data-testid="delete-confirm"
+            @click="removeItem"
+          >
+            {{ t('items.detail.deleteConfirm') }}
+          </button>
+          <button type="button" class="btn btn-sm" @click="confirmDelete = false">
+            {{ t('common.cancel') }}
+          </button>
         </template>
       </section>
     </template>

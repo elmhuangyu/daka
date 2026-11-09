@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { ApiError, describeError } from '../api'
 import apiSource from '../api.ts?raw'
 import { en } from './en'
-import { ERROR_KEYS, EXT_CAL_ERROR_KEYS, errorKeyForCode, errorKeyForStatus, extCalErrorKey } from './errors'
+import {
+  ERROR_KEYS,
+  EXT_CAL_ERROR_KEYS,
+  errorKeyForCode,
+  errorKeyForStatus,
+  extCalErrorKey,
+} from './errors'
 import { setLocale } from './index'
 import zhCN from './zh-CN'
 

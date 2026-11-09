@@ -28,7 +28,13 @@ export const useItemsStore = defineStore('items', () => {
     q.value = ''
     loading.value = false
   }
-  watch(() => privacy.redact, (on) => { if (on) clear() }, { flush: 'sync' })
+  watch(
+    () => privacy.redact,
+    (on) => {
+      if (on) clear()
+    },
+    { flush: 'sync' },
+  )
 
   async function refresh() {
     const my = ++seq
@@ -92,7 +98,13 @@ export const useItemDetailStore = defineStore('itemDetail', () => {
     calendar.value = []
     loading.value = false
   }
-  watch(() => privacy.redact, (on) => { if (on) clear() }, { flush: 'sync' })
+  watch(
+    () => privacy.redact,
+    (on) => {
+      if (on) clear()
+    },
+    { flush: 'sync' },
+  )
 
   async function loadCalendar() {
     const my = ++calSeq
@@ -190,7 +202,22 @@ export const useItemDetailStore = defineStore('itemDetail', () => {
   }
 
   return {
-    id, item, stats, history, nextCursor, month, calendar, loading, error, notFound,
-    clear, load, loadMore, setMonth, removeCheckin, patch, remove,
+    id,
+    item,
+    stats,
+    history,
+    nextCursor,
+    month,
+    calendar,
+    loading,
+    error,
+    notFound,
+    clear,
+    load,
+    loadMore,
+    setMonth,
+    removeCheckin,
+    patch,
+    remove,
   }
 })

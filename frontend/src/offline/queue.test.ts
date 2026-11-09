@@ -16,7 +16,10 @@ describe('OfflineQueue', () => {
   it('stores only request fields and replays in order with the original keys', async () => {
     const calls: Array<[CheckinInput, string]> = []
     const { q, store } = make(async (i, k) => void calls.push([i, k]))
-    await q.enqueue({ item_id: 1, mode: 'set', note: 'n', name: 'Secret name' } as CheckinInput, 'k1')
+    await q.enqueue(
+      { item_id: 1, mode: 'set', note: 'n', name: 'Secret name' } as CheckinInput,
+      'k1',
+    )
     await q.enqueue({ item_id: 2, mode: 'delta', value: 3, date: '2026-01-02' }, 'k2')
     expect(JSON.stringify(await store.all())).not.toContain('Secret name')
     await q.replay()
@@ -140,7 +143,9 @@ describe('OfflineQueue', () => {
 
   it('refuses ad-hoc entries (their note is plaintext)', async () => {
     const { q, store } = make(async () => undefined)
-    await expect(q.enqueue({ item_id: 1, mode: 'append', adhoc: true, note: 'Name' }, 'a')).rejects.toThrow()
+    await expect(
+      q.enqueue({ item_id: 1, mode: 'append', adhoc: true, note: 'Name' }, 'a'),
+    ).rejects.toThrow()
     expect(await store.all()).toEqual([])
   })
 

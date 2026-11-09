@@ -97,7 +97,9 @@ export const NETWORK_ERROR_KEY = 'errors.network' satisfies MessageKey
 
 /** Message key for a server error code, or null when the code is unknown. */
 export function errorKeyForCode(code: string): MessageKey | null {
-  return Object.prototype.hasOwnProperty.call(ERROR_KEYS, code) ? ERROR_KEYS[code as ErrorCode] : null
+  return Object.prototype.hasOwnProperty.call(ERROR_KEYS, code)
+    ? ERROR_KEYS[code as ErrorCode]
+    : null
 }
 
 /** Generic fallback key by HTTP status, used when the code is empty or unknown. */

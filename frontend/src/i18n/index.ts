@@ -14,7 +14,11 @@ export type Messages = Partial<Record<MessageKey, string>>
 export type Params = Record<string, string | number>
 
 /** Keys written as `<base>.other` (plus other CLDR categories) are plural families. */
-export type PluralBase = MessageKey extends infer K ? (K extends `${infer B}.other` ? B : never) : never
+export type PluralBase = MessageKey extends infer K
+  ? K extends `${infer B}.other`
+    ? B
+    : never
+  : never
 
 // English ships in the main bundle. Other locales are separate chunks loaded on
 // demand, so a user on English never downloads them. A key missing from the
@@ -60,7 +64,12 @@ function storeLocale(code: string): void {
 export function detectLocale(): LocaleCode {
   const saved = readStoredLocale()
   if (saved) return saved
-  const langs = typeof navigator === 'undefined' ? [] : navigator.languages?.length ? navigator.languages : [navigator.language]
+  const langs =
+    typeof navigator === 'undefined'
+      ? []
+      : navigator.languages?.length
+        ? navigator.languages
+        : [navigator.language]
   for (const tag of langs) {
     const m = tag ? matchLocale(tag) : null
     if (m) return m
@@ -116,8 +125,9 @@ export function tn(base: PluralBase, count: number, params?: Params): string {
     // Unknown locale tag: use the generic form.
   }
   const specific = `${base}.${cat}` as MessageKey
-  const has = (catalogs.get(locale.value) as Record<string, string> | undefined)?.[specific] !== undefined
-    || (en as Record<string, string>)[specific] !== undefined
+  const has =
+    (catalogs.get(locale.value) as Record<string, string> | undefined)?.[specific] !== undefined ||
+    (en as Record<string, string>)[specific] !== undefined
   return t(has ? specific : (`${base}.other` as MessageKey), { count, ...params })
 }
 

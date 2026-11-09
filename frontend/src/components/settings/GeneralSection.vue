@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { describeError, getCalendarSettings, putCalendarSettings, type CalendarSettings } from '../../api'
+import {
+  describeError,
+  getCalendarSettings,
+  putCalendarSettings,
+  type CalendarSettings,
+} from '../../api'
 import { SUPPORTED_LOCALES, currentLocale, setLocale, useI18n } from '../../i18n'
 
 const { t } = useI18n()
@@ -24,7 +29,10 @@ const freeze = ref(false)
 const zones = computed(() => {
   let list: string[] = []
   try {
-    list = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.('timeZone') ?? []
+    list =
+      (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.(
+        'timeZone',
+      ) ?? []
   } catch {
     list = []
   }
@@ -79,8 +87,15 @@ async function save() {
       <p v-if="error" class="text-error" role="alert" data-testid="general-error">{{ error }}</p>
       <label class="form-control">
         <span class="label-text">{{ t('settings.language.label') }}</span>
-        <select v-model="lang" class="select select-bordered" data-testid="g-language" @change="changeLanguage">
-          <option v-for="l in SUPPORTED_LOCALES" :key="l.value" :value="l.value">{{ l.label }}</option>
+        <select
+          v-model="lang"
+          class="select select-bordered"
+          data-testid="g-language"
+          @change="changeLanguage"
+        >
+          <option v-for="l in SUPPORTED_LOCALES" :key="l.value" :value="l.value">
+            {{ l.label }}
+          </option>
         </select>
         <span class="label-text-alt opacity-70">{{ t('settings.language.hint') }}</span>
       </label>
@@ -92,7 +107,11 @@ async function save() {
       </label>
       <label class="form-control">
         <span class="label-text">{{ t('settings.general.weekStart') }}</span>
-        <select v-model.number="weekStart" class="select select-bordered" data-testid="g-week-start">
+        <select
+          v-model.number="weekStart"
+          class="select select-bordered"
+          data-testid="g-week-start"
+        >
           <option :value="1">{{ t('settings.general.monday') }}</option>
           <option :value="0">{{ t('settings.general.sunday') }}</option>
         </select>
@@ -101,7 +120,9 @@ async function save() {
         <span class="label-text">{{ t('settings.general.region') }}</span>
         <select v-model="region" class="select select-bordered" data-testid="g-region">
           <!-- The server cannot clear a region once set. -->
-          <option value="" :disabled="!!settings?.holiday_region">{{ t('settings.general.regionNone') }}</option>
+          <option value="" :disabled="!!settings?.holiday_region">
+            {{ t('settings.general.regionNone') }}
+          </option>
           <option value="CN">{{ t('settings.general.regionCN') }}</option>
           <option value="US">{{ t('settings.general.regionUS') }}</option>
         </select>
@@ -111,8 +132,17 @@ async function save() {
         <span class="label-text">{{ t('settings.general.freeze') }}</span>
       </label>
       <div class="flex items-center gap-3">
-        <button class="btn btn-primary" type="submit" :disabled="busy || !settings" data-testid="g-save">{{ t('settings.general.save') }}</button>
-        <span v-if="saved" class="text-success" data-testid="g-saved">{{ t('settings.general.saved') }}</span>
+        <button
+          class="btn btn-primary"
+          type="submit"
+          :disabled="busy || !settings"
+          data-testid="g-save"
+        >
+          {{ t('settings.general.save') }}
+        </button>
+        <span v-if="saved" class="text-success" data-testid="g-saved">{{
+          t('settings.general.saved')
+        }}</span>
       </div>
     </form>
   </section>

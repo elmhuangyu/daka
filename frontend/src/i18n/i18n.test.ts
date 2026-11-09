@@ -2,7 +2,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { en } from './en'
 import zhCN from './zh-CN'
 import {
-  SUPPORTED_LOCALES, currentLocale, detectLocale, initLocale, registerLocale, setLocale, t, tn, tParts, useI18n,
+  SUPPORTED_LOCALES,
+  currentLocale,
+  detectLocale,
+  initLocale,
+  registerLocale,
+  setLocale,
+  t,
+  tn,
+  tParts,
+  useI18n,
 } from './index'
 import { LOCALE_STORAGE_KEY } from './locales'
 
@@ -60,7 +69,9 @@ describe('t', () => {
   it('returns the english message and interpolates params', () => {
     expect(t('data.export.button')).toBe(en['data.export.button'])
     expect(t('data.delete.prompt', { word: 'DELETE' })).toBe('Type DELETE to confirm')
-    expect(t('data.import.done', { items: 3, checkins: 0 })).toBe('Imported 3 items and 0 check-ins.')
+    expect(t('data.import.done', { items: 3, checkins: 0 })).toBe(
+      'Imported 3 items and 0 check-ins.',
+    )
   })
 
   it('keeps unknown placeholders verbatim', () => {
@@ -69,7 +80,11 @@ describe('t', () => {
   })
 
   it('splits a message into text and slot parts', () => {
-    expect(tParts('items.editor.everyNDays')).toEqual([{ text: 'Every ' }, { slot: 'input' }, { text: ' days' }])
+    expect(tParts('items.editor.everyNDays')).toEqual([
+      { text: 'Every ' },
+      { slot: 'input' },
+      { text: ' days' },
+    ])
   })
 })
 

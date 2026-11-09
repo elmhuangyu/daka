@@ -4,12 +4,12 @@ default:
 
 module := "github.com/elmhuangyu/daka/backend"
 
-# Format backend (goimports) and frontend (eslint --fix)
+# Format backend (goimports) and frontend (oxfmt)
 fmt:
     cd backend && goimports -w -local "{{module}}" .
     cd frontend && pnpm run fmt
 
-# Lint backend (golangci-lint) and frontend (eslint + vue-tsc)
+# Lint backend (golangci-lint) and frontend (oxlint + vue-tsc)
 lint:
     cd backend && golangci-lint run ./...
     cd frontend && pnpm run lint

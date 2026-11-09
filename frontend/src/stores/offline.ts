@@ -6,7 +6,13 @@ import type { CheckinInput } from '../api'
 import { useAuthStore } from './auth'
 import { useCalendarStore } from './calendar'
 import { useTodayStore } from './today'
-import { dateIn, idbStore, OfflineQueue, type PauseReason, type QueueFailure } from '../offline/queue'
+import {
+  dateIn,
+  idbStore,
+  OfflineQueue,
+  type PauseReason,
+  type QueueFailure,
+} from '../offline/queue'
 
 const USER_KEY = 'daka.offline.user'
 
@@ -31,7 +37,11 @@ export const useOfflineStore = defineStore('offline', () => {
 
   function q(): OfflineQueue {
     if (!queue) {
-      queue = new OfflineQueue(idbStore(), (i, k) => api.postCheckin(i, k), () => api.resetCsrf())
+      queue = new OfflineQueue(
+        idbStore(),
+        (i, k) => api.postCheckin(i, k),
+        () => api.resetCsrf(),
+      )
       queue.onChange = sync
     }
     return queue
@@ -163,10 +173,28 @@ export const useOfflineStore = defineStore('offline', () => {
     })
   }
 
-  const visible = computed(() => !online.value || pendingCount.value > 0 || failures.value.length > 0)
+  const visible = computed(
+    () => !online.value || pendingCount.value > 0 || failures.value.length > 0,
+  )
 
   return {
-    online, pendingCount, pendingItems, failures, paused, stalled, replaying, syncedTick, visible, bound,
-    start, replay, retry, checkin, dismissFailure, clear, bindUser, listen,
+    online,
+    pendingCount,
+    pendingItems,
+    failures,
+    paused,
+    stalled,
+    replaying,
+    syncedTick,
+    visible,
+    bound,
+    start,
+    replay,
+    retry,
+    checkin,
+    dismissFailure,
+    clear,
+    bindUser,
+    listen,
   }
 })

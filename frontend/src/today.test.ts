@@ -8,18 +8,35 @@ import { fmt, matchesFilter, percent, ringStats, valueRows } from './today/logic
 import type { ItemDetail } from './api'
 
 function jsonRes(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
 const rule = (o: object = {}) => ({ schedule_type: 'fixed_rrule', option_targets: {}, ...o })
 function detail(o: Partial<ItemDetail> & { id: number; name: string }): ItemDetail {
   return {
-    tracker_type: 'boolean', kind: 'habit', polarity: 'positive', category_id: null, effective_sensitive: false,
-    options: [], current_rule: rule(), ...o,
+    tracker_type: 'boolean',
+    kind: 'habit',
+    polarity: 'positive',
+    category_id: null,
+    effective_sensitive: false,
+    options: [],
+    current_rule: rule(),
+    ...o,
   } as ItemDetail
 }
 const tItem = (id: number, name: string, o: object = {}) => ({
-  id, name, category_id: null, tracker_type: 'boolean', is_sensitive: false, due: true, done: false, log_ids: [], ...o,
+  id,
+  name,
+  category_id: null,
+  tracker_type: 'boolean',
+  is_sensitive: false,
+  due: true,
+  done: false,
+  log_ids: [],
+  ...o,
 })
 
 interface World {
@@ -37,12 +54,20 @@ beforeEach(() => {
   world = { today: [], items: [], cats: [], logs: [], progress: { done: 0, total: 0 } }
   fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     url = String(url)
-    if (url === '/api/auth/status') return jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
+    if (url === '/api/auth/status')
+      return jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
     if (url.startsWith('/api/view/today'))
-      return jsonRes({ date: '2026-11-07', weekday: 6, timezone: 'UTC', progress: world.progress, items: world.today })
+      return jsonRes({
+        date: '2026-11-07',
+        weekday: 6,
+        timezone: 'UTC',
+        progress: world.progress,
+        items: world.today,
+      })
     if (url.startsWith('/api/items')) return jsonRes({ items: world.items })
     if (url.startsWith('/api/categories')) return jsonRes({ categories: world.cats })
-    if (url.startsWith('/api/checkins') && (!init || !init.method)) return jsonRes({ checkins: world.logs, next_cursor: null })
+    if (url.startsWith('/api/checkins') && (!init || !init.method))
+      return jsonRes({ checkins: world.logs, next_cursor: null })
     return jsonRes({})
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -61,7 +86,8 @@ async function mountApp() {
   await flushPromises()
   return w
 }
-const writes = () => fetchMock.mock.calls.filter((c) => c[1]?.method === 'POST' && String(c[0]) === '/api/checkins')
+const writes = () =>
+  fetchMock.mock.calls.filter((c) => c[1]?.method === 'POST' && String(c[0]) === '/api/checkins')
 const lastBody = () => JSON.parse(writes().at(-1)![1].body)
 
 describe('logic', () => {
@@ -74,7 +100,10 @@ describe('logic', () => {
   })
 
   it('ring counts only positive fixed_rrule non-maintenance habits', () => {
-    const mk = (d: ItemDetail, done: boolean) => ({ detail: d, today: tItem(d.id, d.name, { done }) as never })
+    const mk = (d: ItemDetail, done: boolean) => ({
+      detail: d,
+      today: tItem(d.id, d.name, { done }) as never,
+    })
     const r = ringStats([
       mk(detail({ id: 1, name: 'a' }), true),
       mk(detail({ id: 2, name: 'b' }), false),
@@ -87,10 +116,32 @@ describe('logic', () => {
 
   it('builds option rows with targets and per-option totals', () => {
     const d = detail({
-      id: 1, name: 'Ex', tracker_type: 'counter',
+      id: 1,
+      name: 'Ex',
+      tracker_type: 'counter',
       options: [
-        { id: 10, name: 'Run', unit: 'km', step: 1, min_val: null, max_val: null, aggregate: 'sum', sort_order: 0, target_value: null },
-        { id: 11, name: 'Lift', unit: 'sets', step: 5, min_val: null, max_val: null, aggregate: 'sum', sort_order: 1, target_value: null },
+        {
+          id: 10,
+          name: 'Run',
+          unit: 'km',
+          step: 1,
+          min_val: null,
+          max_val: null,
+          aggregate: 'sum',
+          sort_order: 0,
+          target_value: null,
+        },
+        {
+          id: 11,
+          name: 'Lift',
+          unit: 'sets',
+          step: 5,
+          min_val: null,
+          max_val: null,
+          aggregate: 'sum',
+          sort_order: 1,
+          target_value: null,
+        },
       ],
       current_rule: rule({ option_targets: { '10': 2 } }),
     })
@@ -115,7 +166,9 @@ describe('Today page', () => {
 
   it('shows an error with retry', async () => {
     fetchMock.mockImplementation(async (url: string) =>
-      String(url) === '/api/auth/status' ? jsonRes({ login_required: false, authenticated: true }) : jsonRes({ error: 'internal error' }, 500),
+      String(url) === '/api/auth/status'
+        ? jsonRes({ login_required: false, authenticated: true })
+        : jsonRes({ error: 'internal error' }, 500),
     )
     const w = await mountApp()
     expect(w.get('[data-testid=error]').text()).toContain('went wrong')
@@ -143,7 +196,10 @@ describe('Today page', () => {
     world.today = [tItem(1, 'Read')]
     world.items = [detail({ id: 1, name: 'Read' })]
     const w = await mountApp()
-    const base = fetchMock.getMockImplementation() as (u: string, i?: RequestInit) => Promise<Response>
+    const base = fetchMock.getMockImplementation() as (
+      u: string,
+      i?: RequestInit,
+    ) => Promise<Response>
     let release!: (r: Response) => void
     fetchMock.mockImplementation((url: string, init?: RequestInit) =>
       init?.method === 'POST' ? new Promise<Response>((r) => (release = r)) : base(url, init),
@@ -160,7 +216,14 @@ describe('Today page', () => {
   it('counter: + / - / set send delta values', async () => {
     world.today = [tItem(1, 'Water', { tracker_type: 'counter' })]
     world.items = [
-      detail({ id: 1, name: 'Water', tracker_type: 'counter', unit: 'ml', step: 250, current_rule: rule({ target_value: 2000 }) }),
+      detail({
+        id: 1,
+        name: 'Water',
+        tracker_type: 'counter',
+        unit: 'ml',
+        step: 250,
+        current_rule: rule({ target_value: 2000 }),
+      }),
     ]
     world.logs = [{ id: 1, item_id: 1, option_id: null, date: '', value: 500, note: '' }]
     const w = await mountApp()
@@ -181,8 +244,22 @@ describe('Today page', () => {
     world.today = [tItem(1, 'Exercise', { tracker_type: 'counter' })]
     world.items = [
       detail({
-        id: 1, name: 'Exercise', tracker_type: 'counter',
-        options: [{ id: 10, name: 'Run', unit: 'km', step: 2, min_val: null, max_val: null, aggregate: 'sum', sort_order: 0, target_value: null }],
+        id: 1,
+        name: 'Exercise',
+        tracker_type: 'counter',
+        options: [
+          {
+            id: 10,
+            name: 'Run',
+            unit: 'km',
+            step: 2,
+            min_val: null,
+            max_val: null,
+            aggregate: 'sum',
+            sort_order: 0,
+            target_value: null,
+          },
+        ],
       }),
     ]
     const w = await mountApp()
@@ -198,7 +275,16 @@ describe('Today page', () => {
 
   it('metric: records a validated value', async () => {
     world.today = [tItem(1, 'Weight', { tracker_type: 'metric' })]
-    world.items = [detail({ id: 1, name: 'Weight', tracker_type: 'metric', unit: 'kg', min_val: 30, max_val: 200 })]
+    world.items = [
+      detail({
+        id: 1,
+        name: 'Weight',
+        tracker_type: 'metric',
+        unit: 'kg',
+        min_val: 30,
+        max_val: 200,
+      }),
+    ]
     const w = await mountApp()
     await w.get('[data-testid=value-input]').setValue('10')
     await w.get('[data-testid=record]').trigger('click')
@@ -214,15 +300,33 @@ describe('Today page', () => {
   it('maintenance-overdue card marks done with a note', async () => {
     world.items = [
       detail({
-        id: 3, name: 'Filter', tracker_type: 'maintenance', current_rule: rule({ schedule_type: 'rolling' }),
+        id: 3,
+        name: 'Filter',
+        tracker_type: 'maintenance',
+        current_rule: rule({ schedule_type: 'rolling' }),
         stats: {
-          last_at: null, days_since_last: 95, quota: null,
-          maintenance: { next_due: '2026-11-02', state: 'overdue', days_until_due: 0, overdue_days: 5 },
+          last_at: null,
+          days_since_last: 95,
+          quota: null,
+          maintenance: {
+            next_due: '2026-11-02',
+            state: 'overdue',
+            days_until_due: 0,
+            overdue_days: 5,
+          },
         },
       }),
       detail({
-        id: 4, name: 'Fine', tracker_type: 'maintenance', current_rule: rule({ schedule_type: 'rolling' }),
-        stats: { last_at: null, days_since_last: 1, quota: null, maintenance: { next_due: '2027-01-01', state: 'ok', days_until_due: 50, overdue_days: 0 } },
+        id: 4,
+        name: 'Fine',
+        tracker_type: 'maintenance',
+        current_rule: rule({ schedule_type: 'rolling' }),
+        stats: {
+          last_at: null,
+          days_since_last: 1,
+          quota: null,
+          maintenance: { next_due: '2027-01-01', state: 'ok', days_until_due: 50, overdue_days: 0 },
+        },
       }),
     ]
     const w = await mountApp()
@@ -238,10 +342,26 @@ describe('Today page', () => {
   it('quota section: negative boolean logs occurrences and shows progress', async () => {
     world.items = [
       detail({
-        id: 5, name: 'Cola', polarity: 'negative', current_rule: rule({ schedule_type: 'quota' }),
+        id: 5,
+        name: 'Cola',
+        polarity: 'negative',
+        current_rule: rule({ schedule_type: 'quota' }),
         stats: {
-          last_at: null, days_since_last: 3, maintenance: null,
-          quota: { comparator: 'at_most', window: 'year', period: 'year', used: 3, limit: 4, remaining: 1, ratio: 0.75, met: true, exceeded: false, traffic: 'yellow' },
+          last_at: null,
+          days_since_last: 3,
+          maintenance: null,
+          quota: {
+            comparator: 'at_most',
+            window: 'year',
+            period: 'year',
+            used: 3,
+            limit: 4,
+            remaining: 1,
+            ratio: 0.75,
+            met: true,
+            exceeded: false,
+            traffic: 'yellow',
+          },
         },
       }),
     ]
@@ -257,8 +377,14 @@ describe('Today page', () => {
       { id: 1, name: 'Work', color: '', icon: '', is_sensitive: false, sort_order: 0 },
       { id: 2, name: 'Life', color: '', icon: '', is_sensitive: false, sort_order: 1 },
     ]
-    world.today = [tItem(1, 'Email', { category_id: 1, done: true }), tItem(2, 'Walk', { category_id: 2 })]
-    world.items = [detail({ id: 1, name: 'Email', category_id: 1 }), detail({ id: 2, name: 'Walk', category_id: 2 })]
+    world.today = [
+      tItem(1, 'Email', { category_id: 1, done: true }),
+      tItem(2, 'Walk', { category_id: 2 }),
+    ]
+    world.items = [
+      detail({ id: 1, name: 'Email', category_id: 1 }),
+      detail({ id: 2, name: 'Walk', category_id: 2 }),
+    ]
     world.logs = [{ id: 1, item_id: 1, option_id: null, date: '', value: 0, note: '' }]
     world.progress = { done: 1, total: 2 }
     const w = await mountApp()
@@ -270,12 +396,17 @@ describe('Today page', () => {
   })
 
   it('privacy: clears plaintext synchronously, requests redact=1, masks sensitive categories', async () => {
-    world.cats = [{ id: 1, name: 'SecretCat', color: '', icon: '', is_sensitive: true, sort_order: 0 }]
+    world.cats = [
+      { id: 1, name: 'SecretCat', color: '', icon: '', is_sensitive: true, sort_order: 0 },
+    ]
     world.today = [tItem(1, 'Secret', { category_id: 1 })]
     world.items = [detail({ id: 1, name: 'Secret', category_id: 1, effective_sensitive: true })]
     const w = await mountApp()
     expect(w.html()).toContain('Secret')
-    const base = fetchMock.getMockImplementation() as (u: string, i?: RequestInit) => Promise<Response>
+    const base = fetchMock.getMockImplementation() as (
+      u: string,
+      i?: RequestInit,
+    ) => Promise<Response>
     fetchMock.mockImplementation(async () => {
       throw new Error('down')
     })
@@ -285,13 +416,20 @@ describe('Today page', () => {
     expect(w.html()).not.toContain('Secret')
 
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (String(url).startsWith('/api/items')) return jsonRes({ items: [detail({ id: 1, name: 'Private item', category_id: 1, effective_sensitive: true })] })
+      if (String(url).startsWith('/api/items'))
+        return jsonRes({
+          items: [
+            detail({ id: 1, name: 'Private item', category_id: 1, effective_sensitive: true }),
+          ],
+        })
       return base(url, init)
     })
     await w.get('[data-testid=retry]').trigger('click')
     await flushPromises()
     const urls = fetchMock.mock.calls.map((c) => String(c[0]))
-    expect(urls.filter((u) => u.startsWith('/api/view/today')).at(-1)).toBe('/api/view/today?redact=1')
+    expect(urls.filter((u) => u.startsWith('/api/view/today')).at(-1)).toBe(
+      '/api/view/today?redact=1',
+    )
     expect(urls.filter((u) => u.startsWith('/api/items')).at(-1)).toContain('redact=1')
     expect(urls.filter((u) => u.startsWith('/api/checkins')).at(-1)).toContain('redact=1')
     expect(w.html()).not.toContain('SecretCat')
@@ -302,7 +440,10 @@ describe('Today page', () => {
     world.today = [tItem(1, 'Old')]
     world.items = [detail({ id: 1, name: 'Old' })]
     const w = await mountApp()
-    const base = fetchMock.getMockImplementation() as (u: string, i?: RequestInit) => Promise<Response>
+    const base = fetchMock.getMockImplementation() as (
+      u: string,
+      i?: RequestInit,
+    ) => Promise<Response>
     let slow!: (r: Response) => void
     fetchMock.mockImplementationOnce(() => new Promise<Response>((r) => (slow = r))) // today, redact on
     await w.get('[data-testid=redact-toggle]').trigger('click')
@@ -311,7 +452,15 @@ describe('Today page', () => {
     fetchMock.mockImplementation(base)
     await w.get('[data-testid=redact-toggle]').trigger('click')
     await flushPromises()
-    slow(jsonRes({ date: '2026-11-07', weekday: 6, timezone: 'UTC', progress: { done: 0, total: 0 }, items: [tItem(1, 'STALE')] }))
+    slow(
+      jsonRes({
+        date: '2026-11-07',
+        weekday: 6,
+        timezone: 'UTC',
+        progress: { done: 0, total: 0 },
+        items: [tItem(1, 'STALE')],
+      }),
+    )
     await flushPromises()
     expect(w.html()).toContain('NEWER')
     expect(w.html()).not.toContain('STALE')
@@ -323,7 +472,9 @@ describe('Today page', () => {
     await w.get('input[aria-label="Interval in days"]').setValue(3)
     await w.get('form').trigger('submit')
     await flushPromises()
-    const call = fetchMock.mock.calls.find((c) => c[1]?.method === 'POST' && String(c[0]) === '/api/items')!
+    const call = fetchMock.mock.calls.find(
+      (c) => c[1]?.method === 'POST' && String(c[0]) === '/api/items',
+    )!
     expect(JSON.parse(call[1].body).rule.rrule_string).toBe('FREQ=DAILY;INTERVAL=3')
   })
 })

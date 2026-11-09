@@ -86,7 +86,13 @@ export function cellLabel(cell: HeatmapCell, opts: LabelOpts = {}): string {
   const total = cell.options_total ?? 0
   const met = cell.options_met ?? 0
   if (!bucket && !(cell.value > 0) && !total) return line(t('heatmap.status.noCheckin'))
-  let status = t(bucket === 4 ? 'heatmap.status.completed' : bucket ? 'heatmap.status.partlyCompleted' : 'heatmap.status.notCompleted')
+  let status = t(
+    bucket === 4
+      ? 'heatmap.status.completed'
+      : bucket
+        ? 'heatmap.status.partlyCompleted'
+        : 'heatmap.status.notCompleted',
+  )
   if (opts.redact) return line(status)
   if (total > 1) status = t('heatmap.status.withOptions', { status, met, total })
   return line(status)

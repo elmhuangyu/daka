@@ -30,7 +30,9 @@ const privacy = usePrivacyStore()
     </aside>
 
     <div class="flex min-w-0 flex-1 flex-col">
-      <header class="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-base-300 bg-base-100 px-4 py-2">
+      <header
+        class="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-base-300 bg-base-100 px-4 py-2"
+      >
         <span class="text-lg font-bold md:invisible">Daka</span>
         <div class="flex items-center gap-2">
           <PrivacyToggle />
@@ -45,7 +47,12 @@ const privacy = usePrivacyStore()
 
     <!-- Mobile bottom bar -->
     <nav class="dock md:hidden" :aria-label="t('nav.main')">
-      <RouterLink v-for="n in NAV_ITEMS" :key="n.name" :to="n.path" :data-testid="`nav-bottom-${n.name}`">
+      <RouterLink
+        v-for="n in NAV_ITEMS"
+        :key="n.name"
+        :to="n.path"
+        :data-testid="`nav-bottom-${n.name}`"
+      >
         <Icon :icon="n.icon" aria-hidden="true" class="size-[1.2em]" />
         <span class="dock-label">{{ t(n.labelKey) }}</span>
       </RouterLink>

@@ -67,7 +67,9 @@ async function submit() {
       <p v-else class="text-sm">{{ t('reauth.redirect') }}</p>
       <p v-if="error" class="error mt-2" role="alert" data-testid="reauth-error">{{ error }}</p>
       <div class="modal-action">
-        <button type="button" class="btn" @click="auth.settleReauth(false)">{{ t('common.cancel') }}</button>
+        <button type="button" class="btn" @click="auth.settleReauth(false)">
+          {{ t('common.cancel') }}
+        </button>
         <button type="submit" class="btn btn-primary" :disabled="busy">
           {{ auth.oidcEnabled ? t('reauth.continue') : t('reauth.confirm') }}
         </button>
