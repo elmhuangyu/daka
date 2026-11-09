@@ -1,9 +1,10 @@
 # syntax=docker/dockerfile:1
 
 # Stage 1: build the frontend.
-FROM node:24-alpine AS web
+# The pnpm image ships only pnpm; pnpm installs the Node.js runtime itself.
+FROM ghcr.io/pnpm/pnpm:12.17.0 AS web
 WORKDIR /src/frontend
-RUN corepack enable
+RUN pnpm add -g node@runtime:24
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
