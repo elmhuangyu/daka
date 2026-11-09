@@ -223,19 +223,19 @@ async function doDelete() {
           <h3 class="font-bold text-sm">{{ t('data.delete.title') }}</h3>
         </div>
         <p class="text-xs opacity-80 leading-relaxed max-w-xl">{{ t('data.delete.help') }}</p>
-        <div class="flex flex-wrap items-end gap-3 pt-2">
-          <label class="form-control gap-1">
-            <span class="label-text text-xs font-medium text-error">{{
-              t('data.delete.prompt', { word: CONFIRM_WORD })
-            }}</span>
+        <div class="flex flex-col sm:flex-row sm:items-end gap-3 pt-2">
+          <div class="flex flex-col gap-1.5 sm:w-60">
+            <span class="text-xs font-medium text-error">
+              {{ t('data.delete.prompt', { word: CONFIRM_WORD }) }}
+            </span>
             <input
               v-model="confirmText"
-              class="input input-bordered input-sm w-48 font-mono"
+              class="input input-bordered input-sm w-full font-mono"
               autocomplete="off"
               data-testid="data-confirm"
               :placeholder="CONFIRM_WORD"
             />
-          </label>
+          </div>
           <button
             class="btn btn-sm btn-error gap-1.5"
             :disabled="!canDelete"
