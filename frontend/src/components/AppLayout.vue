@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { NAV_ITEMS } from '../nav'
@@ -12,6 +13,28 @@ const { t } = useI18n()
 const privacy = usePrivacyStore()
 const route = useRoute()
 
+function readCollapsed(): boolean {
+  try {
+    return (
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('daka:sidebar_collapsed') === 'true'
+    )
+  } catch {
+    return false
+  }
+}
+
+const collapsed = ref(readCollapsed())
+
+function toggleSidebar() {
+  collapsed.value = !collapsed.value
+  try {
+    localStorage.setItem('daka:sidebar_collapsed', String(collapsed.value))
+  } catch {
+    // localStorage may be unavailable
+  }
+}
+
 function isNavActive(path: string) {
   return path === '/' ? route.path === '/' : route.path.startsWith(path)
 }
@@ -20,15 +43,44 @@ function isNavActive(path: string) {
 <template>
   <div class="min-h-screen md:flex" :data-privacy="privacy.redact ? 'on' : 'off'">
     <!-- Desktop sidebar -->
-    <aside class="hidden w-60 shrink-0 border-r border-base-300 bg-base-200/50 md:block">
-      <div class="sticky top-0 flex flex-col p-4">
-        <div class="flex items-center gap-2.5 px-2 py-3 mb-2">
+    <aside
+      class="hidden shrink-0 border-r border-base-300 bg-base-200/50 md:block transition-[width] duration-200"
+      :class="collapsed ? 'w-16' : 'w-60'"
+    >
+      <div class="sticky top-0 flex flex-col p-3">
+        <div
+          class="flex items-center gap-2 px-1 py-3 mb-2"
+          :class="{ 'justify-center': collapsed }"
+        >
           <div
-            class="size-8 rounded-lg bg-primary text-primary-content flex items-center justify-center font-bold shadow-xs"
+            class="size-8 rounded-lg bg-primary text-primary-content flex items-center justify-center font-bold shadow-xs shrink-0"
           >
             <Icon icon="lucide:check-circle-2" class="size-5" aria-hidden="true" />
           </div>
-          <span class="text-xl font-bold tracking-tight">Daka</span>
+          <span v-if="!collapsed" class="text-xl font-bold tracking-tight truncate">Daka</span>
+          <button
+            v-if="!collapsed"
+            type="button"
+            class="btn btn-ghost btn-xs btn-circle ml-auto shrink-0"
+            :title="t('nav.collapse')"
+            :aria-label="t('nav.collapse')"
+            data-testid="sidebar-toggle"
+            @click="toggleSidebar"
+          >
+            <Icon icon="lucide:chevron-left" class="size-4" />
+          </button>
+        </div>
+        <div v-if="collapsed" class="flex justify-center mb-2">
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-circle"
+            :title="t('nav.expand')"
+            :aria-label="t('nav.expand')"
+            data-testid="sidebar-toggle"
+            @click="toggleSidebar"
+          >
+            <Icon icon="lucide:chevron-right" class="size-4" />
+          </button>
         </div>
         <nav :aria-label="t('nav.main')">
           <ul class="menu w-full gap-1 p-0">
@@ -37,12 +89,15 @@ function isNavActive(path: string) {
                 :to="n.path"
                 class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
                 :class="{
+                  'justify-center px-0': collapsed,
                   'bg-primary text-primary-content font-semibold shadow-xs': isNavActive(n.path),
                 }"
+                :title="t(n.labelKey)"
+                :aria-label="t(n.labelKey)"
                 :data-testid="`nav-side-${n.name}`"
               >
                 <Icon :icon="n.icon" class="size-4 shrink-0" aria-hidden="true" />
-                <span>{{ t(n.labelKey) }}</span>
+                <span v-if="!collapsed">{{ t(n.labelKey) }}</span>
               </RouterLink>
             </li>
           </ul>
@@ -54,7 +109,22 @@ function isNavActive(path: string) {
       <header
         class="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-base-300 bg-base-100 px-4 py-2"
       >
-        <span class="text-lg font-bold md:invisible">Daka</span>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="hidden md:inline-flex btn btn-ghost btn-sm btn-circle"
+            :title="collapsed ? t('nav.expand') : t('nav.collapse')"
+            :aria-label="collapsed ? t('nav.expand') : t('nav.collapse')"
+            data-testid="sidebar-toggle-header"
+            @click="toggleSidebar"
+          >
+            <Icon
+              :icon="collapsed ? 'lucide:chevron-right' : 'lucide:chevron-left'"
+              class="size-4"
+            />
+          </button>
+          <span class="text-lg font-bold md:invisible">Daka</span>
+        </div>
         <div class="flex items-center gap-2">
           <PrivacyToggle />
           <AvatarMenu />

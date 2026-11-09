@@ -46,7 +46,8 @@ type tokenResponse struct {
 	Scopes          []string   `json:"scopes"`
 	Privacy         string     `json:"privacy"`
 	IncludeNegative bool       `json:"include_negative"`
-	ExpiresAt       time.Time  `json:"expires_at"`
+	CategoryID      *uint      `json:"category_id"`
+	ExpiresAt       *time.Time `json:"expires_at"`
 	Expired         bool       `json:"expired"`
 	RevokedAt       *time.Time `json:"revoked_at"`
 	LastUsedAt      *time.Time `json:"last_used_at"`
@@ -56,9 +57,16 @@ type tokenResponse struct {
 }
 
 func (s *server) newTokenResponse(t dbmodels.ApiToken) tokenResponse {
+	var exp *time.Time
+	var expired bool
+	if !t.IsNeverExpires() {
+		utc := t.ExpiresAt.UTC()
+		exp = &utc
+		expired = !s.now().Before(t.ExpiresAt)
+	}
 	return tokenResponse{
 		ID: t.ID, Name: t.Name, Scopes: strings.Split(t.Scopes, ","), Privacy: string(t.Privacy),
-		IncludeNegative: t.IncludeNegative, ExpiresAt: t.ExpiresAt.UTC(), Expired: !s.now().Before(t.ExpiresAt),
+		IncludeNegative: t.IncludeNegative, CategoryID: t.CategoryID, ExpiresAt: exp, Expired: expired,
 		RevokedAt: t.RevokedAt, LastUsedAt: t.LastUsedAt,
 	}
 }
@@ -66,7 +74,9 @@ func (s *server) newTokenResponse(t dbmodels.ApiToken) tokenResponse {
 type tokenRequest struct {
 	Name            *string `json:"name"`
 	Privacy         *string `json:"privacy"`
+	CategoryID      *uint   `json:"category_id"`
 	ExpiresInDays   *int    `json:"expires_in_days"`
+	NeverExpires    *bool   `json:"never_expires"`
 	IncludeNegative *bool   `json:"include_negative"`
 	// Scope is "feed:read" (default) or "read". It is fixed at creation.
 	Scope *string `json:"scope"`
@@ -136,13 +146,33 @@ func (s *server) postToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	days := defaultTokenDays
-	if req.ExpiresInDays != nil {
-		days = *req.ExpiresInDays
+	var catID *uint
+	if req.CategoryID != nil && *req.CategoryID > 0 {
+		var cat dbmodels.Category
+		if err := s.db.Read().Where("id = ? AND user_id = ?", *req.CategoryID, userID).Take(&cat).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				bad("category not found")
+				return
+			}
+			internalError(w, err, "load category failed")
+			return
+		}
+		c := *req.CategoryID
+		catID = &c
 	}
-	if days < 1 || days > maxTokenDays {
-		bad("expires_in_days must be between 1 and 365")
-		return
+	var exp time.Time
+	if req.NeverExpires != nil && *req.NeverExpires {
+		exp = dbmodels.NeverExpires
+	} else {
+		days := defaultTokenDays
+		if req.ExpiresInDays != nil {
+			days = *req.ExpiresInDays
+		}
+		if days < 1 || days > maxTokenDays {
+			bad("expires_in_days must be between 1 and 365")
+			return
+		}
+		exp = s.now().Add(time.Duration(days) * 24 * time.Hour).UTC()
 	}
 	var n int64
 	if err := s.db.Read().Model(&dbmodels.ApiToken{}).
@@ -161,7 +191,7 @@ func (s *server) postToken(w http.ResponseWriter, r *http.Request) {
 	}
 	t := dbmodels.ApiToken{
 		UserID: userID, TokenHash: hashToken(plain), Name: name, Scopes: string(scope),
-		Privacy: privacy, ExpiresAt: s.now().Add(time.Duration(days) * 24 * time.Hour).UTC(),
+		Privacy: privacy, CategoryID: catID, ExpiresAt: exp,
 	}
 	if req.IncludeNegative != nil {
 		t.IncludeNegative = *req.IncludeNegative
@@ -179,8 +209,8 @@ func (s *server) postToken(w http.ResponseWriter, r *http.Request) {
 	jsonResult(http.StatusCreated, resp).write(w)
 }
 
-// DELETE /api/tokens/{id} (behind reauth): revokes the token. The row is kept
-// (revoked_at) so the listing shows what was revoked; repeating is idempotent.
+// DELETE /api/tokens/{id} (behind reauth): revokes the token. If ?delete=1 is
+// passed, permanently deletes the token row from the database.
 func (s *server) deleteToken(w http.ResponseWriter, r *http.Request) {
 	userID, ok := requestUser(w, r)
 	if !ok {
@@ -198,6 +228,14 @@ func (s *server) deleteToken(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		internalError(w, err, "load token failed")
+		return
+	}
+	if r.URL.Query().Get("delete") == "1" {
+		if err := s.db.Write().Delete(&t).Error; err != nil {
+			internalError(w, err, "delete token failed")
+			return
+		}
+		jsonResult(http.StatusOK, map[string]any{"deleted": true}).write(w)
 		return
 	}
 	if t.RevokedAt == nil {

@@ -66,7 +66,7 @@ func TestSchemaMatchesDesign(t *testing.T) {
 		{&FreezePeriod{}, "freeze_periods", map[string]string{"id": tInt, "user_id": tStr, "start_date": tStr, "end_date": tStr,
 			"reason": tStr}},
 		{&ApiToken{}, "api_tokens", map[string]string{"id": tInt, "user_id": tStr, "token_hash": tStr, "name": tStr,
-			"scopes": tStr, "privacy": tStr, "expires_at": tTime, "include_negative": tBool, "revoked_at": tTime,
+			"scopes": tStr, "privacy": tStr, "expires_at": tTime, "include_negative": tBool, "category_id": tInt, "revoked_at": tTime,
 			"last_used_at": tTime}},
 		{&IdempotencyKey{}, "idempotency_keys", map[string]string{"user_id": tStr, "key": tStr, "status_code": tInt,
 			"response_body": tStr, "created_at": tTime}},

@@ -57,7 +57,8 @@ func TestTokenLifecycle(t *testing.T) {
 	require.True(t, strings.HasPrefix(c.Token, "dk_"))
 	require.Equal(t, []string{"feed:read"}, c.Scopes)
 	require.Equal(t, "exclude_sensitive", c.Privacy)
-	require.Equal(t, fixedNow.Add(defaultTokenDays*24*time.Hour), c.ExpiresAt)
+	require.NotNil(t, c.ExpiresAt)
+	require.Equal(t, fixedNow.Add(defaultTokenDays*24*time.Hour), *c.ExpiresAt)
 	require.Equal(t, feedPath+"?token="+c.Token, c.FeedPath)
 
 	// Only the hash is stored.
@@ -90,6 +91,45 @@ func TestTokenLifecycle(t *testing.T) {
 	require.Equal(t, 401, e.feed(nil, "GET", feedPath+"?token="+c.Token, nil).Code)
 	require.Equal(t, 404, e.do("DELETE", "/api/tokens/9999", "", "", nil).Code)
 	require.Contains(t, e.do("GET", "/api/tokens", "", "", nil).Body.String(), `"revoked_at":"`)
+
+	// Revoked token can be permanently deleted with ?delete=1.
+	require.Equal(t, 200, e.do("DELETE", fmt.Sprintf("/api/tokens/%d?delete=1", c.ID), "", "", nil).Code)
+	require.Equal(t, 404, e.do("DELETE", fmt.Sprintf("/api/tokens/%d", c.ID), "", "", nil).Code)
+	require.NotContains(t, e.do("GET", "/api/tokens", "", "", nil).Body.String(), `"name":"Laptop"`)
+}
+
+func TestTokenNeverExpiresAndCategoryFilter(t *testing.T) {
+	e := newEnv(t)
+	catA := dbmodels.Category{UserID: "u1", Name: "Work"}
+	require.NoError(t, e.db.Write().Create(&catA).Error)
+	catB := dbmodels.Category{UserID: "u1", Name: "Personal"}
+	require.NoError(t, e.db.Write().Create(&catB).Error)
+
+	e.dailyItem("u1", func(it *dbmodels.Item) { it.Name = "Deep Work"; it.CategoryID = &catA.ID })
+	e.dailyItem("u1", func(it *dbmodels.Item) { it.Name = "Therapy Notes"; it.CategoryID = &catA.ID; it.IsSensitive = true })
+	e.dailyItem("u1", func(it *dbmodels.Item) { it.Name = "Workout"; it.CategoryID = &catB.ID })
+
+	// Token with never_expires: true
+	cNever := e.mkToken("u1", m{"name": "Never", "never_expires": true, "category_id": catA.ID})
+	require.Nil(t, cNever.ExpiresAt)
+	require.False(t, cNever.Expired)
+	require.Equal(t, &catA.ID, cNever.CategoryID)
+
+	// Feed query 5 years in the future still works.
+	e.now = e.now.Add(5 * 365 * 24 * time.Hour)
+	resp := e.feed(nil, "GET", feedPath+"?token="+cNever.Token, nil)
+	require.Equal(t, 200, resp.Code)
+	body := resp.Body.String()
+	require.Contains(t, body, "SUMMARY:Deep Work")
+	require.NotContains(t, body, "SUMMARY:Workout")
+	require.NotContains(t, body, "Therapy Notes")
+
+	// When catA is deleted with uncategorize=1, token scoped to catA is revoked to prevent scope widening.
+	require.Equal(t, 200, e.do("DELETE", fmt.Sprintf("/api/categories/%d?uncategorize=1", catA.ID), "u1", "", nil).Code)
+	var row dbmodels.ApiToken
+	require.NoError(t, e.db.Write().First(&row, cNever.ID).Error)
+	require.NotNil(t, row.RevokedAt)
+	require.Equal(t, 401, e.feed(nil, "GET", feedPath+"?token="+cNever.Token, nil).Code)
 }
 
 func TestTokenCreateValidation(t *testing.T) {
@@ -108,7 +148,8 @@ func TestTokenCreateValidation(t *testing.T) {
 		require.Equal(t, 400, e.do("POST", "/api/tokens", "", "", body).Code, name)
 	}
 	c := e.mkToken("", m{"name": "x", "expires_in_days": 1, "privacy": "all"})
-	require.Equal(t, fixedNow.Add(24*time.Hour), c.ExpiresAt)
+	require.NotNil(t, c.ExpiresAt)
+	require.Equal(t, fixedNow.Add(24*time.Hour), *c.ExpiresAt)
 	require.Equal(t, "all", c.Privacy)
 }
 

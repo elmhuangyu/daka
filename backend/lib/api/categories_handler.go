@@ -282,6 +282,20 @@ func (s *server) deleteCategory(w http.ResponseWriter, r *http.Request) {
 				return result{}, err
 			}
 		}
+		if moveTo != nil {
+			if err := tx.Model(&dbmodels.ApiToken{}).Where("user_id = ? AND category_id = ?", userID, id).
+				UpdateColumn("category_id", moveTo).Error; err != nil {
+				return result{}, err
+			}
+		} else {
+			// A token scoped to this category must be revoked so it does not
+			// unintentionally widen its scope to all categories.
+			now := s.now().UTC()
+			if err := tx.Model(&dbmodels.ApiToken{}).Where("user_id = ? AND category_id = ? AND revoked_at IS NULL", userID, id).
+				UpdateColumn("revoked_at", now).Error; err != nil {
+				return result{}, err
+			}
+		}
 		if err := tx.Delete(&dbmodels.Category{}, c.ID).Error; err != nil {
 			return result{}, err
 		}

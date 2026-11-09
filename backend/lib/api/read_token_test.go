@@ -32,7 +32,8 @@ func TestReadTokenCreation(t *testing.T) {
 	require.Equal(t, []string{"read"}, c.Scopes)
 	require.Equal(t, "exclude_sensitive", c.Privacy)
 	require.Empty(t, c.FeedPath)
-	require.Equal(t, fixedNow.Add(30*24*time.Hour), c.ExpiresAt)
+	require.NotNil(t, c.ExpiresAt)
+	require.Equal(t, fixedNow.Add(30*24*time.Hour), *c.ExpiresAt)
 	var row dbmodels.ApiToken
 	require.NoError(t, e.db.Write().First(&row, c.ID).Error)
 	require.Equal(t, hashToken(c.Token), row.TokenHash)

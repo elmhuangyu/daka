@@ -735,7 +735,8 @@ export interface TokenDto {
   scopes: string[]
   privacy: string
   include_negative: boolean
-  expires_at: string
+  category_id?: number | null
+  expires_at: string | null
   expired: boolean
   revoked_at: string | null
   last_used_at: string | null
@@ -750,8 +751,10 @@ export async function listTokens(): Promise<TokenDto[]> {
 
 export function createToken(body: {
   name: string
-  privacy: string
-  expires_in_days: number
+  privacy?: string
+  category_id?: number | null
+  expires_in_days?: number
+  never_expires?: boolean
   include_negative?: boolean
 }): Promise<TokenDto> {
   return request<TokenDto>('/api/tokens', jsonInit('POST', body))
@@ -759,6 +762,10 @@ export function createToken(body: {
 
 export function revokeToken(id: number): Promise<unknown> {
   return request(`/api/tokens/${id}`, { method: 'DELETE' })
+}
+
+export function deleteToken(id: number): Promise<unknown> {
+  return request(`/api/tokens/${id}?delete=1`, { method: 'DELETE' })
 }
 
 export interface TelegramStatus {

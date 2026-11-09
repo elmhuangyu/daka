@@ -1,5 +1,9 @@
 @import 'tailwindcss';
 @plugin 'daisyui';
+@plugin './themes/catppuccinTheme.latte.ts';
+@plugin './themes/catppuccinTheme.frappe.ts';
+@plugin './themes/catppuccinTheme.macchiato.ts';
+@plugin './themes/catppuccinTheme.mocha.ts';
 
 .error {
   color: var(--color-error);

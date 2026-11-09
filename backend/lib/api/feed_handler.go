@@ -90,7 +90,7 @@ func (s *server) authenticateToken(w http.ResponseWriter, r *http.Request, tok s
 		return dbmodels.ApiToken{}, false
 	}
 	if subtle.ConstantTimeCompare([]byte(hash), []byte(t.TokenHash)) != 1 ||
-		t.RevokedAt != nil || !s.now().Before(t.ExpiresAt) || !hasScope(t.Scopes, scope) {
+		t.RevokedAt != nil || (!t.IsNeverExpires() && !s.now().Before(t.ExpiresAt)) || !hasScope(t.Scopes, scope) {
 		return fail()
 	}
 	s.feedFail.Success(ip, prefix)
@@ -186,6 +186,9 @@ func (s *server) buildFeed(t dbmodels.ApiToken) ([]byte, error) {
 	cal := s.calendarFor(st)
 
 	q := g.Where("user_id = ? AND archived = ?", t.UserID, false)
+	if t.CategoryID != nil && *t.CategoryID > 0 {
+		q = q.Where("category_id = ?", *t.CategoryID)
+	}
 	if !t.IncludeNegative {
 		q = q.Where("polarity <> ?", dbmodels.PolarityNegative)
 	}

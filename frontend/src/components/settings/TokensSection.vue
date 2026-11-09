@@ -1,17 +1,28 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Icon } from '@iconify/vue'
-import { createToken, describeError, listTokens, revokeToken, type TokenDto } from '../../api'
+import {
+  createToken,
+  deleteToken,
+  describeError,
+  listCategories,
+  listTokens,
+  revokeToken,
+  type CategoryDto,
+  type TokenDto,
+} from '../../api'
 import { useI18n } from '../../i18n'
+import { useSettingsStore } from '../../stores/settings'
 
 const { t } = useI18n()
+const settingsStore = useSettingsStore()
 
 const tokens = ref<TokenDto[]>([])
+const categories = ref<CategoryDto[]>([])
 const error = ref('')
 const name = ref('')
-const days = ref(90)
-const privacy = ref('exclude_sensitive')
-const includeNegative = ref(false)
+const expiry = ref<string>('90')
+const selectedCategory = ref<string>('')
 const busy = ref(false)
 
 // The plaintext lives only in this ref while the dialog is open.
@@ -24,7 +35,15 @@ const feedUrl = computed(() =>
 
 async function load() {
   try {
-    tokens.value = await listTokens()
+    const [tks, cats] = await Promise.allSettled([listTokens(), listCategories()])
+    if (tks.status === 'fulfilled') {
+      tokens.value = tks.value
+    } else {
+      error.value = describeError(tks.reason)
+    }
+    if (cats.status === 'fulfilled') {
+      categories.value = cats.value
+    }
   } catch (e) {
     error.value = describeError(e)
   }
@@ -42,12 +61,16 @@ async function create() {
   busy.value = true
   error.value = ''
   try {
-    const tk = await createToken({
+    const payload: Parameters<typeof createToken>[0] = {
       name: name.value.trim(),
-      privacy: privacy.value,
-      expires_in_days: days.value,
-      include_negative: includeNegative.value,
-    })
+      category_id: selectedCategory.value ? Number(selectedCategory.value) : null,
+    }
+    if (expiry.value === 'never') {
+      payload.never_expires = true
+    } else {
+      payload.expires_in_days = Number(expiry.value)
+    }
+    const tk = await createToken(payload)
     created.value = { name: tk.name, feed_path: tk.feed_path ?? '' }
     name.value = ''
     await load()
@@ -77,15 +100,30 @@ async function revoke(tk: TokenDto) {
   }
 }
 
+async function remove(tk: TokenDto) {
+  error.value = ''
+  try {
+    await deleteToken(tk.id)
+    await load()
+  } catch (e) {
+    error.value = describeError(e)
+  }
+}
+
 const status = (tk: TokenDto) => (tk.revoked_at ? 'revoked' : tk.expired ? 'expired' : 'active')
-const day = (s: string | null) => (s ? s.slice(0, 10) : t('settings.tokens.never'))
-const PRIVACY_KEYS = {
-  exclude_sensitive: 'settings.tokens.excluded',
-  anonymize_sensitive: 'settings.tokens.anonymized',
-  all: 'settings.tokens.included',
-} as const
-const privacyText = (p: string) =>
-  p in PRIVACY_KEYS ? t(PRIVACY_KEYS[p as keyof typeof PRIVACY_KEYS]) : p
+const categoryText = (catId?: number | null) => {
+  if (!catId) return t('settings.tokens.allCategories')
+  const found = categories.value.find((c) => c.id === catId)
+  return found ? settingsStore.categoryLabel(found) : t('settings.tokens.unknownCategory')
+}
+const expiresText = (tk: TokenDto) =>
+  tk.expires_at
+    ? t('settings.tokens.expiresAt', { date: tk.expires_at.slice(0, 10) })
+    : t('settings.tokens.neverExpires')
+const usedText = (tk: TokenDto) =>
+  tk.last_used_at
+    ? t('settings.tokens.lastUsedAt', { date: tk.last_used_at.slice(0, 10) })
+    : t('settings.tokens.neverUsed')
 </script>
 
 <template>
@@ -139,21 +177,32 @@ const privacyText = (p: string) =>
             <span class="text-xs opacity-60">
               {{
                 t('settings.tokens.meta', {
-                  privacy: privacyText(tk.privacy),
-                  expires: day(tk.expires_at),
-                  used: day(tk.last_used_at),
+                  category: categoryText(tk.category_id),
+                  expires: expiresText(tk),
+                  used: usedText(tk),
                 })
               }}
             </span>
           </div>
-          <button
-            v-if="status(tk) === 'active'"
-            class="btn btn-sm btn-ghost text-error hover:bg-error/10 text-xs"
-            data-testid="tok-revoke"
-            @click="revoke(tk)"
-          >
-            {{ t('settings.tokens.revoke') }}
-          </button>
+          <div class="flex items-center gap-2">
+            <button
+              v-if="status(tk) === 'active'"
+              class="btn btn-sm btn-ghost text-error hover:bg-error/10 text-xs"
+              data-testid="tok-revoke"
+              @click="revoke(tk)"
+            >
+              {{ t('settings.tokens.revoke') }}
+            </button>
+            <button
+              v-else
+              class="btn btn-sm btn-ghost text-error hover:bg-error/10 text-xs gap-1.5"
+              data-testid="tok-delete"
+              @click="remove(tk)"
+            >
+              <Icon icon="lucide:trash-2" class="size-3.5" aria-hidden="true" />
+              {{ t('settings.tokens.delete') }}
+            </button>
+          </div>
         </li>
         <li
           v-if="!tokens.length"
@@ -180,38 +229,34 @@ const privacyText = (p: string) =>
             />
           </label>
           <label class="form-control gap-1">
-            <span class="label-text text-xs font-medium">{{ t('settings.tokens.expiresIn') }}</span>
-            <input
-              v-model.number="days"
-              type="number"
-              min="1"
-              max="365"
-              class="input input-bordered input-sm w-full"
-              data-testid="tok-days"
-            />
+            <span class="label-text text-xs font-medium">{{ t('settings.tokens.category') }}</span>
+            <select
+              v-model="selectedCategory"
+              class="select select-bordered select-sm w-full"
+              data-testid="tok-category"
+            >
+              <option value="">{{ t('settings.tokens.allCategories') }}</option>
+              <option v-for="c in categories" :key="c.id" :value="String(c.id)">
+                {{ settingsStore.categoryLabel(c) }}
+              </option>
+            </select>
           </label>
           <label class="form-control gap-1">
-            <span class="label-text text-xs font-medium">{{
-              t('settings.tokens.sensitiveItems')
-            }}</span>
+            <span class="label-text text-xs font-medium">{{ t('settings.tokens.expiresIn') }}</span>
             <select
-              v-model="privacy"
+              v-model="expiry"
               class="select select-bordered select-sm w-full"
-              data-testid="tok-privacy"
+              data-testid="tok-expiry"
             >
-              <option value="exclude_sensitive">{{ t('settings.tokens.excluded') }}</option>
-              <option value="anonymize_sensitive">{{ t('settings.tokens.anonymized') }}</option>
-              <option value="all">{{ t('settings.tokens.included') }}</option>
+              <option value="30">{{ t('settings.tokens.days30') }}</option>
+              <option value="90">{{ t('settings.tokens.days90') }}</option>
+              <option value="180">{{ t('settings.tokens.days180') }}</option>
+              <option value="365">{{ t('settings.tokens.days365') }}</option>
+              <option value="never">{{ t('settings.tokens.neverExpires') }}</option>
             </select>
           </label>
         </div>
-        <div
-          class="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-base-300/50"
-        >
-          <label class="label cursor-pointer gap-2 py-0">
-            <input v-model="includeNegative" type="checkbox" class="checkbox checkbox-sm" />
-            <span class="label-text text-xs">{{ t('settings.tokens.includeNegative') }}</span>
-          </label>
+        <div class="flex items-center justify-end gap-3 pt-1 border-t border-base-300/50">
           <button
             class="btn btn-sm btn-primary gap-1.5"
             type="submit"

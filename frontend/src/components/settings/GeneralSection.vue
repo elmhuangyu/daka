@@ -17,6 +17,36 @@ async function changeLanguage() {
   lang.value = await setLocale(lang.value, { persist: true })
 }
 
+function getEffectiveTheme(): string {
+  try {
+    const attr =
+      typeof document !== 'undefined' ? document.documentElement.getAttribute('data-theme') : null
+    if (attr) return attr
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('theme') : null
+    if (saved) return saved
+  } catch {
+    // storage may be restricted
+  }
+  if (
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-color-scheme: dark)').matches
+  ) {
+    return 'dark'
+  }
+  return 'light'
+}
+
+const theme = ref(getEffectiveTheme())
+
+function changeTheme() {
+  document.documentElement.setAttribute('data-theme', theme.value)
+  try {
+    localStorage.setItem('theme', theme.value)
+  } catch {
+    // localStorage may be unavailable
+  }
+}
+
 const settings = ref<CalendarSettings | null>(null)
 const error = ref('')
 const saved = ref(false)
@@ -119,6 +149,28 @@ async function save() {
             </option>
           </select>
           <span class="text-[11px] opacity-60">{{ t('settings.language.hint') }}</span>
+        </label>
+
+        <label class="form-control gap-1.5">
+          <span class="label-text font-medium text-xs">{{ t('settings.theme.label') }}</span>
+          <select
+            v-model="theme"
+            class="select select-bordered select-sm md:select-md w-full"
+            data-testid="g-theme"
+            @change="changeTheme"
+          >
+            <optgroup :label="t('settings.theme.standard')">
+              <option value="light">{{ t('settings.theme.light') }}</option>
+              <option value="dark">{{ t('settings.theme.dark') }}</option>
+            </optgroup>
+            <optgroup :label="t('settings.theme.catppuccin')">
+              <option value="latte">{{ t('settings.theme.latte') }}</option>
+              <option value="frappe">{{ t('settings.theme.frappe') }}</option>
+              <option value="macchiato">{{ t('settings.theme.macchiato') }}</option>
+              <option value="mocha">{{ t('settings.theme.mocha') }}</option>
+            </optgroup>
+          </select>
+          <span class="text-[11px] opacity-60">{{ t('settings.theme.hint') }}</span>
         </label>
 
         <label class="form-control gap-1.5">

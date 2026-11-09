@@ -179,6 +179,9 @@ importers:
         specifier: ^5.4.0
         version: 5.4.0(@vue/compiler-sfc@3.5.45)(pinia@4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.45(typescript@6.0.3)))(rolldown@1.2.16)(vite@8.3.6(jiti@2.7.0))(vue@3.5.45(typescript@6.0.3))
     devDependencies:
+      '@catppuccin/daisyui':
+        specifier: ^2.1.1
+        version: 2.1.1(tailwindcss@4.3.5)
       '@tailwindcss/vite':
         specifier: ^4.3.5
         version: 4.3.5(vite@8.3.6(jiti@2.7.0))
@@ -251,6 +254,14 @@ packages:
   '@babel/types@8.1.0':
     resolution: {integrity: sha512-8V8aSTDx012YPmDQF30vrokyxVFdRAU2YBS2VzrnfLAGkP8floVnjckwgFcD0Jrvf6GWMSRdCrYVsk3tyMwZRg==}
     engines: {node: ^22.18.0 || >=24.11.0}
+
+  '@catppuccin/daisyui@2.1.1':
+    resolution: {integrity: sha512-PrZttjj8kwfDBJ34sR+DN25Xtjvxx4T5p8uu/iiGYZR8UOsNwzMlO/alYDBwwTOLzP1NKLNRax09kCT39+QM+A==}
+    peerDependencies:
+      tailwindcss: ^4.0.17
+
+  '@catppuccin/palette@1.8.0':
+    resolution: {integrity: sha512-qXhwKiLzQomUygUJYB36YAFgs+dET5bIocfkiaFIatQF5Pwc7L112TlF9P8J5Oqs3x3XTjYSucG0ncHXSCuk7Q==}
 
   '@exodus/bytes@1.16.0':
     resolution: {integrity: sha512-IcpW84uEn3N7ETtNZMlxKhfl6Pec8rUNGOTBtWbK1FKhJxIFAptZyVrvVRVBimAJxJCgc3PxepxkdWWG4DVzfA==}
@@ -1536,6 +1547,13 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 8.0.8
       '@babel/helper-validator-identifier': 8.0.6
+
+  '@catppuccin/daisyui@2.1.1(tailwindcss@4.3.5)':
+    dependencies:
+      '@catppuccin/palette': 1.8.0
+      tailwindcss: 4.3.5
+
+  '@catppuccin/palette@1.8.0': {}
 
   '@exodus/bytes@1.16.0': {}
 
