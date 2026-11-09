@@ -18,8 +18,8 @@ import { LOCALE_STORAGE_KEY } from './locales'
 function mockStorage(initial: Record<string, string> = {}) {
   const data = new Map(Object.entries(initial))
   const store = {
-    getItem: vi.fn((k: string) => data.get(k) ?? null),
-    setItem: vi.fn((k: string, v: string) => void data.set(k, v)),
+    getItem: vi.fn<(k: string) => string | null>((k: string) => data.get(k) ?? null),
+    setItem: vi.fn<(k: string, v: string) => void>((k: string, v: string) => void data.set(k, v)),
   }
   vi.stubGlobal('localStorage', store)
   return { data, store }
@@ -48,15 +48,16 @@ describe('catalogs', () => {
 
   it('uses the same placeholders in every locale', () => {
     for (const k of Object.keys(en) as (keyof typeof en)[]) {
-      expect(placeholders(zhCN[k]), k).toEqual(placeholders(en[k]))
+      expect([k, placeholders(zhCN[k])]).toEqual([k, placeholders(en[k])])
     }
   })
 
   it('every plural family has the other form', () => {
-    for (const k of Object.keys(en)) {
+    const missing = Object.keys(en).filter((k) => {
       const m = /^(.*)\.(one|two|few|many|zero)$/.exec(k)
-      if (m) expect(en, `${m[1]}.other`).toHaveProperty(`${m[1]}.other`)
-    }
+      return m !== null && !(`${m[1]}.other` in en)
+    })
+    expect(missing).toEqual([])
   })
 
   it('lists each supported locale once with a native label', () => {
@@ -99,7 +100,7 @@ describe('detectLocale', () => {
     mockStorage()
     for (const tag of ['zh', 'zh-CN', 'zh-TW', 'zh-Hans-CN']) {
       mockLanguages([tag])
-      expect(detectLocale(), tag).toBe('zh-CN')
+      expect([tag, detectLocale()]).toEqual([tag, 'zh-CN'])
     }
   })
 

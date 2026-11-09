@@ -19,7 +19,7 @@ let status: { oidc_enabled: boolean; login_required: boolean; authenticated: boo
 beforeEach(() => {
   localStorage.clear()
   status = { oidc_enabled: false, login_required: true, authenticated: true }
-  fetchMock = vi.fn(async (url: string) => {
+  fetchMock = vi.fn<(url: string) => Promise<Response>>(async (url: string) => {
     if (url === '/api/auth/status') return jsonRes(status)
     if (url === '/api/auth/me') return jsonRes({ id: 'u', name: 'Alice', csrf_token: 't' })
     if (url === '/api/auth/logout') {
@@ -116,7 +116,7 @@ describe('layout', () => {
   })
 
   it('avatar button and menu display avatar image when avatar_url is provided, falling back to initial on error', async () => {
-    fetchMock = vi.fn(async (url: string) => {
+    fetchMock = vi.fn<(url: string) => Promise<Response>>(async (url: string) => {
       if (url === '/api/auth/status') return jsonRes(status)
       if (url === '/api/auth/me')
         return jsonRes({

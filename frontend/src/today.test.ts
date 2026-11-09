@@ -52,24 +52,26 @@ let fetchMock: ReturnType<typeof vi.fn>
 beforeEach(() => {
   localStorage.clear()
   world = { today: [], items: [], cats: [], logs: [], progress: { done: 0, total: 0 } }
-  fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-    url = String(url)
-    if (url === '/api/auth/status')
-      return jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
-    if (url.startsWith('/api/view/today'))
-      return jsonRes({
-        date: '2026-11-07',
-        weekday: 6,
-        timezone: 'UTC',
-        progress: world.progress,
-        items: world.today,
-      })
-    if (url.startsWith('/api/items')) return jsonRes({ items: world.items })
-    if (url.startsWith('/api/categories')) return jsonRes({ categories: world.cats })
-    if (url.startsWith('/api/checkins') && (!init || !init.method))
-      return jsonRes({ checkins: world.logs, next_cursor: null })
-    return jsonRes({})
-  })
+  fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(
+    async (url: string, init?: RequestInit) => {
+      url = String(url)
+      if (url === '/api/auth/status')
+        return jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
+      if (url.startsWith('/api/view/today'))
+        return jsonRes({
+          date: '2026-11-07',
+          weekday: 6,
+          timezone: 'UTC',
+          progress: world.progress,
+          items: world.today,
+        })
+      if (url.startsWith('/api/items')) return jsonRes({ items: world.items })
+      if (url.startsWith('/api/categories')) return jsonRes({ categories: world.cats })
+      if (url.startsWith('/api/checkins') && (!init || !init.method))
+        return jsonRes({ checkins: world.logs, next_cursor: null })
+      return jsonRes({})
+    },
+  )
   vi.stubGlobal('fetch', fetchMock)
 })
 afterEach(() => {

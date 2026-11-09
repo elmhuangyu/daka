@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError, describeError } from '../api'
-import apiSource from '../api.ts?raw'
 import { en } from './en'
 import {
   ERROR_KEYS,
@@ -12,18 +11,22 @@ import {
 import { setLocale } from './index'
 import zhCN from './zh-CN'
 
+const apiSource = Object.values(
+  import.meta.glob<string>('../api.ts', { query: '?raw', import: 'default', eager: true }),
+)[0]!
+
 describe('error code mapping', () => {
   it('maps every code to an existing message key in every locale', () => {
     for (const [code, key] of Object.entries({ ...ERROR_KEYS, ...EXT_CAL_ERROR_KEYS })) {
-      expect(en, code).toHaveProperty(key)
-      expect(zhCN, code).toHaveProperty(key)
+      expect({ code, has: key in en }).toEqual({ code, has: true })
+      expect({ code, has: key in zhCN }).toEqual({ code, has: true })
     }
   })
 
   it('maps every error code that api.ts mentions', () => {
     const codes = new Set([...apiSource.matchAll(/code === '([\w ]+)'/g)].map((m) => m[1]!))
     expect(codes.size).toBeGreaterThan(0)
-    for (const c of codes) expect(errorKeyForCode(c), c).not.toBeNull()
+    expect([...codes].filter((c) => errorKeyForCode(c) === null)).toEqual([])
   })
 
   it('falls back to a status based key for unknown codes', () => {

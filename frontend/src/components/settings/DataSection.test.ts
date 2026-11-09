@@ -50,8 +50,8 @@ beforeEach(() => {
     }
     return jsonRes({})
   })
-  URL.createObjectURL = vi.fn(() => 'blob:x')
-  URL.revokeObjectURL = vi.fn()
+  URL.createObjectURL = vi.fn<(obj: Blob | MediaSource) => string>(() => 'blob:x')
+  URL.revokeObjectURL = vi.fn<(url: string) => void>()
 })
 
 async function mountSection() {

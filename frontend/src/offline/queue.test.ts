@@ -51,7 +51,7 @@ describe('OfflineQueue', () => {
   })
 
   it('refreshes the CSRF token before every replay', async () => {
-    const before = vi.fn()
+    const before = vi.fn<() => void>()
     const { q } = make(async () => undefined, before)
     await q.enqueue({ item_id: 1, mode: 'set' }, 'a')
     await q.enqueue({ item_id: 2, mode: 'set' }, 'b')
@@ -87,7 +87,7 @@ describe('OfflineQueue', () => {
 
   it('pauses on 401 and on reauth_required until a manual retry', async () => {
     let err: ApiError | null = new ApiError('unauthorized', 401, 'unauthorized')
-    const send = vi.fn(async () => {
+    const send = vi.fn<() => Promise<void>>(async () => {
       if (err) throw err
     })
     const { q } = make(send)
@@ -107,7 +107,7 @@ describe('OfflineQueue', () => {
   })
 
   it('does not double-send when replay is called concurrently', async () => {
-    const send = vi.fn(async () => undefined)
+    const send = vi.fn<() => Promise<void>>(async () => undefined)
     const { q } = make(send)
     await q.enqueue({ item_id: 1, mode: 'set' }, 'a')
     await Promise.all([q.replay(), q.replay()])
@@ -128,7 +128,7 @@ describe('OfflineQueue', () => {
 
   it('a clear during a running replay stops it', async () => {
     let release!: () => void
-    const send = vi.fn(() => new Promise<void>((r) => (release = r)))
+    const send = vi.fn<() => Promise<void>>(() => new Promise<void>((r) => (release = r)))
     const { q, store } = make(send)
     await q.enqueue({ item_id: 1, mode: 'set' }, 'a')
     await q.enqueue({ item_id: 2, mode: 'set' }, 'b')
@@ -145,12 +145,12 @@ describe('OfflineQueue', () => {
     const { q, store } = make(async () => undefined)
     await expect(
       q.enqueue({ item_id: 1, mode: 'append', adhoc: true, note: 'Name' }, 'a'),
-    ).rejects.toThrow()
+    ).rejects.toThrow(Error)
     expect(await store.all()).toEqual([])
   })
 
   it('scheduleRetry arms a single timer that replays', async () => {
-    const send = vi.fn(async () => undefined)
+    const send = vi.fn<() => Promise<void>>(async () => undefined)
     const { q, timers } = make(send)
     await q.enqueue({ item_id: 1, mode: 'set' }, 'a')
     q.scheduleRetry()

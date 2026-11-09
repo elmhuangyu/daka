@@ -43,7 +43,7 @@ function scan(node: Node, found: string[]): void {
 
 describe('templates have no hard-coded UI text', () => {
   for (const [file, source] of Object.entries(FILES)) {
-    it(file.replace('../', ''), () => {
+    it(`${file.replace('../', '')}`, () => {
       const { descriptor } = parse(source, { filename: file })
       const found: string[] = []
       if (descriptor.template?.ast) scan(descriptor.template.ast as unknown as Node, found)

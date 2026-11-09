@@ -14,7 +14,9 @@ let me: () => Response
 beforeEach(() => {
   resetCsrf()
   me = () => jsonRes({ id: 'u', name: 'U', csrf_token: 'tok-1' })
-  fetchMock = vi.fn(async (url: string) => (url === '/api/auth/me' ? me() : jsonRes({})))
+  fetchMock = vi.fn<(url: string) => Promise<Response>>(async (url: string) =>
+    url === '/api/auth/me' ? me() : jsonRes({}),
+  )
   vi.stubGlobal('fetch', fetchMock)
 })
 afterEach(() => {

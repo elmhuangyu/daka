@@ -32,7 +32,9 @@ beforeEach(() => {
     '/api/auth/status': () =>
       jsonRes({ oidc_enabled: false, login_required: true, authenticated: true }),
   }
-  fetchMock = vi.fn(async (url: string) => (routes[url] ? routes[url]() : jsonRes({})))
+  fetchMock = vi.fn<(url: string) => Promise<Response>>(async (url: string) =>
+    routes[url] ? routes[url]() : jsonRes({}),
+  )
   vi.stubGlobal('fetch', fetchMock)
 })
 afterEach(() => {
@@ -70,18 +72,18 @@ describe('api auth helpers', () => {
   })
 
   it('calls onUnauthorized on 401 unauthorized but not on invalid_secret', async () => {
-    const onUnauthorized = vi.fn()
+    const onUnauthorized = vi.fn<() => void>()
     setAuthHooks({ onUnauthorized })
     routes['/api/checkins'] = () => jsonRes({ error: 'unauthorized' }, 401)
-    await expect(setCheckin(1, true)).rejects.toThrow()
+    await expect(setCheckin(1, true)).rejects.toThrow(Error)
     expect(onUnauthorized).toHaveBeenCalledTimes(1)
     routes['/api/checkins'] = () => jsonRes({ error: 'invalid_secret' }, 401)
-    await expect(setCheckin(1, true)).rejects.toThrow()
+    await expect(setCheckin(1, true)).rejects.toThrow(Error)
     expect(onUnauthorized).toHaveBeenCalledTimes(1)
   })
 
   it('retries once after reauth_required when the hook resolves true', async () => {
-    const onReauthRequired = vi.fn(async () => true)
+    const onReauthRequired = vi.fn<() => Promise<boolean>>(async () => true)
     setAuthHooks({ onReauthRequired })
     let n = 0
     routes['/api/checkins'] = () =>
@@ -148,7 +150,7 @@ describe('auth store', () => {
     const auth = useAuthStore()
     await auth.init()
     routes['/api/auth/logout'] = () => jsonRes({ error: 'internal error' }, 500)
-    await expect(auth.logout()).rejects.toThrow()
+    await expect(auth.logout()).rejects.toThrow(Error)
     expect(auth.authenticated).toBe(false)
     expect(auth.user).toBeNull()
   })
@@ -157,7 +159,7 @@ describe('auth store', () => {
     const auth = useAuthStore()
     await auth.init()
     routes['/api/checkins'] = () => jsonRes({ error: 'unauthorized' }, 401)
-    await expect(setCheckin(1, true)).rejects.toThrow()
+    await expect(setCheckin(1, true)).rejects.toThrow(Error)
     expect(auth.authenticated).toBe(false)
   })
 
@@ -237,7 +239,7 @@ describe('auth store', () => {
     setActivePinia(pinia)
     const auth = useAuthStore()
     await auth.init()
-    const assign = vi.fn()
+    const assign = vi.fn<(url: string) => void>()
     vi.stubGlobal('location', { ...window.location, assign })
     const w = mount(ReauthModal, { global: { plugins: [pinia] } })
     void auth.requestReauth()
