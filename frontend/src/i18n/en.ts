@@ -125,6 +125,7 @@ export const en = {
   'common.edit': 'Edit',
   'common.add': 'Add',
   'common.dismiss': 'Dismiss',
+  'common.clear': 'Clear',
   'common.countSuffix': '{title} ({count})',
   'common.days.one': '{count} day',
   'common.days.other': '{count} days',

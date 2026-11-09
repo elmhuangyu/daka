@@ -35,7 +35,8 @@ import {
 import { localIso, WEEKDAYS } from '../rrule'
 import { usePrivacyStore } from '../stores/privacy'
 import { useI18n } from '../i18n'
-import { monthName, weekdayName } from '../i18n/format'
+import { formatCustomDate, monthName, weekdayName } from '../i18n/format'
+import DateInput from '../components/DateInput.vue'
 
 const { t, tParts } = useI18n()
 
@@ -585,12 +586,7 @@ const showHoliday = computed(() => holidayAllowed(form))
             </select>
             <label v-if="form.periodKind === 'once'" class="flex items-center gap-2 text-sm pt-1">
               {{ t('items.editor.dueDate') }}
-              <input
-                v-model="form.dtstart"
-                type="date"
-                class="input input-bordered input-sm"
-                data-testid="f-due-date"
-              />
+              <DateInput v-model="form.dtstart" data-testid="f-due-date" />
             </label>
             <label v-if="form.periodKind === 'interval'" class="flex items-center gap-2">
               <template v-for="(p, i) in tParts('items.editor.everyNDays')" :key="i">
@@ -669,21 +665,11 @@ const showHoliday = computed(() => holidayAllowed(form))
             </label>
             <label v-if="form.periodKind !== 'once'" class="flex items-center gap-2 text-sm pt-1">
               {{ t('items.editor.startsOn') }}
-              <input
-                v-model="form.dtstart"
-                type="date"
-                class="input input-bordered input-sm"
-                data-testid="f-starts-on"
-              />
+              <DateInput v-model="form.dtstart" data-testid="f-starts-on" />
             </label>
             <label v-if="form.periodKind !== 'once'" class="flex items-center gap-2 text-sm pt-1">
               {{ t('items.editor.endsOn') }}
-              <input
-                v-model="form.until"
-                type="date"
-                class="input input-bordered input-sm"
-                data-testid="f-ends-on"
-              />
+              <DateInput v-model="form.until" clearable data-testid="f-ends-on" />
             </label>
             <fieldset
               v-if="showHoliday"
@@ -845,7 +831,7 @@ const showHoliday = computed(() => holidayAllowed(form))
             :key="d"
             class="badge badge-neutral badge-sm font-mono text-[11px]"
           >
-            {{ d }}
+            {{ formatCustomDate(d) }}
           </li>
         </ul>
         <p v-if="preview.note" class="text-xs opacity-60">{{ preview.note }}</p>
@@ -872,7 +858,7 @@ const showHoliday = computed(() => holidayAllowed(form))
             !retro
               ? t('items.editor.ruleWarningToday')
               : effectiveFrom
-                ? t('items.editor.ruleWarningDate', { date: effectiveFrom })
+                ? t('items.editor.ruleWarningDate', { date: formatCustomDate(effectiveFrom) })
                 : t('items.editor.ruleWarningBelow')
           }}
         </p>
@@ -885,14 +871,7 @@ const showHoliday = computed(() => holidayAllowed(form))
           />
           {{ t('items.editor.retro') }}
         </label>
-        <input
-          v-if="retro"
-          v-model="effectiveFrom"
-          type="date"
-          :max="today"
-          class="input input-bordered input-sm w-48"
-          data-testid="f-effective"
-        />
+        <DateInput v-if="retro" v-model="effectiveFrom" :max="today" data-testid="f-effective" />
       </section>
 
       <ul

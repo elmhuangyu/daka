@@ -1,6 +1,7 @@
 import { ApiError, describeError, type ItemDto } from './api'
 import { t, tn, type MessageKey, type PluralBase } from './i18n'
 import { errorKeyForCode } from './i18n/errors'
+import { formatCustomDate } from './i18n/format'
 import {
   buildRRule,
   describeRRule,
@@ -575,7 +576,7 @@ export function previewRule(f: ItemForm, today: string, dtstart?: string): RuleP
       if ('error' in r) return { sentence: r.error, dates: null, note: '' }
       let sentence = describeRRule(r.rrule)
       if (f.until !== '' && !r.rrule.includes('UNTIL='))
-        sentence = t('rrule.until', { head: sentence, date: f.until })
+        sentence = t('rrule.until', { head: sentence, date: formatCustomDate(f.until) })
       sentence += t('common.sentenceEnd')
       const dates = nextOccurrences(r.rrule, dtstart || today, today, 5)
       const note =

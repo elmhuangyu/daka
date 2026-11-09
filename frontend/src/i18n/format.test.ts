@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { formatLongDate, formatMonthYear, monthName, weekdayName } from './format'
+import {
+  currentDateFormat,
+  dateFormatPlaceholder,
+  formatCustomDate,
+  formatLongDate,
+  formatMonthYear,
+  monthName,
+  parseCustomDate,
+  setDateFormat,
+  weekdayName,
+} from './format'
 import { setLocale } from './index'
 import { describeRRule } from '../rrule'
 import { describeRule } from '../items/logic'
@@ -49,5 +59,65 @@ describe('format helpers (zh-CN)', () => {
     } finally {
       await setLocale('en')
     }
+  })
+})
+
+describe('date format settings and custom parsing/formatting', () => {
+  it('formats custom dates according to format', () => {
+    expect(formatCustomDate('2026-11-09', 'YYYY-MM-DD')).toBe('2026-11-09')
+    expect(formatCustomDate('2026-11-09', 'YYYY/MM/DD')).toBe('2026/11/09')
+    expect(formatCustomDate('2026-11-09', 'MM/DD/YYYY')).toBe('11/09/2026')
+    expect(formatCustomDate('2026-11-09', 'DD/MM/YYYY')).toBe('09/11/2026')
+    expect(formatCustomDate('')).toBe('')
+    expect(formatCustomDate('invalid')).toBe('invalid')
+  })
+
+  it('updates reactive activeDateFormat when setDateFormat is called', () => {
+    try {
+      setDateFormat('YYYY/MM/DD')
+      expect(currentDateFormat()).toBe('YYYY/MM/DD')
+      expect(formatCustomDate('2026-11-09')).toBe('2026/11/09')
+      expect(dateFormatPlaceholder()).toBe('YYYY/MM/DD')
+
+      setDateFormat('MM/DD/YYYY')
+      expect(currentDateFormat()).toBe('MM/DD/YYYY')
+      expect(formatCustomDate('2026-11-09')).toBe('11/09/2026')
+      expect(dateFormatPlaceholder()).toBe('MM/DD/YYYY')
+
+      setDateFormat('DD/MM/YYYY')
+      expect(currentDateFormat()).toBe('DD/MM/YYYY')
+      expect(formatCustomDate('2026-11-09')).toBe('09/11/2026')
+      expect(dateFormatPlaceholder()).toBe('DD/MM/YYYY')
+    } finally {
+      setDateFormat('YYYY-MM-DD')
+    }
+  })
+
+  it('parses custom date inputs accurately', () => {
+    // Year-first inputs
+    expect(parseCustomDate('2026-11-09')).toBe('2026-11-09')
+    expect(parseCustomDate('2026/11/09')).toBe('2026-11-09')
+    expect(parseCustomDate('2026.11.09')).toBe('2026-11-09')
+
+    // MM/DD/YYYY
+    expect(parseCustomDate('11/09/2026', 'MM/DD/YYYY')).toBe('2026-11-09')
+    expect(parseCustomDate('11-09-2026', 'MM/DD/YYYY')).toBe('2026-11-09')
+
+    // DD/MM/YYYY
+    expect(parseCustomDate('09/11/2026', 'DD/MM/YYYY')).toBe('2026-11-09')
+    expect(parseCustomDate('09-11-2026', 'DD/MM/YYYY')).toBe('2026-11-09')
+
+    // Disambiguation: 25/11/2026 must be DD/MM/YYYY even if format was MM/DD/YYYY
+    expect(parseCustomDate('25/11/2026', 'MM/DD/YYYY')).toBe('2026-11-25')
+    // Disambiguation: 11/25/2026 must be MM/DD/YYYY even if format was DD/MM/YYYY
+    expect(parseCustomDate('11/25/2026', 'DD/MM/YYYY')).toBe('2026-11-25')
+
+    // Invalid dates
+    expect(parseCustomDate('')).toBeNull()
+    expect(parseCustomDate('random')).toBeNull()
+    expect(parseCustomDate('2026-02-29')).toBeNull() // non leap-year
+    expect(parseCustomDate('2024-02-29')).toBe('2024-02-29') // leap-year
+    expect(parseCustomDate('2026-13-01')).toBeNull()
+    expect(parseCustomDate('2026-04-31')).toBeNull()
   })
 })

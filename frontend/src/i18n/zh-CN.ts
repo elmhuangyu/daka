@@ -120,6 +120,7 @@ const zhCN: Record<MessageKey, string> = {
   'common.edit': '编辑',
   'common.add': '添加',
   'common.dismiss': '关闭',
+  'common.clear': '清除',
   'common.countSuffix': '{title}（{count}）',
   'common.days.one': '{count} 天',
   'common.days.other': '{count} 天',

@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { makeRouter } from '../router'
 import ItemEditorView from './ItemEditorView.vue'
 import { usePrivacyStore } from '../stores/privacy'
+import { setDateFormat } from '../i18n/format'
 
 function jsonRes(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -83,5 +84,47 @@ describe('ItemEditorView', () => {
     expect(w.find('[data-testid=privacy-blocked]').exists()).toBe(true)
     expect(calls.some((c) => c.url.startsWith('/api/items/3'))).toBe(false)
     usePrivacyStore()
+  })
+
+  it('renders start and end dates according to the date format setting and parses input', async () => {
+    setDateFormat('YYYY/MM/DD')
+    try {
+      const { w } = await mountAt('/items/new')
+      const startsOn = w.get<HTMLInputElement>('[data-testid=f-starts-on]')
+      // Starts on defaults to today, formatted as YYYY/MM/DD
+      expect(startsOn.element.value).toMatch(/^\d{4}\/\d{2}\/\d{2}$/)
+
+      await w.get('[data-testid=f-name]').setValue('Yoga')
+      await startsOn.setValue('2026/11/15')
+      await startsOn.trigger('blur')
+
+      const endsOn = w.get<HTMLInputElement>('[data-testid=f-ends-on]')
+      expect(endsOn.attributes('placeholder')).toBe('YYYY/MM/DD')
+      await endsOn.setValue('2026/11/25')
+      await endsOn.trigger('blur')
+
+      // Preview sentence reflects until formatted date
+      expect(w.get('[data-testid=preview-sentence]').text()).toContain('2026/11/25')
+
+      // Preview dates list reflects YYYY/MM/DD formatting
+      const previewDates = w.findAll('[data-testid=preview-dates] li')
+      expect(previewDates.length).toBeGreaterThan(0)
+      expect(previewDates[0]!.text()).toBe('2026/11/15')
+
+      await w.get('form').trigger('submit')
+      await flushPromises()
+
+      const post = calls.find((c) => c.url === '/api/items' && c.method === 'POST')!
+      expect(post.body).toMatchObject({
+        name: 'Yoga',
+        rule: {
+          schedule_type: 'fixed_rrule',
+          dtstart: '2026-11-15',
+          until: '2026-11-25',
+        },
+      })
+    } finally {
+      setDateFormat('YYYY-MM-DD')
+    }
   })
 })

@@ -12,7 +12,7 @@ import ItemCard from '../components/today/ItemCard.vue'
 import QuickAddForm from '../components/today/QuickAddForm.vue'
 import { createAdHocEvent, createScheduledEvent, describeError, type CheckinInput } from '../api'
 import { useI18n } from '../i18n'
-import { weekdayName } from '../i18n/format'
+import { formatCustomDate, weekdayName } from '../i18n/format'
 
 const { t } = useI18n()
 
@@ -152,7 +152,7 @@ watch(
             "
           >
             <Icon icon="lucide:calendar" class="size-4 opacity-70 shrink-0" />
-            <span class="font-mono tracking-tight">{{ store.view.date }}</span>
+            <span class="font-mono tracking-tight">{{ formatCustomDate(store.view.date) }}</span>
             <span class="text-xs sm:text-sm font-normal text-base-content/70 whitespace-nowrap">
               {{ weekdayName(store.view.weekday) }}
             </span>
@@ -483,7 +483,9 @@ watch(
           >
             <span class="font-medium text-base-content/90">{{ u.name }}</span>
             <div class="flex items-center gap-2">
-              <span class="text-xs text-base-content/60 font-mono">{{ u.due_date }}</span>
+              <span class="text-xs text-base-content/60 font-mono">{{
+                formatCustomDate(u.due_date)
+              }}</span>
               <span class="badge badge-sm badge-ghost font-mono">
                 {{
                   u.days_until === 1 ? t('today.tomorrow') : t('today.inNDays', { n: u.days_until })

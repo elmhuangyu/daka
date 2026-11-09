@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { currentLocale } from './index'
 
 // Date-only values are YYYY-MM-DD strings. They are formatted in UTC from a
@@ -59,7 +60,7 @@ export const DATE_FORMAT_OPTIONS: { value: DateFormat; label: string; sample: st
   { value: 'DD/MM/YYYY', label: 'DD/MM/YYYY', sample: '09/11/2026' },
 ]
 
-export function currentDateFormat(): DateFormat {
+function readSavedDateFormat(): DateFormat {
   try {
     if (typeof localStorage !== 'undefined') {
       const saved = localStorage.getItem('daka:date_format')
@@ -73,7 +74,14 @@ export function currentDateFormat(): DateFormat {
   return 'YYYY-MM-DD'
 }
 
+export const activeDateFormat = ref<DateFormat>(readSavedDateFormat())
+
+export function currentDateFormat(): DateFormat {
+  return activeDateFormat.value
+}
+
 export function setDateFormat(df: DateFormat) {
+  activeDateFormat.value = df
   try {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem('daka:date_format', df)
@@ -81,6 +89,72 @@ export function setDateFormat(df: DateFormat) {
   } catch {
     // storage unavailable
   }
+}
+
+export function dateFormatPlaceholder(format?: DateFormat): string {
+  const f = format || currentDateFormat()
+  switch (f) {
+    case 'YYYY/MM/DD':
+      return 'YYYY/MM/DD'
+    case 'MM/DD/YYYY':
+      return 'MM/DD/YYYY'
+    case 'DD/MM/YYYY':
+      return 'DD/MM/YYYY'
+    case 'YYYY-MM-DD':
+    default:
+      return 'YYYY-MM-DD'
+  }
+}
+
+function isValidYMD(y: number, m: number, d: number): boolean {
+  if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1000 || y > 9999) return false
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
+}
+
+function toIsoString(y: number, m: number, d: number): string {
+  return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
+
+export function parseCustomDate(input: string, format?: DateFormat): string | null {
+  const trimmed = input.trim()
+  if (!trimmed) return null
+
+  // 1. Try standard ISO format YYYY-MM-DD or YYYY/MM/DD (year first)
+  const yFirst = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(trimmed)
+  if (yFirst) {
+    const y = Number(yFirst[1])
+    const m = Number(yFirst[2])
+    const d = Number(yFirst[3])
+    if (isValidYMD(y, m, d)) return toIsoString(y, m, d)
+    return null
+  }
+
+  // 2. Year at end, e.g. MM/DD/YYYY or DD/MM/YYYY
+  const yEnd = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/.exec(trimmed)
+  if (yEnd) {
+    const p1 = Number(yEnd[1])
+    const p2 = Number(yEnd[2])
+    const y = Number(yEnd[3])
+    const f = format || currentDateFormat()
+
+    let m = f === 'DD/MM/YYYY' ? p2 : p1
+    let d = f === 'DD/MM/YYYY' ? p1 : p2
+
+    // Disambiguation if one of the parts is > 12
+    if (p1 > 12 && p2 <= 12) {
+      d = p1
+      m = p2
+    } else if (p2 > 12 && p1 <= 12) {
+      m = p1
+      d = p2
+    }
+
+    if (isValidYMD(y, m, d)) return toIsoString(y, m, d)
+    return null
+  }
+
+  return null
 }
 
 export function formatCustomDate(iso: string, format?: DateFormat): string {
