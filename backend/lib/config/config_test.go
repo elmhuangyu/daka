@@ -155,3 +155,12 @@ func TestSecretsNeverRendered(t *testing.T) {
 		}
 	}
 }
+
+func TestExampleConfigLoads(t *testing.T) {
+	c, err := Load("../../../example/config.example.yaml", envFrom(nil))
+	require.NoError(t, err)
+	d := Default()
+	require.Equal(t, d.Server.Listen, c.Server.Listen)
+	require.Equal(t, d.DB.Driver, c.DB.Driver)
+	require.True(t, c.Auth.SecureCookie)
+}

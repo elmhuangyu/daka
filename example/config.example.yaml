@@ -1,0 +1,54 @@
+# Daka example configuration. Copy to config.yaml and pass it with
+#   daka --config config.yaml
+# Every key is optional; the values below are the defaults unless noted.
+# Secrets (DAKA_SECRET_KEY, DAKA_SECRET_KEY_OLD, DAKA_TELEGRAM_BOT_TOKEN) are
+# read from the environment only and must not be put in this file.
+# Most keys can also be set with DAKA_* environment variables (see .env.example).
+
+# IANA timezone of the bootstrapped single-user account (first start only).
+timezone: UTC
+
+server:
+  # Loopback = single-user mode, no login. A non-loopback address requires OIDC
+  # or (allow_insecure_public + shared_secret) below.
+  listen: 127.0.0.1:8080
+  # Directory with the built frontend (frontend/dist). The Docker image sets it.
+  # static_dir: /app/web
+  # Extra Host header names (no port) accepted behind a reverse proxy.
+  allowed_hosts: []
+  #  - daka.example.com
+  # Proxy IPs/CIDRs whose X-Forwarded-For header is trusted.
+  trusted_proxies: []
+  #  - 172.16.0.0/12
+  rate_limit:
+    disabled: false
+    rps: 20
+    burst: 60
+
+db:
+  # sqlite (default) or postgres.
+  driver: sqlite
+  # sqlite: a file path. postgres: a connection string (may hold credentials,
+  # so prefer DAKA_DB_DSN from the environment).
+  dsn: daka.db
+
+auth:
+  # --- OIDC login (Authorization Code + PKCE) ---
+  # issuer: https://id.example.com
+  # client_id: daka
+  # redirect_url: https://daka.example.com/api/auth/oidc/callback
+  # scopes: [openid, profile, email]
+  # client_secret: set via DAKA_AUTH_CLIENT_SECRET
+  #
+  # --- Or shared-secret login, only for trusted networks ---
+  # allow_insecure_public: true
+  # shared_secret: set via DAKA_AUTH_SHARED_SECRET (16+ characters)
+  #
+  # Session cookies are Secure by default; disable only for plain-HTTP tests.
+  secure_cookie: true
+
+holiday:
+  # Turn off statutory-holiday awareness entirely.
+  disabled: false
+  # Override the remote data URL ({year} is replaced); empty = built-in default.
+  # url_template: ""

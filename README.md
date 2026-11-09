@@ -36,6 +36,7 @@ The backend serves the built frontend from a plain directory (no `go:embed`). Se
   ```
 
   Because the container listens on a non-loopback address, it refuses to start without either OIDC (`DAKA_AUTH_ISSUER` and friends) or `DAKA_AUTH_ALLOW_INSECURE_PUBLIC=1` plus `DAKA_AUTH_SHARED_SECRET`. Session cookies are `Secure` by default, so login only works over HTTPS (or on localhost in most browsers): terminate TLS in a reverse proxy in front of the container. For trusted plain-HTTP testing only, add `-e DAKA_AUTH_SECURE_COOKIE=0`. A bind-mounted `/data` must be writable by uid 10001.
+- Compose: `example/` holds a `docker-compose.yml`, a fully commented `config.example.yaml` and an `.env.example`. Copy the latter two to `.env` and `config.yaml` (both gitignored), edit, then run `docker compose up -d --build` from `example/`.
 - Caveat (known open item): in login mode the HostGuard (DNS-rebinding defence) is off unless `server.allowed_hosts` / `DAKA_ALLOWED_HOSTS` is set, and there is no startup warning. Set it when exposing the container.
 
 ## Deployment and security

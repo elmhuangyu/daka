@@ -1,0 +1,26 @@
+# Example deployment. From this directory:
+#   cp .env.example .env && cp config.example.yaml config.yaml   # then edit both
+#   docker compose up -d --build
+# Put a TLS reverse proxy in front: session cookies are Secure by default.
+services:
+  daka:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: daka:local
+    restart: unless-stopped
+    command: ["--config", "/etc/daka/config.yaml"]
+    env_file: .env
+    ports:
+      # Publish on loopback only; let the reverse proxy reach it.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - daka-data:/data
+      - ./config.yaml:/etc/daka/config.yaml:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  daka-data:
