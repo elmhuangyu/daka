@@ -7,3 +7,4 @@ frontend/dist/
 # Local deployment files copied from example/
 example/.env
 example/config.yaml
+build/

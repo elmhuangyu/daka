@@ -2,37 +2,52 @@
 default:
     @just --list
 
-# Run all backend tests
-test:
-    cd backend && go test ./...
+module := "github.com/elmhuangyu/daka/backend"
 
-# Run the end-to-end tests (real HTTP stack, temp SQLite DB, injected clock)
-e2e:
-    cd backend && go test ./e2e/...
-
-# Lint: golangci-lint if installed, otherwise go vet + gofmt check
-lint:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd backend
-    if command -v golangci-lint >/dev/null 2>&1; then
-        golangci-lint run ./...
-    else
-        echo "golangci-lint not found; falling back to go vet + gofmt"
-        go vet ./...
-        out="$(gofmt -l .)"
-        if [ -n "$out" ]; then
-            echo "gofmt needed on:" >&2
-            echo "$out" >&2
-            exit 1
-        fi
-    fi
-
-# Format code
+# Format backend (goimports) and frontend (eslint --fix)
 fmt:
-    cd backend && gofmt -w .
+    cd backend && goimports -w -local "{{module}}" .
+    cd frontend && pnpm run fmt
 
-# Run the backend
+# Lint backend (golangci-lint) and frontend (eslint + vue-tsc)
+lint:
+    cd backend && golangci-lint run ./...
+    cd frontend && pnpm run lint
+
+# Build version: UTC build time and short commit
+version := `date -u +%Y-%m-%d-%H-%M-%S` + "-" + `git rev-parse --short=8 HEAD`
+
+# Build the backend binary into build/ and the frontend into frontend/dist
+build:
+    mkdir -p build && cd backend && go build -trimpath -o ../build/ ./cmd/daka
+    cd frontend && pnpm run build
+
+# Test backend (incl. e2e, race detector) and frontend
+test:
+    cd backend && go test -race ./...
+    cd frontend && pnpm run test
+
+# Build the Docker image
+build-image:
+    docker build -t daka:main -t daka:{{version}} .
+
+# Run go mod tidy
+tidy:
+    cd backend && go mod tidy
+
+# Update Go module dependencies
+update-go-deps:
+    cd backend && go get -u -t ./...
+    @just tidy
+
+# Update pnpm dependencies
+update-pnpm-deps:
+    cd frontend && pnpm update
+
+# Update both Go and pnpm dependencies
+update-deps: update-go-deps update-pnpm-deps
+
+# Run the backend (127.0.0.1:8080, single-user mode)
 run:
     cd backend && go run ./cmd/daka
 
@@ -40,22 +55,11 @@ run:
 fe-install:
     cd frontend && pnpm install
 
-# Run frontend tests
-fe-test:
-    cd frontend && pnpm test
-
-# Type-check (vue-tsc) and lint (eslint) the frontend
-fe-lint:
-    cd frontend && pnpm lint
-
-# Build the frontend into frontend/dist
-fe-build:
-    cd frontend && pnpm build
-
 # Run the frontend dev server (proxies /api to 127.0.0.1:8080)
 fe-dev:
     cd frontend && pnpm dev
 
-# Build the frontend, then run the backend serving it (single-user, 127.0.0.1:8080)
-run-full: fe-build
+# Build the frontend, then run the backend serving it
+run-full:
+    cd frontend && pnpm run build
     cd backend && DAKA_STATIC_DIR="{{justfile_directory()}}/frontend/dist" go run ./cmd/daka

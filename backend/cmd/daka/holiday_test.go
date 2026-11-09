@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/elmhuangyu/daka/backend/lib/app"
 	"testing"
+
+	"github.com/elmhuangyu/daka/backend/lib/app"
 
 	"github.com/stretchr/testify/require"
 

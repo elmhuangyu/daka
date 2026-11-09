@@ -5,19 +5,21 @@ A habit tracker with a Go backend and a Vue frontend.
 ## Layout
 
 - `backend/cmd/daka` - program entry point
-- `backend/e2e` - end-to-end tests over the real HTTP stack (`just e2e`)
+- `backend/e2e` - end-to-end tests over the real HTTP stack
 - `backend/lib/{app,config,auth,db,dbmodels,holiday,schedule,stats,extcal,notify,ratelimit,secret,api}` - backend packages
-- `frontend` - Vue 3 SPA (`just fe-install`, `fe-lint`, `fe-test`, `fe-build`)
+- `frontend` - Vue 3 SPA (`just fe-install`, `fe-dev`)
 - `skills/daka` - Claude skill for the read-only AI API
 
 ## Development
 
 Requires Go and [just](https://github.com/casey/just).
 
-- `just test` - run backend tests
-- `just e2e` - run the end-to-end tests (real router, temp SQLite DB, injected clock, fake OIDC provider)
-- `just lint` - golangci-lint if installed, else `go vet` and a gofmt check
-- `just fmt` - format code
+- `just fmt` - goimports (backend) and eslint --fix (frontend)
+- `just lint` - golangci-lint and eslint/vue-tsc
+- `just build` - backend binary into `build/`, frontend into `frontend/dist`
+- `just test` - backend tests (including the e2e tests over the real router, temp SQLite DB, injected clock, fake OIDC provider) and Vitest
+- `just build-image` - build the Docker image
+- `just update-deps` - update Go and pnpm dependencies
 - `just run` - run the backend (API only)
 - `just run-full` - build the frontend, then run the backend serving it at http://127.0.0.1:8080
 
@@ -25,7 +27,7 @@ Requires Go and [just](https://github.com/casey/just).
 
 The backend serves the built frontend from a plain directory (no `go:embed`). Set `DAKA_STATIC_DIR` (or `server.static_dir`) to a directory containing `index.html`; relative paths are resolved at startup, and a missing directory is a startup error (a directory without `index.html` only logs a warning). `/api/*` always wins over static files, unknown non-file paths fall back to `index.html` (SPA routing), and hashed `/assets/*` are served immutable while `index.html`, `sw.js` and the manifest are always revalidated.
 
-- Local: `just run-full` runs `just fe-build` and then starts the backend with `DAKA_STATIC_DIR` pointing at `frontend/dist`.
+- Local: `just run-full` runs `pnpm run build` and then starts the backend with `DAKA_STATIC_DIR` pointing at `frontend/dist`.
 - Docker: the root `Dockerfile` builds the frontend and a static backend binary (no CGO) and runs as a non-root user. The image sets `DAKA_STATIC_DIR=/app/web`, `DAKA_LISTEN=0.0.0.0:8080` and `DAKA_DB_DSN=/data/daka.db`; `/data` is a volume. No secrets are baked in.
 
   ```sh
@@ -54,7 +56,7 @@ Some checks need a real third-party service and cannot be automated.
 (`ACTION:DISPLAY`, `TRIGGER:PT0S`) on timed events (items with `remind_time`),
 which Apple Calendar honours. Google Calendar is expected to show no reminder
 for URL-subscribed calendars, which is why Telegram is the primary reminder
-channel. `just e2e` only pins the feed structure; to verify the Google side:
+channel. the e2e tests only pin the feed structure; to verify the Google side:
 
 1. Create an item with a `remind_time` a few minutes ahead and a feed token
    (`POST /api/tokens`, scope `feed:read`).

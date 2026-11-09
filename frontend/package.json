@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "test": "vitest run",
+    "fmt": "eslint . --fix",
     "lint": "eslint . && vue-tsc --noEmit"
   },
   "dependencies": {

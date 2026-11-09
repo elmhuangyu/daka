@@ -16,16 +16,16 @@ Run from the repo root (needs Go, [just](https://github.com/casey/just), pnpm):
 
 | Command | Purpose |
 | --- | --- |
-| `just test` | Backend unit tests (also run `cd backend && go test -race ./...`) |
-| `just e2e` | End-to-end tests: real router, temp SQLite, injected clock, fake OIDC |
-| `just lint` / `just fmt` | golangci-lint (falls back to `go vet` + gofmt) / gofmt |
-| `just run` | Run the backend (`127.0.0.1:8080`, single-user mode) |
+| `just fmt` | goimports (backend) + eslint --fix (frontend) |
+| `just lint` | golangci-lint + eslint/vue-tsc |
+| `just build` | Backend binary into `build/`, frontend into `frontend/dist` |
+| `just test` | `go test -race ./...` (includes `backend/e2e`) + Vitest |
+| `just build-image` | Docker image |
+| `just update-deps` | Update Go and pnpm dependencies |
+| `just run` / `run-full` | Run the backend / build the frontend and serve it |
 | `just fe-install` / `fe-dev` | Install frontend deps / dev server (proxies `/api`) |
-| `just fe-lint` | vue-tsc + eslint |
-| `just fe-test` | Vitest |
-| `just fe-build` | Build into `frontend/dist` |
 
-Before finishing a change, run `just lint`, `just test`, `just e2e` for backend work and `just fe-lint`, `just fe-test`, `just fe-build` for frontend work.
+Before finishing a change, run `just fmt lint build test`.
 
 ## Layout
 
