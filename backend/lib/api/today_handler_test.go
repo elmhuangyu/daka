@@ -267,3 +267,90 @@ func TestTodayEmptyItemsIsArray(t *testing.T) {
 	require.Equal(t, 200, w.Code)
 	require.Contains(t, w.Body.String(), `"items":[]`)
 }
+
+func TestTodayCustomDate(t *testing.T) {
+	e := newEnv(t)
+	resp := e.today("", "?date=2026-11-05")
+	require.Equal(t, "2026-11-05", resp.Date)
+	require.Equal(t, int(time.Thursday), resp.Weekday)
+
+	// Invalid date format yields 400.
+	w := e.do("GET", "/api/view/today?date=invalid", "", "", nil)
+	require.Equal(t, 400, w.Code)
+}
+
+func TestTodayOverdueEventAndUpcoming(t *testing.T) {
+	e := newEnv(t)
+	// Create an overdue event: effective earlier (2026-11-01), dtstart 2026-11-05, count=1.
+	code, ev := e.createItem("", m{
+		"name":         "One-time task",
+		"kind":         "event",
+		"tracker_type": "boolean",
+		"rule": m{
+			"schedule_type": "fixed_rrule",
+			"rrule_string":  "FREQ=DAILY;COUNT=1",
+			"dtstart":       "2026-11-05",
+			"holiday_mode":  "none",
+		},
+	})
+	require.Equal(t, 201, code)
+	// Update effective_from in DB to simulate item created on or before 2026-11-05.
+	require.NoError(t, e.db.Write().Model(&dbmodels.ItemRuleVersion{}).
+		Where("item_id = ?", ev.ID).Update("effective_from", "2026-11-05").Error)
+
+	// Create an upcoming item due on 2026-11-09.
+	code, up := e.createItem("", m{
+		"name":         "Upcoming item",
+		"kind":         "habit",
+		"tracker_type": "boolean",
+		"rule": m{
+			"schedule_type": "fixed_rrule",
+			"rrule_string":  "FREQ=DAILY;INTERVAL=5",
+			"dtstart":       "2026-11-09",
+			"holiday_mode":  "none",
+		},
+	})
+	require.Equal(t, 201, code)
+
+	// Fetch today (2026-11-07).
+	resp := e.today("", "")
+	require.Equal(t, "2026-11-07", resp.Date)
+
+	// The event should be detected as overdue.
+	var overdueItem *todayItem
+	for i := range resp.Items {
+		if resp.Items[i].ID == ev.ID {
+			overdueItem = &resp.Items[i]
+			break
+		}
+	}
+	require.NotNil(t, overdueItem, "overdue event should be included in today items")
+	require.True(t, overdueItem.Overdue)
+	require.Equal(t, "2026-11-05", overdueItem.DueDate)
+	require.False(t, overdueItem.Done)
+
+	// The upcoming item should appear in upcoming list.
+	var foundUp *upcomingItem
+	for i := range resp.Upcoming {
+		if resp.Upcoming[i].ID == up.ID {
+			foundUp = &resp.Upcoming[i]
+			break
+		}
+	}
+	require.NotNil(t, foundUp, "future item should appear in upcoming")
+	require.Equal(t, "2026-11-09", foundUp.DueDate)
+	require.Equal(t, 2, foundUp.DaysUntil)
+
+	// After checking in the overdue event on 2026-11-07, it should be marked done.
+	e.checkin(ev.ID, "2026-11-07")
+	resp2 := e.today("", "")
+	var overdueItem2 *todayItem
+	for i := range resp2.Items {
+		if resp2.Items[i].ID == ev.ID {
+			overdueItem2 = &resp2.Items[i]
+			break
+		}
+	}
+	require.NotNil(t, overdueItem2)
+	require.True(t, overdueItem2.Done)
+}

@@ -113,6 +113,22 @@ func pendingToday(g *gorm.DB, userID, date string, cal schedule.DayCalendar) ([]
 				log.Warn().Err(err).Uint("item_id", it.ID).Msg("notify: skipping item with unevaluable rule")
 				continue
 			}
+			if !due && it.Kind == dbmodels.KindEvent {
+				dayTime, _ := time.Parse(dbmodels.DateLayout, date)
+				lookback := dayTime.AddDate(0, 0, -60).Format(dbmodels.DateLayout)
+				yesterday := dayTime.AddDate(0, 0, -1).Format(dbmodels.DateLayout)
+				pastDates, pErr := schedule.DueDatesWith(vs, lookback, yesterday, cal)
+				if pErr == nil && len(pastDates) > 0 {
+					lastDue := pastDates[len(pastDates)-1]
+					var logCount int64
+					if err := g.Model(&dbmodels.CheckinLog{}).
+						Where("user_id = ? AND item_id = ? AND checkin_date >= ?", userID, it.ID, pastDates[0]).
+						Count(&logCount).Error; err == nil && logCount == 0 {
+						due = true
+						e.OverdueDays = daysBetween(lastDue, date)
+					}
+				}
+			}
 			if !due {
 				continue
 			}

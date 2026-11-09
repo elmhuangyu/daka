@@ -120,6 +120,23 @@ describe('buildCreateBody', () => {
       rolling_unit: 'day',
     })
   })
+  it('event with one-time once period sets dtstart, count=1, and until', () => {
+    const f = emptyForm()
+    f.name = 'Tax filing'
+    f.kind = 'event'
+    f.periodKind = 'once'
+    f.dtstart = '2026-11-15'
+    const b = buildCreateBody(f) as { name: string; kind: string; rule: Record<string, unknown> }
+    expect(b.name).toBe('Tax filing')
+    expect(b.kind).toBe('event')
+    expect(b.rule).toEqual({
+      schedule_type: 'fixed_rrule',
+      rrule_string: 'FREQ=DAILY;COUNT=1',
+      holiday_mode: 'none',
+      dtstart: '2026-11-15',
+      until: '2026-11-15',
+    })
+  })
   it('counter with options sends per-option targets and quota option index', () => {
     const f = emptyForm()
     f.trackerType = 'counter'

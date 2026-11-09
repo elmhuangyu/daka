@@ -14,7 +14,7 @@ import {
 export type TrackerType = 'boolean' | 'counter' | 'metric' | 'maintenance'
 export type Polarity = 'positive' | 'negative'
 export type ScheduleType = 'fixed_rrule' | 'rolling' | 'quota' | 'none'
-export type PeriodKind = 'daily' | 'interval' | 'weekly' | 'monthly' | 'yearly' | 'custom'
+export type PeriodKind = 'daily' | 'interval' | 'weekly' | 'monthly' | 'yearly' | 'custom' | 'once'
 export type HolidayMode = 'none' | 'skip_holidays' | 'workdays_only'
 
 export interface OptionForm {
@@ -28,6 +28,7 @@ export interface OptionForm {
 
 export interface ItemForm {
   name: string
+  kind: 'habit' | 'event'
   trackerType: TrackerType
   polarity: Polarity
   categoryId: number | null
@@ -51,6 +52,7 @@ export interface ItemForm {
   yearMonth: string
   yearDay: string
   custom: string
+  dtstart: string
   until: string
   holidayMode: HolidayMode
   rollingInterval: string
@@ -68,6 +70,7 @@ export interface ItemForm {
 export function emptyForm(): ItemForm {
   return {
     name: '',
+    kind: 'habit',
     trackerType: 'boolean',
     polarity: 'positive',
     categoryId: null,
@@ -91,6 +94,7 @@ export function emptyForm(): ItemForm {
     yearMonth: '1',
     yearDay: '1',
     custom: '',
+    dtstart: '',
     until: '',
     holidayMode: 'none',
     rollingInterval: '30',
@@ -182,6 +186,8 @@ function preset(f: ItemForm): Preset {
       return { kind: 'yearly', month: Number(f.yearMonth), day: Number(f.yearDay) }
     case 'custom':
       return { kind: 'custom', rrule: f.custom }
+    case 'once':
+      return { kind: 'custom', rrule: 'FREQ=DAILY;COUNT=1' }
   }
 }
 
@@ -252,8 +258,14 @@ export function buildRule(f: ItemForm, patch: boolean): Json {
     const r = formRRule(f)
     rule.rrule_string = 'rrule' in r ? r.rrule : ''
     rule.holiday_mode = f.holidayMode
-    if (f.until !== '') rule.until = f.until
-    else if (patch) rule.until = ''
+    if (f.dtstart !== '') rule.dtstart = f.dtstart
+    if (f.periodKind === 'once' && f.dtstart !== '') {
+      rule.until = f.dtstart
+    } else if (f.until !== '') {
+      rule.until = f.until
+    } else if (patch) {
+      rule.until = ''
+    }
   } else if (f.scheduleType === 'rolling') {
     rule.rolling_interval = Number(f.rollingInterval)
     rule.rolling_unit = f.rollingUnit
@@ -310,7 +322,7 @@ export function buildCreateBody(f: ItemForm): Json {
   const body: Json = {
     name: f.name.trim(),
     tracker_type: f.trackerType,
-    kind: 'habit',
+    kind: f.kind,
     polarity: f.polarity,
     category_id: f.categoryId,
     is_sensitive: f.isSensitive,
@@ -334,6 +346,7 @@ export function formFromItem(it: ItemDto): ItemForm {
   const f = emptyForm()
   const r = it.current_rule
   f.name = it.name
+  f.kind = (it.kind as 'habit' | 'event') || 'habit'
   f.trackerType = it.tracker_type as TrackerType
   f.polarity = it.polarity as Polarity
   f.categoryId = it.category_id
@@ -354,28 +367,33 @@ export function formFromItem(it: ItemDto): ItemForm {
   }))
   f.scheduleType = r.schedule_type as ScheduleType
   f.holidayMode = (r.holiday_mode || 'none') as HolidayMode
+  f.dtstart = r.dtstart ?? ''
   f.until = r.until ?? ''
   if (r.schedule_type === 'fixed_rrule') {
-    const p = presetFromRRule(r.rrule_string)
-    if (!p) {
-      f.periodKind = 'custom'
-      f.custom = r.rrule_string
-    } else if (p.kind === 'days') {
-      f.periodKind = p.interval === 1 ? 'daily' : 'interval'
-      f.interval = String(p.interval)
-    } else if (p.kind === 'weekly' && (p.interval ?? 1) === 1) {
-      f.periodKind = 'weekly'
-      f.weekDays = [...p.days]
-    } else if (p.kind === 'monthly' && (p.interval ?? 1) === 1) {
-      f.periodKind = 'monthly'
-      f.monthDay = String(p.day)
-    } else if (p.kind === 'yearly') {
-      f.periodKind = 'yearly'
-      f.yearMonth = String(p.month)
-      f.yearDay = String(p.day)
+    if (r.rrule_string === 'FREQ=DAILY;COUNT=1') {
+      f.periodKind = 'once'
     } else {
-      f.periodKind = 'custom'
-      f.custom = r.rrule_string
+      const p = presetFromRRule(r.rrule_string)
+      if (!p) {
+        f.periodKind = 'custom'
+        f.custom = r.rrule_string
+      } else if (p.kind === 'days') {
+        f.periodKind = p.interval === 1 ? 'daily' : 'interval'
+        f.interval = String(p.interval)
+      } else if (p.kind === 'weekly' && (p.interval ?? 1) === 1) {
+        f.periodKind = 'weekly'
+        f.weekDays = [...p.days]
+      } else if (p.kind === 'monthly' && (p.interval ?? 1) === 1) {
+        f.periodKind = 'monthly'
+        f.monthDay = String(p.day)
+      } else if (p.kind === 'yearly') {
+        f.periodKind = 'yearly'
+        f.yearMonth = String(p.month)
+        f.yearDay = String(p.day)
+      } else {
+        f.periodKind = 'custom'
+        f.custom = r.rrule_string
+      }
     }
   }
   f.rollingInterval = r.rolling_interval ? String(r.rolling_interval) : f.rollingInterval
@@ -425,6 +443,7 @@ export function buildEditPlan(
   const o = formFromItem(orig)
   const patch: Json = {}
   if (f.name.trim() !== o.name) patch.name = f.name.trim()
+  if (f.kind !== o.kind) patch.kind = f.kind
   if (f.categoryId !== o.categoryId) patch.category_id = f.categoryId
   if (f.isSensitive !== o.isSensitive) patch.is_sensitive = f.isSensitive
   if (f.remindTime !== o.remindTime) patch.remind_time = f.remindTime === '' ? null : f.remindTime

@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -26,18 +27,33 @@ type todayItem struct {
 	Name        string `json:"name"`
 	CategoryID  *uint  `json:"category_id"`
 	TrackerType string `json:"tracker_type"`
+	Kind        string `json:"kind"`
 	IsSensitive bool   `json:"is_sensitive"`
 	Due         bool   `json:"due"`
 	Done        bool   `json:"done"`
+	Overdue     bool   `json:"overdue,omitempty"`
+	DueDate     string `json:"due_date,omitempty"`
 	LogIDs      []uint `json:"log_ids"`
 }
 
+type upcomingItem struct {
+	ID          uint   `json:"id"`
+	Name        string `json:"name"`
+	CategoryID  *uint  `json:"category_id"`
+	TrackerType string `json:"tracker_type"`
+	Kind        string `json:"kind"`
+	IsSensitive bool   `json:"is_sensitive"`
+	DueDate     string `json:"due_date"`
+	DaysUntil   int    `json:"days_until"`
+}
+
 type todayResponse struct {
-	Date     string        `json:"date"`
-	Weekday  int           `json:"weekday"`
-	Timezone string        `json:"timezone"`
-	Progress todayProgress `json:"progress"`
-	Items    []todayItem   `json:"items"`
+	Date     string         `json:"date"`
+	Weekday  int            `json:"weekday"`
+	Timezone string         `json:"timezone"`
+	Progress todayProgress  `json:"progress"`
+	Items    []todayItem    `json:"items"`
+	Upcoming []upcomingItem `json:"upcoming,omitempty"`
 }
 
 func (s *server) getToday(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +66,14 @@ func (s *server) getToday(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	resp, err := s.today(s.db.Read(), u.ID, redact, isReadToken(r))
+	targetDate := r.URL.Query().Get("date")
+	if targetDate != "" {
+		if t, perr := time.Parse(dbmodels.DateLayout, targetDate); perr != nil || t.Format(dbmodels.DateLayout) != targetDate {
+			errResult(http.StatusBadRequest, "invalid date, expected YYYY-MM-DD").write(w)
+			return
+		}
+	}
+	resp, err := s.today(s.db.Read(), u.ID, targetDate, redact, isReadToken(r))
 	if err != nil {
 		log.Error().Err(err).Msg("view/today failed")
 		errResult(http.StatusInternalServerError, "internal error").write(w)
@@ -59,22 +82,31 @@ func (s *server) getToday(w http.ResponseWriter, r *http.Request) {
 	jsonResult(http.StatusOK, resp).write(w)
 }
 
-func (s *server) today(db *gorm.DB, userID string, redact, hideSensitive bool) (*todayResponse, error) {
+func (s *server) today(db *gorm.DB, userID string, requestedDate string, redact, hideSensitive bool) (*todayResponse, error) {
 	st, err := userSettings(db, userID)
 	if err != nil {
 		return nil, err
 	}
 	tz := st.Timezone
 	cal := s.calendarFor(st)
-	date, err := schedule.Today(s.now(), tz)
-	if err != nil {
-		return nil, err
+	date := requestedDate
+	if date == "" {
+		date, err = schedule.Today(s.now(), tz)
+		if err != nil {
+			return nil, err
+		}
 	}
 	day, err := time.Parse(dbmodels.DateLayout, date)
 	if err != nil {
 		return nil, err
 	}
-	resp := &todayResponse{Date: date, Weekday: int(day.Weekday()), Timezone: tz, Items: []todayItem{}}
+	resp := &todayResponse{
+		Date:     date,
+		Weekday:  int(day.Weekday()),
+		Timezone: tz,
+		Items:    []todayItem{},
+		Upcoming: []upcomingItem{},
+	}
 
 	var items []dbmodels.Item
 	if err := db.Where("user_id = ? AND archived = ?", userID, false).
@@ -89,8 +121,9 @@ func (s *server) today(db *gorm.DB, userID string, redact, hideSensitive bool) (
 		ids[i] = it.ID
 	}
 
+	endRange := day.AddDate(0, 0, 7).Format(dbmodels.DateLayout)
 	var versions []dbmodels.ItemRuleVersion
-	if err := db.Where("item_id IN ? AND effective_from <= ?", ids, date).Find(&versions).Error; err != nil {
+	if err := db.Where("item_id IN ? AND effective_from <= ?", ids, endRange).Find(&versions).Error; err != nil {
 		return nil, err
 	}
 	byItem := map[uint][]dbmodels.ItemRuleVersion{}
@@ -123,6 +156,9 @@ func (s *server) today(db *gorm.DB, userID string, redact, hideSensitive bool) (
 		return nil, err
 	}
 
+	lookbackStart := day.AddDate(0, 0, -60).Format(dbmodels.DateLayout)
+	yesterday := day.AddDate(0, 0, -1).Format(dbmodels.DateLayout)
+
 	for _, it := range items {
 		if hideSensitive && sens(it) {
 			continue
@@ -137,13 +173,43 @@ func (s *server) today(db *gorm.DB, userID string, redact, hideSensitive bool) (
 			log.Warn().Err(err).Uint("item_id", it.ID).Msg("view/today: skipping item with unevaluable rule")
 			continue
 		}
+
+		isOverdue := false
+		overdueDate := ""
+		hasLogsToday := len(logIDs[it.ID]) > 0
+		if it.Kind == dbmodels.KindEvent {
+			pastDates, pErr := schedule.DueDatesWith(fixedOnly(vs), lookbackStart, yesterday, cal)
+			if pErr == nil && len(pastDates) > 0 {
+				lastDue := pastDates[len(pastDates)-1]
+				var logCount int64
+				if err := db.Model(&dbmodels.CheckinLog{}).
+					Where("user_id = ? AND item_id = ? AND checkin_date >= ?", userID, it.ID, pastDates[0]).
+					Count(&logCount).Error; err == nil {
+					if logCount == 0 {
+						due = true
+						isOverdue = true
+						overdueDate = lastDue
+					} else if hasLogsToday {
+						// Completed today.
+						overdueDate = lastDue
+					}
+				}
+			}
+		}
+
+		if !due && hasLogsToday {
+			due = true
+		}
+
 		if !due {
 			continue
 		}
 		ti := todayItem{
 			ID: it.ID, Name: it.Name, CategoryID: it.CategoryID,
-			TrackerType: string(it.TrackerType), IsSensitive: sens(it),
-			Due: true, LogIDs: logIDs[it.ID],
+			TrackerType: string(it.TrackerType), Kind: string(it.Kind),
+			IsSensitive: sens(it),
+			Due:         true, Overdue: isOverdue, DueDate: overdueDate,
+			LogIDs: logIDs[it.ID],
 		}
 		if ti.LogIDs == nil {
 			ti.LogIDs = []uint{}
@@ -164,6 +230,48 @@ func (s *server) today(db *gorm.DB, userID string, redact, hideSensitive bool) (
 			}
 		}
 	}
+
+	tomorrow := day.AddDate(0, 0, 1).Format(dbmodels.DateLayout)
+	for _, it := range items {
+		if hideSensitive && sens(it) {
+			continue
+		}
+		vs := byItem[it.ID]
+		fvs := fixedOnly(vs)
+		futureDates, err := schedule.DueDatesWith(fvs, tomorrow, endRange, cal)
+		if err != nil {
+			continue
+		}
+		for _, fd := range futureDates {
+			tFd, pErr := time.Parse(dbmodels.DateLayout, fd)
+			if pErr != nil {
+				continue
+			}
+			daysUntil := int(tFd.Sub(day).Hours() / 24)
+			name := it.Name
+			if redact && sens(it) {
+				name = privateItemName
+			}
+			resp.Upcoming = append(resp.Upcoming, upcomingItem{
+				ID:          it.ID,
+				Name:        name,
+				CategoryID:  it.CategoryID,
+				TrackerType: string(it.TrackerType),
+				Kind:        string(it.Kind),
+				IsSensitive: sens(it),
+				DueDate:     fd,
+				DaysUntil:   daysUntil,
+			})
+		}
+	}
+
+	sort.SliceStable(resp.Upcoming, func(i, j int) bool {
+		if resp.Upcoming[i].DueDate != resp.Upcoming[j].DueDate {
+			return resp.Upcoming[i].DueDate < resp.Upcoming[j].DueDate
+		}
+		return resp.Upcoming[i].DaysUntil < resp.Upcoming[j].DaysUntil
+	})
+
 	return resp, nil
 }
 

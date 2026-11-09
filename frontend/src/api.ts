@@ -11,10 +11,24 @@ export interface TodayItem {
   name: string
   category_id: number | null
   tracker_type: string
+  kind?: string
   is_sensitive: boolean
   due: boolean
   done: boolean
+  overdue?: boolean
+  due_date?: string
   log_ids: number[]
+}
+
+export interface UpcomingItem {
+  id: number
+  name: string
+  category_id: number | null
+  tracker_type: string
+  kind: string
+  is_sensitive: boolean
+  due_date: string
+  days_until: number
 }
 
 export interface TodayView {
@@ -23,6 +37,7 @@ export interface TodayView {
   timezone: string
   progress: { done: number; total: number }
   items: TodayItem[]
+  upcoming?: UpcomingItem[]
 }
 
 export interface NewItem {
@@ -323,8 +338,12 @@ function jsonInit(
   }
 }
 
-export function getToday(redact: boolean): Promise<TodayView> {
-  return request<TodayView>(`/api/view/today${redact ? '?redact=1' : ''}`)
+export function getToday(redact: boolean, date?: string): Promise<TodayView> {
+  const params = new URLSearchParams()
+  if (redact) params.set('redact', '1')
+  if (date) params.set('date', date)
+  const qs = params.toString() ? `?${params.toString()}` : ''
+  return request<TodayView>(`/api/view/today${qs}`)
 }
 
 export interface OptionDetail {

@@ -81,6 +81,8 @@ async function load() {
     if (item) {
       original.value = item
       Object.assign(form, formFromItem(item))
+    } else if (!form.dtstart) {
+      form.dtstart = today
     }
   } catch (e) {
     loadError.value = describeItemError(e)
@@ -117,8 +119,11 @@ watch(
 const errors = computed(() => validateForm(form))
 const preview = computed(() => {
   const o = original.value
-  const keepPhase = o && o.current_rule.schedule_type === 'fixed_rrule' && o.current_rule.dtstart
-  return previewRule(form, today, keepPhase ? o.current_rule.dtstart : today)
+  const phase =
+    form.dtstart ||
+    (o && o.current_rule.schedule_type === 'fixed_rrule' && o.current_rule.dtstart) ||
+    today
+  return previewRule(form, today, phase)
 })
 const ruleWillChange = computed(() => {
   if (!original.value) return false
@@ -313,6 +318,30 @@ const showHoliday = computed(() => holidayAllowed(form))
           {{ t('items.editor.section.tracking') }}
         </h2>
 
+        <fieldset class="flex flex-col gap-2 pb-1">
+          <legend class="text-sm font-medium">{{ t('items.editor.kind') }}</legend>
+          <div class="join w-full shadow-xs">
+            <button
+              type="button"
+              class="btn join-item btn-sm flex-1"
+              :class="{ 'btn-primary': form.kind === 'habit' }"
+              data-testid="kind-habit"
+              @click="form.kind = 'habit'"
+            >
+              {{ t('items.editor.kindHabit') }}
+            </button>
+            <button
+              type="button"
+              class="btn join-item btn-sm flex-1"
+              :class="{ 'btn-primary': form.kind === 'event' }"
+              data-testid="kind-event"
+              @click="form.kind = 'event'"
+            >
+              {{ t('items.editor.kindEvent') }}
+            </button>
+          </div>
+        </fieldset>
+
         <fieldset class="flex flex-col gap-2.5" :disabled="isEdit">
           <legend class="text-sm font-medium">{{ t('items.editor.type') }}</legend>
           <div class="join flex-wrap shadow-xs">
@@ -494,6 +523,7 @@ const showHoliday = computed(() => holidayAllowed(form))
               class="select select-bordered w-full"
               data-testid="f-period"
             >
+              <option value="once">{{ t('items.editor.period.once') }}</option>
               <option value="daily">{{ t('items.editor.period.daily') }}</option>
               <option value="interval">{{ t('items.editor.period.interval') }}</option>
               <option value="weekly">{{ t('items.editor.period.weekly') }}</option>
@@ -501,6 +531,15 @@ const showHoliday = computed(() => holidayAllowed(form))
               <option value="yearly">{{ t('items.editor.period.yearly') }}</option>
               <option value="custom">{{ t('items.editor.period.custom') }}</option>
             </select>
+            <label v-if="form.periodKind === 'once'" class="flex items-center gap-2 text-sm pt-1">
+              {{ t('items.editor.dueDate') }}
+              <input
+                v-model="form.dtstart"
+                type="date"
+                class="input input-bordered input-sm"
+                data-testid="f-due-date"
+              />
+            </label>
             <label v-if="form.periodKind === 'interval'" class="flex items-center gap-2">
               <template v-for="(p, i) in tParts('items.editor.everyNDays')" :key="i">
                 <input
@@ -576,10 +615,24 @@ const showHoliday = computed(() => holidayAllowed(form))
                 data-testid="f-custom"
               />
             </label>
-            <label class="flex items-center gap-2 text-sm pt-1"
-              >{{ t('items.editor.endsOn') }}
-              <input v-model="form.until" type="date" class="input input-bordered input-sm"
-            /></label>
+            <label v-if="form.periodKind !== 'once'" class="flex items-center gap-2 text-sm pt-1">
+              {{ t('items.editor.startsOn') }}
+              <input
+                v-model="form.dtstart"
+                type="date"
+                class="input input-bordered input-sm"
+                data-testid="f-starts-on"
+              />
+            </label>
+            <label v-if="form.periodKind !== 'once'" class="flex items-center gap-2 text-sm pt-1">
+              {{ t('items.editor.endsOn') }}
+              <input
+                v-model="form.until"
+                type="date"
+                class="input input-bordered input-sm"
+                data-testid="f-ends-on"
+              />
+            </label>
             <fieldset
               v-if="showHoliday"
               class="flex flex-col gap-2 rounded-lg border border-base-300 bg-base-200/40 p-3 mt-1"

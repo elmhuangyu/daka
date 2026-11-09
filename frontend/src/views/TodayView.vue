@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { useOfflineStore } from '../stores/offline'
@@ -20,6 +20,19 @@ const privacy = usePrivacyStore()
 const store = useTodayStore()
 const offline = useOfflineStore()
 
+const upcomingDays = ref<3 | 7>(3)
+const selectedUnscheduledId = ref<number | null>(null)
+
+const filteredUpcoming = computed(() =>
+  store.upcoming.filter((u) => u.days_until <= upcomingDays.value),
+)
+
+async function logUnscheduled() {
+  if (!selectedUnscheduledId.value) return
+  await store.submit({ item_id: selectedUnscheduledId.value, mode: 'set', value: 1 })
+  selectedUnscheduledId.value = null
+}
+
 const sections = computed(
   () =>
     [
@@ -35,6 +48,7 @@ const sections = computed(
 )
 const visibleCount = computed(
   () =>
+    store.overdueCards.length +
     store.todoCards.length +
     store.maintenanceCards.length +
     store.quotaCards.length +
@@ -61,16 +75,58 @@ watch(
 
 <template>
   <section class="mx-auto max-w-2xl space-y-4 p-4">
-    <header v-if="store.view" class="flex flex-wrap items-baseline justify-between gap-2 pb-1">
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight">
-          {{ t('today.heading') }} {{ store.view.date }}
-          <small class="text-base font-normal text-base-content/70 ml-1">{{
-            weekdayName(store.view.weekday)
-          }}</small>
-        </h1>
+    <header v-if="store.view" class="flex flex-wrap items-center justify-between gap-3 pb-1">
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          class="btn btn-sm btn-circle btn-ghost"
+          :aria-label="t('today.prevDay')"
+          data-testid="prev-day"
+          @click="store.goToPrevDay()"
+        >
+          <Icon icon="lucide:chevron-left" class="size-5" />
+        </button>
+        <div class="flex items-baseline gap-2">
+          <input
+            type="date"
+            class="input input-sm input-ghost font-bold text-xl px-1 cursor-pointer focus:bg-base-200"
+            :value="store.view.date"
+            @change="store.goToDate(($event.target as HTMLInputElement).value)"
+          />
+          <span class="text-sm font-normal text-base-content/70">
+            {{ weekdayName(store.view.weekday) }}
+          </span>
+          <span v-if="store.isToday" class="badge badge-primary badge-outline badge-xs text-[10px]">
+            {{ t('today.todayBadge') }}
+          </span>
+        </div>
+        <button
+          type="button"
+          class="btn btn-sm btn-circle btn-ghost"
+          :aria-label="t('today.nextDay')"
+          data-testid="next-day"
+          @click="store.goToNextDay()"
+        >
+          <Icon icon="lucide:chevron-right" class="size-5" />
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button
+          v-if="!store.isToday"
+          type="button"
+          class="btn btn-xs btn-outline btn-primary"
+          @click="store.goToToday()"
+        >
+          {{ t('today.jumpToday') }}
+        </button>
       </div>
     </header>
+
+    <div v-if="store.isFuture" class="alert alert-info text-xs py-2 shadow-xs" role="status">
+      <Icon icon="lucide:info" class="size-4 shrink-0" />
+      <span>{{ t('today.futureNotice') }}</span>
+    </div>
 
     <p
       v-if="store.loading && !store.view"
@@ -129,6 +185,34 @@ watch(
         </p>
       </div>
 
+      <!-- Overdue section: keep reminding until completed -->
+      <section
+        v-if="store.overdueCards.length"
+        class="card card-border border-error/40 bg-error/5 p-4 shadow-xs space-y-3"
+        data-testid="section-overdue"
+      >
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-bold text-error flex items-center gap-2">
+            <Icon icon="lucide:alert-circle" class="size-4" />
+            {{ t('today.section.overdue') }} ({{ store.overdueCards.length }})
+          </h2>
+          <span class="text-xs text-error/80">{{ t('today.overdueHint') }}</span>
+        </div>
+        <ul class="space-y-2" data-testid="overdue-list">
+          <li v-for="c in store.overdueCards" :key="c.detail.id">
+            <ItemCard
+              :vm="c"
+              :category="cat(c)"
+              variant="todo"
+              :busy="store.busy.includes(c.detail.id)"
+              :pending="offline.pendingItems.includes(c.detail.id)"
+              @log="log"
+              @remove="store.remove(c.detail.id, $event)"
+            />
+          </li>
+        </ul>
+      </section>
+
       <template v-for="s in sections" :key="s.id">
         <section
           v-if="s.cards.length"
@@ -153,6 +237,39 @@ watch(
           </ul>
         </section>
       </template>
+
+      <!-- Quick Log for Unscheduled items / 随手记 -->
+      <div
+        v-if="store.unscheduledItems.length"
+        class="card card-border bg-base-100 border-base-300 p-4 shadow-xs space-y-3"
+        data-testid="section-unscheduled"
+      >
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold text-base-content/80 flex items-center gap-2">
+            <Icon icon="lucide:pencil" class="size-4 text-primary" />
+            {{ t('today.unscheduledTitle') }}
+          </h3>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <select
+            v-model="selectedUnscheduledId"
+            class="select select-sm select-bordered flex-1 min-w-40"
+          >
+            <option :value="null">{{ t('today.selectToLog') }}</option>
+            <option v-for="u in store.unscheduledItems" :key="u.id" :value="u.id">
+              {{ u.name }}
+            </option>
+          </select>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary shadow-xs"
+            :disabled="!selectedUnscheduledId || store.busy.includes(selectedUnscheduledId)"
+            @click="logUnscheduled"
+          >
+            {{ t('today.logNow') }}
+          </button>
+        </div>
+      </div>
 
       <details
         v-if="store.doneCards.length"
@@ -193,6 +310,55 @@ watch(
           </ul>
         </div>
       </details>
+
+      <!-- Upcoming section: next 3 / 7 days due -->
+      <div
+        v-if="store.upcoming.length"
+        class="card card-border bg-base-100 border-base-300 p-4 shadow-xs space-y-3"
+        data-testid="section-upcoming"
+      >
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold text-base-content/80 flex items-center gap-2">
+            <Icon icon="lucide:calendar-clock" class="size-4 text-primary" />
+            {{ t('today.upcomingTitle') }}
+          </h3>
+          <div class="join">
+            <button
+              type="button"
+              class="btn btn-xs join-item"
+              :class="{ 'btn-primary': upcomingDays === 3, 'btn-ghost': upcomingDays !== 3 }"
+              @click="upcomingDays = 3"
+            >
+              {{ t('today.next3Days') }}
+            </button>
+            <button
+              type="button"
+              class="btn btn-xs join-item"
+              :class="{ 'btn-primary': upcomingDays === 7, 'btn-ghost': upcomingDays !== 7 }"
+              @click="upcomingDays = 7"
+            >
+              {{ t('today.next7Days') }}
+            </button>
+          </div>
+        </div>
+        <ul class="divide-y divide-base-200">
+          <li
+            v-for="u in filteredUpcoming"
+            :key="`${u.id}-${u.due_date}`"
+            class="flex items-center justify-between py-2 text-sm"
+          >
+            <span class="font-medium text-base-content/90">{{ u.name }}</span>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-base-content/60 font-mono">{{ u.due_date }}</span>
+              <span class="badge badge-sm badge-ghost font-mono">
+                {{
+                  u.days_until === 1 ? t('today.tomorrow') : t('today.inNDays', { n: u.days_until })
+                }}
+              </span>
+            </div>
+          </li>
+        </ul>
+      </div>
     </template>
 
     <QuickAddForm @created="store.refresh()" />

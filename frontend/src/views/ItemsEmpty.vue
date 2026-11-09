@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
-import { RouterLink } from 'vue-router'
 import { useI18n } from '../i18n'
 
 const { t } = useI18n()
@@ -22,10 +21,6 @@ const { t } = useI18n()
       <p class="text-sm text-base-content/70">
         {{ t('items.empty') }}
       </p>
-      <RouterLink to="/items/new" class="btn btn-primary btn-sm mt-2 gap-1.5 shadow-xs">
-        <Icon icon="lucide:plus" class="size-4" aria-hidden="true" />
-        {{ t('items.new') }}
-      </RouterLink>
     </div>
   </section>
 </template>

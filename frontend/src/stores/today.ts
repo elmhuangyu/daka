@@ -30,6 +30,16 @@ export const useTodayStore = defineStore('today', () => {
   /** Item ids with a write in flight. */
   const busy = ref<number[]>([])
 
+  const selectedDate = ref<string>('')
+  const actualToday = ref<string>('')
+
+  const isToday = computed(
+    () => !selectedDate.value || !actualToday.value || selectedDate.value === actualToday.value,
+  )
+  const isFuture = computed(
+    () => !!actualToday.value && !!selectedDate.value && selectedDate.value > actualToday.value,
+  )
+
   // Only the latest refresh may update state; stale responses are dropped.
   let seq = 0
 
@@ -50,19 +60,43 @@ export const useTodayStore = defineStore('today', () => {
     { flush: 'sync' },
   )
 
-  async function refresh() {
+  function offsetDate(dateStr: string, days: number): string {
+    const d = new Date(dateStr + 'T00:00:00')
+    d.setDate(d.getDate() + days)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+
+  async function refresh(targetDate?: string) {
     const my = ++seq
     const redact = privacy.redact
+    if (targetDate !== undefined) {
+      selectedDate.value = targetDate
+    }
     if (!view.value) loading.value = true
     try {
+      const qDate =
+        selectedDate.value && actualToday.value && selectedDate.value !== actualToday.value
+          ? selectedDate.value
+          : undefined
       const [v, it, cats] = await Promise.all([
-        api.getToday(redact),
+        api.getToday(redact, qDate),
         api.getItems(redact),
         api.getCategories(),
       ])
       const ls = await api.getCheckinsOn(v.date, redact)
       if (my !== seq) return
+      if (!actualToday.value) {
+        actualToday.value = v.date
+      }
       view.value = v
+      if (qDate) {
+        selectedDate.value = v.date
+      } else {
+        selectedDate.value = ''
+      }
       items.value = it.items ?? []
       // The categories endpoint has no redact flag: mask sensitive ones here.
       categories.value = (cats.categories ?? []).map((c) =>
@@ -78,6 +112,26 @@ export const useTodayStore = defineStore('today', () => {
     } finally {
       if (my === seq) loading.value = false
     }
+  }
+
+  function goToPrevDay() {
+    if (!view.value) return
+    return refresh(offsetDate(view.value.date, -1))
+  }
+
+  function goToNextDay() {
+    if (!view.value) return
+    return refresh(offsetDate(view.value.date, 1))
+  }
+
+  function goToDate(d: string) {
+    if (!d) return
+    return refresh(d)
+  }
+
+  function goToToday() {
+    selectedDate.value = ''
+    return refresh('')
   }
 
   const detailById = computed(() => new Map(items.value.map((d) => [d.id, d])))
@@ -100,20 +154,37 @@ export const useTodayStore = defineStore('today', () => {
   const scoped = (cards: CardVM[]) =>
     cards.filter((c) => matchesFilter(c.detail.category_id, filter.value))
 
-  const todoCards = computed(() => scoped(dueCards.value.filter((c) => !c.today?.done)))
+  const overdueCards = computed(() =>
+    scoped(dueCards.value.filter((c) => c.today?.overdue && !c.today?.done)),
+  )
+  const todoCards = computed(() =>
+    scoped(dueCards.value.filter((c) => !c.today?.overdue && !c.today?.done)),
+  )
   const rollingDone = computed(() =>
     items.value
       .filter((d) => d.current_rule.schedule_type === 'rolling' && !needsAttention(d))
       .map(vm)
       .filter((c) => c.logs.length > 0),
   )
+  const unscheduledItems = computed(() =>
+    items.value.filter((d) => d.current_rule.schedule_type === 'none'),
+  )
+  const unscheduledDone = computed(() =>
+    unscheduledItems.value.map(vm).filter((c) => c.logs.length > 0),
+  )
   const doneCards = computed(() =>
-    scoped([...dueCards.value.filter((c) => c.today?.done), ...rollingDone.value]),
+    scoped([
+      ...dueCards.value.filter((c) => c.today?.done),
+      ...rollingDone.value,
+      ...unscheduledDone.value,
+    ]),
   )
   const maintenanceCards = computed(() => scoped(items.value.filter(needsAttention).map(vm)))
   const quotaCards = computed(() =>
     scoped(items.value.filter((d) => d.current_rule.schedule_type === 'quota').map(vm)),
   )
+
+  const upcoming = computed(() => view.value?.upcoming ?? [])
 
   /** Ring over the filtered due items; the unfiltered view uses the server's progress. */
   const ring = computed(() => {
@@ -146,7 +217,7 @@ export const useTodayStore = defineStore('today', () => {
       error.value = ''
       // A queued (offline) action is not applied yet: keep the server state, show it as pending.
       if ((r as { queued?: boolean } | undefined)?.queued) return
-      await refresh()
+      await refresh(selectedDate.value)
     } catch (e) {
       error.value = api.describeError(e)
     } finally {
@@ -157,7 +228,11 @@ export const useTodayStore = defineStore('today', () => {
   /** One user action = one Idempotency-Key. */
   function submit(input: CheckinInput) {
     const key = api.newIdempotencyKey()
-    return guarded(input.item_id, () => useOfflineStore().checkin(input, key))
+    const payload = { ...input }
+    if (!payload.date && !isToday.value && view.value?.date) {
+      payload.date = view.value.date
+    }
+    return guarded(input.item_id, () => useOfflineStore().checkin(payload, key))
   }
 
   function remove(itemId: number, logId: number) {
@@ -173,14 +248,25 @@ export const useTodayStore = defineStore('today', () => {
     error,
     filter,
     busy,
+    selectedDate,
+    actualToday,
+    isToday,
+    isFuture,
+    overdueCards,
     todoCards,
     doneCards,
     maintenanceCards,
     quotaCards,
+    unscheduledItems,
+    upcoming,
     ring,
     categoryCounts,
     refresh,
     clear,
+    goToPrevDay,
+    goToNextDay,
+    goToDate,
+    goToToday,
     submit,
     remove,
   }

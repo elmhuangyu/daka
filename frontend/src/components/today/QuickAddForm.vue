@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { createItem, describeError } from '../../api'
 import { buildRRule, WEEKDAYS, type Weekday } from '../../rrule'
@@ -98,6 +99,13 @@ async function submit() {
         <button type="submit" class="btn btn-sm btn-primary shadow-xs">
           {{ t('quickAdd.create') }}
         </button>
+        <RouterLink
+          to="/items/new"
+          class="btn btn-sm btn-ghost gap-1.5 text-xs text-base-content/70"
+        >
+          <Icon icon="lucide:sliders-horizontal" class="size-3.5" aria-hidden="true" />
+          {{ t('quickAdd.advanced') }}
+        </RouterLink>
       </form>
       <p
         v-if="error"
