@@ -168,7 +168,7 @@ func buildItemResponses(db *gorm.DB, items []dbmodels.Item, today string) ([]ite
 		targets := optionTargetsOf(cur)
 		resp := itemResponse{
 			ID: it.ID, Name: it.Name, Description: it.Description, TrackerType: string(it.TrackerType),
-			Kind: string(it.Kind), Polarity: string(it.Polarity), CategoryID: it.CategoryID,
+			Kind: string(it.Kind), Polarity: string(it.Polarity), Color: it.Color, CategoryID: it.CategoryID,
 			IsSensitive: it.IsSensitive, EffectiveSensitive: sens(it), Pinned: it.Pinned, SortOrder: it.SortOrder, Archived: it.Archived,
 			RemindTime: it.RemindTime, Unit: it.Unit, Step: it.Step, MinVal: it.MinVal, MaxVal: it.MaxVal,
 			Aggregate: string(it.Aggregate), WarningDays: it.WarningDays,

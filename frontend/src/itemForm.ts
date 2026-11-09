@@ -29,6 +29,7 @@ export interface OptionForm {
 export interface ItemForm {
   name: string
   kind: 'habit' | 'event'
+  color: string
   trackerType: TrackerType
   polarity: Polarity
   categoryId: number | null
@@ -71,6 +72,7 @@ export function emptyForm(): ItemForm {
   return {
     name: '',
     kind: 'habit',
+    color: '',
     trackerType: 'boolean',
     polarity: 'positive',
     categoryId: null,
@@ -329,6 +331,7 @@ export function buildCreateBody(f: ItemForm): Json {
     options: f.options.map(optionBody),
     rule,
   }
+  if (f.color) body.color = f.color
   if (isNumeric(f.trackerType)) {
     body.unit = nums.unit
     body.step = nums.step
@@ -347,6 +350,7 @@ export function formFromItem(it: ItemDto): ItemForm {
   const r = it.current_rule
   f.name = it.name
   f.kind = (it.kind as 'habit' | 'event') || 'habit'
+  f.color = it.color ?? ''
   f.trackerType = it.tracker_type as TrackerType
   f.polarity = it.polarity as Polarity
   f.categoryId = it.category_id
@@ -444,6 +448,7 @@ export function buildEditPlan(
   const patch: Json = {}
   if (f.name.trim() !== o.name) patch.name = f.name.trim()
   if (f.kind !== o.kind) patch.kind = f.kind
+  if (f.color !== o.color) patch.color = f.color
   if (f.categoryId !== o.categoryId) patch.category_id = f.categoryId
   if (f.isSensitive !== o.isSensitive) patch.is_sensitive = f.isSensitive
   if (f.remindTime !== o.remindTime) patch.remind_time = f.remindTime === '' ? null : f.remindTime

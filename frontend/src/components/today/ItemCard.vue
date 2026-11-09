@@ -151,12 +151,21 @@ function addAdhoc() {
   <article
     class="card card-border bg-base-100 border-base-300 shadow-xs transition-all duration-200 hover:border-primary/30"
     :class="{ 'done opacity-70 bg-base-100/60': variant === 'done' }"
+    :style="d.color ? { borderLeftColor: d.color, borderLeftWidth: '4px' } : {}"
     :data-testid="`card-${d.id}`"
     :aria-busy="busy"
   >
     <div class="card-body gap-3 p-3.5 sm:p-4">
       <header class="flex flex-wrap items-center justify-between gap-2">
-        <h3 class="name text-base font-semibold" :class="{ sensitive: d.effective_sensitive }">
+        <h3
+          class="name text-base font-semibold flex items-center gap-2"
+          :class="{ sensitive: d.effective_sensitive }"
+        >
+          <span
+            v-if="d.color"
+            class="size-2.5 rounded-full shrink-0"
+            :style="{ backgroundColor: d.color }"
+          />
           {{ d.name }}
         </h3>
         <span v-if="pending" class="badge badge-warning badge-sm" data-testid="pending-badge">
@@ -219,9 +228,11 @@ function addAdhoc() {
           {{
             checked
               ? t('today.card.undo')
-              : d.tracker_type === 'maintenance'
-                ? t('today.card.markDone')
-                : t('today.card.check')
+              : d.kind === 'event'
+                ? t('today.card.complete')
+                : d.tracker_type === 'maintenance'
+                  ? t('today.card.markDone')
+                  : t('today.card.check')
           }}
         </button>
       </div>

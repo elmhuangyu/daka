@@ -78,6 +78,7 @@ type patchItemRequest struct {
 	// Display fields, edited in place.
 	Name        *string          `json:"name"`
 	Description *string          `json:"description"`
+	Color       *string          `json:"color"`
 	CategoryID  nullable[uint]   `json:"category_id"`
 	IsSensitive *bool            `json:"is_sensitive"`
 	Pinned      *bool            `json:"pinned"`
@@ -319,6 +320,9 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 		}
 		item.Description = *req.Description
 	}
+	if req.Color != nil {
+		item.Color = *req.Color
+	}
 	if req.Pinned != nil {
 		item.Pinned = *req.Pinned
 	}
@@ -445,7 +449,7 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 	}
 
 	if err := tx.Model(&dbmodels.Item{}).Where("id = ?", item.ID).Select(
-		"Name", "Description", "CategoryID", "IsSensitive", "Pinned", "SortOrder", "Archived", "RemindTime",
+		"Name", "Description", "Color", "CategoryID", "IsSensitive", "Pinned", "SortOrder", "Archived", "RemindTime",
 		"Unit", "Step", "MinVal", "MaxVal", "Aggregate", "WarningDays").Updates(&item).Error; err != nil {
 		return result{}, err
 	}

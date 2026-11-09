@@ -50,7 +50,7 @@ func TestSchemaMatchesDesign(t *testing.T) {
 		{&Category{}, "categories", map[string]string{"id": tInt, "user_id": tStr, "name": tStr, "color": tStr, "icon": tStr,
 			"is_sensitive": tBool, "sort_order": tInt}},
 		{&Item{}, "items", map[string]string{"id": tInt, "user_id": tStr, "category_id": tInt, "name": tStr, "description": tStr,
-			"tracker_type": tStr, "unit": tStr, "aggregate": tStr, "step": tFloat, "min_val": tFloat, "max_val": tFloat,
+			"color": tStr, "tracker_type": tStr, "unit": tStr, "aggregate": tStr, "step": tFloat, "min_val": tFloat, "max_val": tFloat,
 			"warning_days": tInt, "kind": tStr, "polarity": tStr, "pinned": tBool, "is_sensitive": tBool, "remind_time": tStr,
 			"sort_order": tInt, "archived": tBool}},
 		{&CheckinLog{}, "checkin_logs", map[string]string{"id": tInt, "user_id": tStr, "item_id": tInt, "checkin_date": tStr,

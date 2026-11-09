@@ -8,9 +8,21 @@ import {
   type CalendarSettings,
 } from '../../api'
 import { SUPPORTED_LOCALES, currentLocale, setLocale, useI18n } from '../../i18n'
+import {
+  currentDateFormat,
+  setDateFormat,
+  DATE_FORMAT_OPTIONS,
+  type DateFormat,
+} from '../../i18n/format'
 
 const { t } = useI18n()
 const lang = ref(currentLocale())
+
+const dateFormat = ref<DateFormat>(currentDateFormat())
+
+function changeDateFormat() {
+  setDateFormat(dateFormat.value)
+}
 
 async function changeLanguage() {
   // Per-device preference: stored in this browser only, never sent to the server.
@@ -171,6 +183,21 @@ async function save() {
             </optgroup>
           </select>
           <span class="text-[11px] opacity-60">{{ t('settings.theme.hint') }}</span>
+        </label>
+
+        <label class="form-control gap-1.5">
+          <span class="label-text font-medium text-xs">{{ t('settings.dateFormat.label') }}</span>
+          <select
+            v-model="dateFormat"
+            class="select select-bordered select-sm md:select-md w-full"
+            data-testid="g-date-format"
+            @change="changeDateFormat"
+          >
+            <option v-for="d in DATE_FORMAT_OPTIONS" :key="d.value" :value="d.value">
+              {{ d.label }} ({{ d.sample }})
+            </option>
+          </select>
+          <span class="text-[11px] opacity-60">{{ t('settings.dateFormat.hint') }}</span>
         </label>
 
         <label class="form-control gap-1.5">

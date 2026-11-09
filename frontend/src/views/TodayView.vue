@@ -10,7 +10,7 @@ import CompletionRing from '../components/today/CompletionRing.vue'
 import CategoryFilter from '../components/today/CategoryFilter.vue'
 import ItemCard from '../components/today/ItemCard.vue'
 import QuickAddForm from '../components/today/QuickAddForm.vue'
-import type { CheckinInput } from '../api'
+import { createAdHocEvent, type CheckinInput } from '../api'
 import { useI18n } from '../i18n'
 import { weekdayName } from '../i18n/format'
 
@@ -20,17 +20,42 @@ const privacy = usePrivacyStore()
 const store = useTodayStore()
 const offline = useOfflineStore()
 
-const upcomingDays = ref<3 | 7>(3)
-const selectedUnscheduledId = ref<number | null>(null)
+const upcomingDays = ref<3 | 7 | 14>(7)
 
 const filteredUpcoming = computed(() =>
   store.upcoming.filter((u) => u.days_until <= upcomingDays.value),
 )
 
-async function logUnscheduled() {
-  if (!selectedUnscheduledId.value) return
-  await store.submit({ item_id: selectedUnscheduledId.value, mode: 'set', value: 1 })
-  selectedUnscheduledId.value = null
+const quickLogQuery = ref('')
+const quickLogOpen = ref(false)
+const quickLogBusy = ref(false)
+
+const matchingUnscheduled = computed(() => {
+  const q = quickLogQuery.value.trim().toLowerCase()
+  if (!q) return store.unscheduledItems
+  return store.unscheduledItems.filter((it) => it.name.toLowerCase().includes(q))
+})
+
+async function submitQuickLog(target: { id?: number; name: string }) {
+  if (quickLogBusy.value) return
+  const name = target.name.trim()
+  if (!name && !target.id) return
+  quickLogBusy.value = true
+  try {
+    if (target.id) {
+      await store.submit({ item_id: target.id, mode: 'set', value: 1 })
+    } else {
+      const created = await createAdHocEvent(name)
+      await store.submit({ item_id: created.id, mode: 'set', value: 1 })
+    }
+    quickLogQuery.value = ''
+    quickLogOpen.value = false
+    await store.refresh()
+  } catch (e) {
+    console.error('Quick log failed:', e)
+  } finally {
+    quickLogBusy.value = false
+  }
 }
 
 const sections = computed(
@@ -76,33 +101,36 @@ watch(
 <template>
   <section class="mx-auto max-w-2xl space-y-4 p-4">
     <header v-if="store.view" class="flex flex-wrap items-center justify-between gap-3 pb-1">
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1.5 flex-nowrap shrink-0">
         <button
           type="button"
-          class="btn btn-sm btn-circle btn-ghost"
+          class="btn btn-sm btn-circle btn-ghost shrink-0"
           :aria-label="t('today.prevDay')"
           data-testid="prev-day"
           @click="store.goToPrevDay()"
         >
           <Icon icon="lucide:chevron-left" class="size-5" />
         </button>
-        <div class="flex items-baseline gap-2">
+        <div class="flex items-center gap-2 flex-nowrap shrink-0 whitespace-nowrap">
           <input
             type="date"
-            class="input input-sm input-ghost font-bold text-xl px-1 cursor-pointer focus:bg-base-200"
+            class="input input-sm input-ghost font-bold text-lg sm:text-xl px-1 cursor-pointer focus:bg-base-200 shrink-0"
             :value="store.view.date"
             @change="store.goToDate(($event.target as HTMLInputElement).value)"
           />
-          <span class="text-sm font-normal text-base-content/70">
+          <span class="text-sm font-normal text-base-content/70 whitespace-nowrap shrink-0">
             {{ weekdayName(store.view.weekday) }}
           </span>
-          <span v-if="store.isToday" class="badge badge-primary badge-outline badge-xs text-[10px]">
+          <span
+            v-if="store.isToday"
+            class="badge badge-primary badge-outline badge-xs text-[10px] whitespace-nowrap shrink-0"
+          >
             {{ t('today.todayBadge') }}
           </span>
         </div>
         <button
           type="button"
-          class="btn btn-sm btn-circle btn-ghost"
+          class="btn btn-sm btn-circle btn-ghost shrink-0"
           :aria-label="t('today.nextDay')"
           data-testid="next-day"
           @click="store.goToNextDay()"
@@ -111,11 +139,11 @@ watch(
         </button>
       </div>
 
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 shrink-0">
         <button
           v-if="!store.isToday"
           type="button"
-          class="btn btn-xs btn-outline btn-primary"
+          class="btn btn-xs btn-outline btn-primary shrink-0"
           @click="store.goToToday()"
         >
           {{ t('today.jumpToday') }}
@@ -240,7 +268,6 @@ watch(
 
       <!-- Quick Log for Unscheduled items / 随手记 -->
       <div
-        v-if="store.unscheduledItems.length"
         class="card card-border bg-base-100 border-base-300 p-4 shadow-xs space-y-3"
         data-testid="section-unscheduled"
       >
@@ -250,24 +277,74 @@ watch(
             {{ t('today.unscheduledTitle') }}
           </h3>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <select
-            v-model="selectedUnscheduledId"
-            class="select select-sm select-bordered flex-1 min-w-40"
+        <div class="relative w-full">
+          <div class="join w-full">
+            <div class="relative flex-1">
+              <input
+                v-model="quickLogQuery"
+                type="text"
+                class="input input-sm input-bordered w-full join-item pr-8"
+                :placeholder="t('today.quickLogPlaceholder')"
+                autocomplete="off"
+                data-testid="quick-log-input"
+                @focus="quickLogOpen = true"
+                @keydown.enter.prevent="submitQuickLog({ name: quickLogQuery })"
+              />
+              <button
+                v-if="quickLogQuery"
+                type="button"
+                class="absolute right-2 top-1.5 text-base-content/40 hover:text-base-content/80"
+                @click="quickLogQuery = ''"
+              >
+                <Icon icon="lucide:x" class="size-4" />
+              </button>
+            </div>
+            <button
+              type="button"
+              class="btn btn-sm btn-primary join-item shadow-xs"
+              :disabled="!quickLogQuery.trim() || quickLogBusy"
+              data-testid="quick-log-submit"
+              @click="submitQuickLog({ name: quickLogQuery })"
+            >
+              <span v-if="quickLogBusy" class="loading loading-spinner loading-xs" />
+              <Icon v-else icon="lucide:plus" class="size-4" />
+              {{ t('today.logNow') }}
+            </button>
+          </div>
+
+          <!-- Dropdown suggestions -->
+          <div
+            v-if="quickLogOpen && (matchingUnscheduled.length > 0 || quickLogQuery.trim())"
+            class="absolute left-0 right-0 z-30 mt-1 max-h-60 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-lg"
           >
-            <option :value="null">{{ t('today.selectToLog') }}</option>
-            <option v-for="u in store.unscheduledItems" :key="u.id" :value="u.id">
-              {{ u.name }}
-            </option>
-          </select>
-          <button
-            type="button"
-            class="btn btn-sm btn-primary shadow-xs"
-            :disabled="!selectedUnscheduledId || store.busy.includes(selectedUnscheduledId)"
-            @click="logUnscheduled"
-          >
-            {{ t('today.logNow') }}
-          </button>
+            <!-- Create new option if typed text doesn't match an exact existing item -->
+            <button
+              v-if="
+                quickLogQuery.trim() &&
+                !matchingUnscheduled.some(
+                  (it) => it.name.toLowerCase() === quickLogQuery.trim().toLowerCase(),
+                )
+              "
+              type="button"
+              class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-primary/10 text-primary font-medium flex items-center gap-2 cursor-pointer"
+              @mousedown.prevent="submitQuickLog({ name: quickLogQuery })"
+            >
+              <Icon icon="lucide:sparkles" class="size-4 shrink-0" />
+              <span>{{ t('today.createAndLog', { name: quickLogQuery.trim() }) }}</span>
+            </button>
+
+            <!-- Matching existing unscheduled items -->
+            <button
+              v-for="u in matchingUnscheduled"
+              :key="u.id"
+              type="button"
+              class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-base-200 flex items-center justify-between cursor-pointer"
+              @mousedown.prevent="submitQuickLog(u)"
+            >
+              <span class="font-medium text-base-content/90">{{ u.name }}</span>
+              <span class="text-xs text-base-content/50">{{ t('today.card.check') }}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -338,6 +415,14 @@ watch(
               @click="upcomingDays = 7"
             >
               {{ t('today.next7Days') }}
+            </button>
+            <button
+              type="button"
+              class="btn btn-xs join-item"
+              :class="{ 'btn-primary': upcomingDays === 14, 'btn-ghost': upcomingDays !== 14 }"
+              @click="upcomingDays = 14"
+            >
+              {{ t('today.next14Days') }}
             </button>
           </div>
         </div>

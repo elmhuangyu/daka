@@ -21,6 +21,7 @@ type Item struct {
 
 	Kind     Kind     `gorm:"size:16;not null;default:habit"`
 	Polarity Polarity `gorm:"size:16;not null;default:positive"`
+	Color    string   `gorm:"size:32"`
 
 	Pinned      bool `gorm:"not null;default:false"`
 	IsSensitive bool `gorm:"not null;default:false"`

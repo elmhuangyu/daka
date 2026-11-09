@@ -49,3 +49,55 @@ export function formatLongDate(iso: string): string {
 export function formatMonthYear(iso: string): string {
   return fmt({ year: 'numeric', month: 'long' }).format(isoToDate(iso))
 }
+
+export type DateFormat = 'YYYY-MM-DD' | 'YYYY/MM/DD' | 'MM/DD/YYYY' | 'DD/MM/YYYY'
+
+export const DATE_FORMAT_OPTIONS: { value: DateFormat; label: string; sample: string }[] = [
+  { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD', sample: '2026-11-09' },
+  { value: 'YYYY/MM/DD', label: 'YYYY/MM/DD', sample: '2026/11/09' },
+  { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY', sample: '11/09/2026' },
+  { value: 'DD/MM/YYYY', label: 'DD/MM/YYYY', sample: '09/11/2026' },
+]
+
+export function currentDateFormat(): DateFormat {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('daka:date_format')
+      if (saved === 'YYYY/MM/DD' || saved === 'MM/DD/YYYY' || saved === 'DD/MM/YYYY') {
+        return saved
+      }
+    }
+  } catch {
+    // storage unavailable
+  }
+  return 'YYYY-MM-DD'
+}
+
+export function setDateFormat(df: DateFormat) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('daka:date_format', df)
+    }
+  } catch {
+    // storage unavailable
+  }
+}
+
+export function formatCustomDate(iso: string, format?: DateFormat): string {
+  if (!iso || !iso.includes('-')) return iso
+  const parts = iso.split('-')
+  if (parts.length !== 3) return iso
+  const [y, m, d] = parts
+  const f = format || currentDateFormat()
+  switch (f) {
+    case 'YYYY/MM/DD':
+      return `${y}/${m}/${d}`
+    case 'MM/DD/YYYY':
+      return `${m}/${d}/${y}`
+    case 'DD/MM/YYYY':
+      return `${d}/${m}/${y}`
+    case 'YYYY-MM-DD':
+    default:
+      return `${y}-${m}-${d}`
+  }
+}

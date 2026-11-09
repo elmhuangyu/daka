@@ -61,6 +61,7 @@ type createItemRequest struct {
 	TrackerType string          `json:"tracker_type"`
 	Kind        string          `json:"kind"`
 	Polarity    string          `json:"polarity"`
+	Color       string          `json:"color,omitempty"`
 	CategoryID  *uint           `json:"category_id"`
 	IsSensitive bool            `json:"is_sensitive"`
 	Unit        string          `json:"unit"`
@@ -122,6 +123,7 @@ type itemResponse struct {
 	TrackerType string  `json:"tracker_type"`
 	Kind        string  `json:"kind"`
 	Polarity    string  `json:"polarity"`
+	Color       string  `json:"color,omitempty"`
 	CategoryID  *uint   `json:"category_id"`
 	IsSensitive bool    `json:"is_sensitive"`
 	// EffectiveSensitive is Item.is_sensitive OR the category's flag (DESIGN 4.1).
@@ -304,7 +306,7 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 			ver.QuotaWindow = dbmodels.QuotaWindowCalendar
 		}
 		item := dbmodels.Item{
-			UserID: userID, CategoryID: req.CategoryID, Name: name,
+			UserID: userID, CategoryID: req.CategoryID, Name: name, Color: req.Color,
 			TrackerType: tracker, Kind: kind, Polarity: polarity, IsSensitive: sensitive,
 			Unit: req.Unit, Step: req.Step, MinVal: req.MinVal, MaxVal: req.MaxVal,
 			Aggregate: dbmodels.Aggregate(req.Aggregate), WarningDays: req.WarningDays,

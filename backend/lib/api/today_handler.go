@@ -28,6 +28,7 @@ type todayItem struct {
 	CategoryID  *uint  `json:"category_id"`
 	TrackerType string `json:"tracker_type"`
 	Kind        string `json:"kind"`
+	Color       string `json:"color,omitempty"`
 	IsSensitive bool   `json:"is_sensitive"`
 	Due         bool   `json:"due"`
 	Done        bool   `json:"done"`
@@ -42,6 +43,7 @@ type upcomingItem struct {
 	CategoryID  *uint  `json:"category_id"`
 	TrackerType string `json:"tracker_type"`
 	Kind        string `json:"kind"`
+	Color       string `json:"color,omitempty"`
 	IsSensitive bool   `json:"is_sensitive"`
 	DueDate     string `json:"due_date"`
 	DaysUntil   int    `json:"days_until"`
@@ -121,7 +123,7 @@ func (s *server) today(db *gorm.DB, userID string, requestedDate string, redact,
 		ids[i] = it.ID
 	}
 
-	endRange := day.AddDate(0, 0, 7).Format(dbmodels.DateLayout)
+	endRange := day.AddDate(0, 0, 14).Format(dbmodels.DateLayout)
 	var versions []dbmodels.ItemRuleVersion
 	if err := db.Where("item_id IN ? AND effective_from <= ?", ids, endRange).Find(&versions).Error; err != nil {
 		return nil, err
@@ -177,6 +179,7 @@ func (s *server) today(db *gorm.DB, userID string, requestedDate string, redact,
 		isOverdue := false
 		overdueDate := ""
 		hasLogsToday := len(logIDs[it.ID]) > 0
+		var eventCompletedLog *dbmodels.CheckinLog
 		if it.Kind == dbmodels.KindEvent {
 			pastDates, pErr := schedule.DueDatesWith(fixedOnly(vs), lookbackStart, yesterday, cal)
 			if pErr == nil && len(pastDates) > 0 {
@@ -195,6 +198,14 @@ func (s *server) today(db *gorm.DB, userID string, requestedDate string, redact,
 					}
 				}
 			}
+			// If an event is due on this date, but has no logs on this date, check if it was completed on a later date.
+			if due && !hasLogsToday {
+				var l dbmodels.CheckinLog
+				if err := db.Where("user_id = ? AND item_id = ? AND checkin_date >= ?", userID, it.ID, date).
+					Order("checkin_date ASC, id ASC").First(&l).Error; err == nil {
+					eventCompletedLog = &l
+				}
+			}
 		}
 
 		if !due && hasLogsToday {
@@ -204,18 +215,23 @@ func (s *server) today(db *gorm.DB, userID string, requestedDate string, redact,
 		if !due {
 			continue
 		}
+		itemLogs := logIDs[it.ID]
+		if len(itemLogs) == 0 && eventCompletedLog != nil {
+			itemLogs = []uint{eventCompletedLog.ID}
+		}
 		ti := todayItem{
 			ID: it.ID, Name: it.Name, CategoryID: it.CategoryID,
 			TrackerType: string(it.TrackerType), Kind: string(it.Kind),
+			Color:       it.Color,
 			IsSensitive: sens(it),
 			Due:         true, Overdue: isOverdue, DueDate: overdueDate,
-			LogIDs: logIDs[it.ID],
+			LogIDs: itemLogs,
 		}
 		if ti.LogIDs == nil {
 			ti.LogIDs = []uint{}
 		}
 		ti.Done = len(ti.LogIDs) > 0
-		if cur := schedule.CurrentVersion(vs, date); cur != nil && ti.Done {
+		if cur := schedule.CurrentVersion(vs, date); cur != nil && ti.Done && len(dayLogs[it.ID]) > 0 {
 			// DayCompletion (DESIGN 2/2.1): targets, options and completion_rule.
 			ti.Done = schedule.DayCompletion(it.TrackerType, *cur, optsByItem[it.ID], dayLogs[it.ID], it.Aggregate).Done
 		}
@@ -258,6 +274,7 @@ func (s *server) today(db *gorm.DB, userID string, requestedDate string, redact,
 				CategoryID:  it.CategoryID,
 				TrackerType: string(it.TrackerType),
 				Kind:        string(it.Kind),
+				Color:       it.Color,
 				IsSensitive: sens(it),
 				DueDate:     fd,
 				DaysUntil:   daysUntil,

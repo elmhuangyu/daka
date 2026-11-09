@@ -58,6 +58,20 @@ const retro = ref(false)
 const effectiveFrom = ref('')
 const newCategory = ref('')
 const newCategorySensitive = ref(false)
+
+const COLOR_PRESETS = [
+  { label: 'None', value: '' },
+  { label: 'Emerald', value: '#10b981' },
+  { label: 'Blue', value: '#3b82f6' },
+  { label: 'Indigo', value: '#6366f1' },
+  { label: 'Purple', value: '#8b5cf6' },
+  { label: 'Pink', value: '#ec4899' },
+  { label: 'Rose', value: '#f43f5e' },
+  { label: 'Amber', value: '#f59e0b' },
+  { label: 'Orange', value: '#f97316' },
+  { label: 'Teal', value: '#14b8a6' },
+  { label: 'Cyan', value: '#06b6d4' },
+]
 const today = localIso()
 
 const TRACKERS = ['boolean', 'counter', 'metric', 'maintenance'] as const
@@ -253,6 +267,44 @@ const showHoliday = computed(() => holidayAllowed(form))
             data-testid="f-name"
           />
         </label>
+
+        <div class="flex flex-col gap-1.5">
+          <span class="text-sm font-medium">{{ t('items.editor.color') }}</span>
+          <div class="flex flex-wrap items-center gap-2">
+            <button
+              v-for="p in COLOR_PRESETS"
+              :key="p.value"
+              type="button"
+              class="size-7 rounded-full border-2 flex items-center justify-center transition-transform hover:scale-110 cursor-pointer"
+              :class="
+                form.color === p.value ? 'border-primary ring-2 ring-primary/30' : 'border-base-300'
+              "
+              :style="p.value ? { backgroundColor: p.value } : {}"
+              :title="p.label"
+              :aria-label="p.label"
+              data-testid="color-picker-item"
+              @click="form.color = p.value"
+            >
+              <Icon v-if="!p.value" icon="lucide:ban" class="size-4 opacity-50" />
+              <Icon
+                v-else-if="form.color === p.value"
+                icon="lucide:check"
+                class="size-4 text-white drop-shadow-xs"
+              />
+            </button>
+            <label
+              class="flex items-center gap-1.5 ml-2 cursor-pointer"
+              :title="t('items.editor.colorCustom')"
+            >
+              <input
+                v-model="form.color"
+                type="color"
+                class="size-7 p-0 rounded border border-base-300 cursor-pointer bg-transparent"
+                :aria-label="t('items.editor.colorCustom')"
+              />
+            </label>
+          </div>
+        </div>
 
         <fieldset v-if="!privacy.redact" class="flex flex-col gap-2">
           <legend class="text-sm font-medium">{{ t('items.editor.category') }}</legend>

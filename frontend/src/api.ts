@@ -12,6 +12,7 @@ export interface TodayItem {
   category_id: number | null
   tracker_type: string
   kind?: string
+  color?: string
   is_sensitive: boolean
   due: boolean
   done: boolean
@@ -26,6 +27,7 @@ export interface UpcomingItem {
   category_id: number | null
   tracker_type: string
   kind: string
+  color?: string
   is_sensitive: boolean
   due_date: string
   days_until: number
@@ -398,6 +400,7 @@ export interface ItemStatsSummary {
 export interface ItemDetail {
   id: number
   name: string
+  color?: string
   tracker_type: 'boolean' | 'counter' | 'maintenance' | 'metric' | string
   kind: 'habit' | 'event' | string
   polarity: 'positive' | 'negative' | string
@@ -531,6 +534,7 @@ export interface ItemDto {
   id: number
   name: string
   description: string
+  color?: string
   remind_time: string | null
   tracker_type: string
   kind: string
@@ -699,6 +703,19 @@ export function createItem(item: NewItem): Promise<unknown> {
       kind: 'habit',
       polarity: 'positive',
       rule: { schedule_type: 'fixed_rrule', rrule_string: item.rrule_string, holiday_mode: 'none' },
+    }),
+  )
+}
+
+export function createAdHocEvent(name: string): Promise<{ id: number }> {
+  return request<{ id: number }>(
+    '/api/items',
+    jsonInit('POST', {
+      name: name.trim(),
+      tracker_type: 'boolean',
+      kind: 'event',
+      polarity: 'positive',
+      rule: { schedule_type: 'none', holiday_mode: 'none' },
     }),
   )
 }

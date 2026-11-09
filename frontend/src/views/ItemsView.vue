@@ -145,6 +145,11 @@ watch(
                   :class="{ 'menu-active font-medium': it.id === selectedId }"
                   :data-testid="`row-${it.id}`"
                 >
+                  <span
+                    v-if="it.color"
+                    class="size-2 rounded-full shrink-0"
+                    :style="{ backgroundColor: it.color }"
+                  />
                   <span class="truncate">{{ it.name }}</span>
                   <span
                     v-for="b in badgesOf(it)"

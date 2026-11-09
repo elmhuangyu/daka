@@ -353,4 +353,16 @@ func TestTodayOverdueEventAndUpcoming(t *testing.T) {
 	}
 	require.NotNil(t, overdueItem2)
 	require.True(t, overdueItem2.Done)
+
+	// When viewing the original due date 2026-11-05, it must ALSO show as Done!
+	respDue := e.today("", "?date=2026-11-05")
+	var dueItem *todayItem
+	for i := range respDue.Items {
+		if respDue.Items[i].ID == ev.ID {
+			dueItem = &respDue.Items[i]
+			break
+		}
+	}
+	require.NotNil(t, dueItem, "event should be present on its due date")
+	require.True(t, dueItem.Done, "event completed on a later date should show Done on its due date")
 }

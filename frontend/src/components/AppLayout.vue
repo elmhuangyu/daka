@@ -55,35 +55,47 @@ function isNavActive(path: string) {
           class="flex items-center gap-2 px-1 py-3 mb-2"
           :class="{ 'justify-center': collapsed }"
         >
-          <div
-            class="size-8 rounded-lg bg-primary text-primary-content flex items-center justify-center font-bold shadow-xs shrink-0"
-          >
-            <Icon icon="lucide:check-circle-2" class="size-5" aria-hidden="true" />
-          </div>
-          <span v-if="!collapsed" class="text-xl font-bold tracking-tight truncate">Daka</span>
+          <!-- Collapsed: brand logo is the expand trigger; hover shows chevron-right -->
           <button
-            v-if="!collapsed"
+            v-if="collapsed"
             type="button"
-            class="btn btn-ghost btn-xs btn-circle ml-auto shrink-0"
-            :title="t('nav.collapse')"
-            :aria-label="t('nav.collapse')"
-            data-testid="sidebar-toggle"
-            @click="toggleSidebar"
-          >
-            <Icon icon="lucide:chevron-left" class="size-4" />
-          </button>
-        </div>
-        <div v-if="collapsed" class="flex justify-center mb-2">
-          <button
-            type="button"
-            class="btn btn-ghost btn-xs btn-circle"
+            class="relative group size-9 rounded-lg bg-primary text-primary-content flex items-center justify-center font-bold shadow-xs cursor-pointer border-0 p-0 transition-transform hover:scale-105"
             :title="t('nav.expand')"
             :aria-label="t('nav.expand')"
             data-testid="sidebar-toggle"
             @click="toggleSidebar"
           >
-            <Icon icon="lucide:chevron-right" class="size-4" />
+            <Icon
+              icon="lucide:check-circle-2"
+              class="size-5 transition-opacity group-hover:opacity-0"
+              aria-hidden="true"
+            />
+            <Icon
+              icon="lucide:chevron-right"
+              class="size-5 absolute inset-0 m-auto opacity-0 group-hover:opacity-100 transition-opacity"
+              aria-hidden="true"
+            />
           </button>
+
+          <!-- Expanded: brand logo + text + collapse button -->
+          <template v-else>
+            <div
+              class="size-8 rounded-lg bg-primary text-primary-content flex items-center justify-center font-bold shadow-xs shrink-0"
+            >
+              <Icon icon="lucide:check-circle-2" class="size-5" aria-hidden="true" />
+            </div>
+            <span class="text-xl font-bold tracking-tight truncate">Daka</span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-circle ml-auto shrink-0"
+              :title="t('nav.collapse')"
+              :aria-label="t('nav.collapse')"
+              data-testid="sidebar-toggle"
+              @click="toggleSidebar"
+            >
+              <Icon icon="lucide:chevron-left" class="size-4" />
+            </button>
+          </template>
         </div>
         <nav :aria-label="t('nav.main')">
           <ul class="menu w-full gap-1 p-0">
@@ -113,19 +125,6 @@ function isNavActive(path: string) {
         class="shrink-0 z-20 flex items-center justify-between gap-2 border-b border-base-300 bg-base-100 px-4 py-2"
       >
         <div class="flex items-center gap-2">
-          <button
-            type="button"
-            class="hidden md:inline-flex btn btn-ghost btn-sm btn-circle"
-            :title="collapsed ? t('nav.expand') : t('nav.collapse')"
-            :aria-label="collapsed ? t('nav.expand') : t('nav.collapse')"
-            data-testid="sidebar-toggle-header"
-            @click="toggleSidebar"
-          >
-            <Icon
-              :icon="collapsed ? 'lucide:chevron-right' : 'lucide:chevron-left'"
-              class="size-4"
-            />
-          </button>
           <span class="text-lg font-bold md:invisible">Daka</span>
         </div>
         <div class="flex items-center gap-2">

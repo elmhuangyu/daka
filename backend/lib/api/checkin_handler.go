@@ -242,6 +242,16 @@ func (s *server) applyCheckin(tx *gorm.DB, userID string, req checkinRequest) (r
 				return result{}, tr.Error
 			}
 			n = tr.RowsAffected
+		} else if item.Kind == dbmodels.KindEvent {
+			var eventLogs []dbmodels.CheckinLog
+			if err := tx.Where("user_id = ? AND item_id = ? AND checkin_date >= ?", userID, item.ID, date).
+				Order("id DESC").Find(&eventLogs).Error; err == nil && len(eventLogs) > 0 {
+				tr := tx.Where("id = ?", eventLogs[0].ID).Delete(&dbmodels.CheckinLog{})
+				if tr.Error != nil {
+					return result{}, tr.Error
+				}
+				n = tr.RowsAffected
+			}
 		}
 		return jsonResult(http.StatusOK, unsetResponse{OK: true, ItemID: item.ID, Date: date, Mode: "unset", Deleted: n}), nil
 	}
