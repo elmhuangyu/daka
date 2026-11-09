@@ -20,10 +20,19 @@ const LinkCodeTTL = 10 * time.Minute
 
 // Binding errors.
 var (
-	ErrInvalidCode = errors.New("notify: link code invalid or expired")
-	ErrChatTaken   = errors.New("notify: chat already linked to another user")
-	ErrInvalidTime = errors.New("notify: digest time must be HH:MM or empty")
+	ErrInvalidCode      = errors.New("notify: link code invalid or expired")
+	ErrChatTaken        = errors.New("notify: chat already linked to another user")
+	ErrInvalidTime      = errors.New("notify: digest time must be HH:MM or empty")
+	ErrInvalidToken     = errors.New("notify: invalid bot token")
+	ErrBotTokenRequired = errors.New("notify: bot token is required")
+	ErrNotConfigured    = errors.New("notify: telegram not configured")
+	ErrNotLinked        = errors.New("notify: telegram not linked")
 )
+
+// TokenAAD returns the AEAD additional authenticated data for encrypting a user's Telegram bot token.
+func TokenAAD(userID string) string {
+	return "user:" + userID + ":telegram_token"
+}
 
 func hashCode(code string) string {
 	h := sha256.Sum256([]byte(strings.TrimSpace(code)))
@@ -34,6 +43,11 @@ func hashCode(code string) string {
 // stored) and invalidates the user's earlier codes. Expired codes of all users
 // are swept on the way.
 func CreateLinkCode(g *gorm.DB, userID string, now time.Time) (code string, expires time.Time, err error) {
+	return CreateLinkCodeWithToken(g, userID, "", "", now)
+}
+
+// CreateLinkCodeWithToken issues a one-time code storing the bot token and username.
+func CreateLinkCodeWithToken(g *gorm.DB, userID, tokenEnc, botUsername string, now time.Time) (code string, expires time.Time, err error) {
 	var b [16]byte
 	if _, err = rand.Read(b[:]); err != nil {
 		return "", time.Time{}, err
@@ -41,10 +55,23 @@ func CreateLinkCode(g *gorm.DB, userID string, now time.Time) (code string, expi
 	code = base64.RawURLEncoding.EncodeToString(b[:])
 	expires = now.Add(LinkCodeTTL).UTC()
 	err = g.Transaction(func(tx *gorm.DB) error {
+		if tokenEnc == "" {
+			var l dbmodels.TelegramLink
+			if tx.Where("user_id = ?", userID).Take(&l).Error == nil {
+				tokenEnc = l.TokenEnc
+				botUsername = l.BotUsername
+			}
+		}
 		if err := tx.Where("user_id = ? OR expires_at <= ?", userID, now.UTC()).Delete(&dbmodels.TelegramLinkCode{}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&dbmodels.TelegramLinkCode{CodeHash: hashCode(code), UserID: userID, ExpiresAt: expires}).Error
+		return tx.Create(&dbmodels.TelegramLinkCode{
+			CodeHash:    hashCode(code),
+			UserID:      userID,
+			TokenEnc:    tokenEnc,
+			BotUsername: botUsername,
+			ExpiresAt:   expires,
+		}).Error
 	})
 	return code, expires, err
 }
@@ -74,7 +101,7 @@ func Bind(g *gorm.DB, code string, chatID int64, now time.Time) (*dbmodels.Teleg
 		err = tx.Where("user_id = ?", c.UserID).Take(&out).Error
 		switch {
 		case errors.Is(err, gorm.ErrRecordNotFound):
-			out = dbmodels.TelegramLink{UserID: c.UserID, ChatID: chatID, Enabled: true, RemindSensitive: true,
+			out = dbmodels.TelegramLink{UserID: c.UserID, TokenEnc: c.TokenEnc, BotUsername: c.BotUsername, ChatID: chatID, Enabled: true, RemindSensitive: true,
 				DigestTime: dbmodels.DefaultDigestTime, LinkedAt: now.UTC()}
 			if err := tx.Create(&out).Error; err != nil {
 				return mapUnique(err)
@@ -82,6 +109,10 @@ func Bind(g *gorm.DB, code string, chatID int64, now time.Time) (*dbmodels.Teleg
 		case err != nil:
 			return err
 		default:
+			if c.TokenEnc != "" {
+				out.TokenEnc = c.TokenEnc
+				out.BotUsername = c.BotUsername
+			}
 			out.ChatID, out.Enabled, out.LinkedAt = chatID, true, now.UTC()
 			if err := tx.Save(&out).Error; err != nil {
 				return mapUnique(err)
@@ -103,10 +134,13 @@ func mapUnique(err error) error {
 	return err
 }
 
-// Unlink removes the user's chat binding and any pending codes.
+// Unlink removes the user's chat binding, reminders, and any pending codes.
 func Unlink(g *gorm.DB, userID string) error {
 	return g.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("user_id = ?", userID).Delete(&dbmodels.TelegramLinkCode{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", userID).Delete(&dbmodels.ReminderLog{}).Error; err != nil {
 			return err
 		}
 		return tx.Where("user_id = ?", userID).Delete(&dbmodels.TelegramLink{}).Error

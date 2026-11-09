@@ -118,7 +118,18 @@ func serve(ctx context.Context, cfg *config.Config, ln net.Listener, logger zero
 	if err != nil {
 		return fmt.Errorf("holiday data: %w", err)
 	}
-	tg := notify.New(notify.Options{DB: d.Write(), Token: cfg.Secrets.TelegramBotToken.Reveal(), Calendar: app.HolidayCalendars(hp)})
+	var keys *secret.Keyring
+	if cfg.Secrets.SecretKey.Reveal() != "" {
+		if keys, err = secret.ParseKeyring(cfg.Secrets.SecretKey.Reveal(), cfg.Secrets.SecretKeyOld.Reveal()); err != nil {
+			return fmt.Errorf("parse secret keyring: %w", err)
+		}
+	}
+	tg := notify.New(notify.Options{
+		DB:       d.Write(),
+		Keys:     keys,
+		Token:    cfg.Secrets.TelegramBotToken.Reveal(),
+		Calendar: app.HolidayCalendars(hp),
+	})
 	handler, sessions, err := app.NewHandler(cfg, d, hp, tg)
 	if err != nil {
 		return fmt.Errorf("build handler: %w", err)
@@ -165,7 +176,7 @@ func serve(ctx context.Context, cfg *config.Config, ln net.Listener, logger zero
 		purgeLoop(purgeCtx, d, sessions, logger)
 	}()
 	if tg.Configured() {
-		logger.Info().Msg("telegram reminders enabled (long polling)")
+		logger.Info().Msg("telegram service enabled")
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

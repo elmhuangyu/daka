@@ -14,6 +14,7 @@ import (
 
 	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
 	"github.com/elmhuangyu/daka/backend/lib/schedule"
+	"github.com/elmhuangyu/daka/backend/lib/secret"
 )
 
 // PrivateItemText replaces the name of a sensitive item in every message.
@@ -37,8 +38,11 @@ type Sender interface {
 // Scheduler sends the daily digest and per-item reminders. Run it in-process;
 // tests call Tick with an injected clock.
 type Scheduler struct {
-	DB     *gorm.DB
-	Sender Sender
+	DB           *gorm.DB
+	Keys         *secret.Keyring
+	BaseURL      string
+	DefaultToken string
+	Sender       Sender
 	// Now defaults to time.Now.
 	Now func() time.Time
 	// Calendar maps UserSettings.holiday_region to a holiday calendar; may be nil.
@@ -83,7 +87,7 @@ func (s *Scheduler) Tick(ctx context.Context) {
 		return
 	}
 	var links []dbmodels.TelegramLink
-	if err := s.DB.Where("enabled = ?", true).Find(&links).Error; err != nil {
+	if err := s.DB.Where("enabled = ? AND chat_id <> 0", true).Find(&links).Error; err != nil {
 		log.Error().Err(err).Msg("notify: list links failed")
 		return
 	}
@@ -206,7 +210,40 @@ func (s *Scheduler) deliver(ctx context.Context, l dbmodels.TelegramLink, itemID
 	if res.Error != nil || res.RowsAffected == 0 {
 		return
 	}
-	err := s.Sender.SendMessage(ctx, l.ChatID, text)
+	var snd Sender
+	if l.TokenEnc != "" && s.Keys != nil {
+		dec, decErr := s.Keys.Decrypt(l.TokenEnc, TokenAAD(l.UserID))
+		if decErr != nil {
+			_ = s.DB.Where("user_id = ? AND item_id = ? AND remind_date = ?", l.UserID, itemID, date).Delete(&dbmodels.ReminderLog{}).Error
+			log.Error().Err(decErr).Str("user_id", l.UserID).Msg("notify: decrypt bot token failed")
+			s.mu.Lock()
+			if s.retry == nil {
+				s.retry = map[string]retryState{}
+			}
+			rs.fails++
+			rs.next = s.now().Add(min(time.Minute<<min(rs.fails-1, 5), maxBackoff))
+			s.retry[key] = rs
+			s.mu.Unlock()
+			return
+		}
+		snd = NewClient(string(dec), s.BaseURL)
+	} else if s.Sender != nil {
+		snd = s.Sender
+	} else if s.DefaultToken != "" {
+		snd = NewClient(s.DefaultToken, s.BaseURL)
+	} else {
+		_ = s.DB.Where("user_id = ? AND item_id = ? AND remind_date = ?", l.UserID, itemID, date).Delete(&dbmodels.ReminderLog{}).Error
+		s.mu.Lock()
+		if s.retry == nil {
+			s.retry = map[string]retryState{}
+		}
+		rs.fails++
+		rs.next = s.now().Add(min(time.Minute<<min(rs.fails-1, 5), maxBackoff))
+		s.retry[key] = rs
+		s.mu.Unlock()
+		return
+	}
+	err := snd.SendMessage(ctx, l.ChatID, text)
 	if err == nil {
 		s.mu.Lock()
 		delete(s.retry, key)

@@ -5,13 +5,16 @@ import "time"
 // DefaultDigestTime is the local time of the daily Telegram digest.
 const DefaultDigestTime = "08:00"
 
-// TelegramLink binds a user to one Telegram chat (notify only: nothing is ever
+// TelegramLink binds a user to their Telegram bot and chat (notify only: nothing is ever
 // written to Daka from Telegram except the one-time link code).
 type TelegramLink struct {
 	UserID string `gorm:"primaryKey;size:64"`
-	// ChatID is unique: one chat can serve exactly one user.
-	ChatID  int64 `gorm:"not null;uniqueIndex"`
-	Enabled bool  `gorm:"not null"`
+	// TokenEnc is the user's encrypted Telegram bot token (AES-GCM envelope).
+	TokenEnc string
+	// BotUsername is the username of the bot (without @).
+	BotUsername string `gorm:"size:64"`
+	ChatID      int64  `gorm:"not null;uniqueIndex"`
+	Enabled     bool   `gorm:"not null"`
 	// RemindSensitive true sends sensitive items with a generic redacted text;
 	// false leaves them out of messages entirely.
 	RemindSensitive bool `gorm:"not null"`
@@ -23,9 +26,11 @@ type TelegramLink struct {
 
 // TelegramLinkCode is a one-time link code; only its hash is stored.
 type TelegramLinkCode struct {
-	CodeHash  string    `gorm:"primaryKey;size:128"`
-	UserID    string    `gorm:"size:64;not null;index"`
-	ExpiresAt time.Time `gorm:"not null"`
+	CodeHash    string `gorm:"primaryKey;size:128"`
+	UserID      string `gorm:"size:64;not null;index"`
+	TokenEnc    string
+	BotUsername string    `gorm:"size:64"`
+	ExpiresAt   time.Time `gorm:"not null"`
 }
 
 // ReminderLog deduplicates reminders. ItemID 0 is the user's daily digest.

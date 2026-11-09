@@ -7,6 +7,8 @@ import {
   describeError,
   getTelegram,
   patchTelegram,
+  setupTelegramBot,
+  testTelegram,
   unlinkTelegram,
   type TelegramStatus,
 } from '../../api'
@@ -19,6 +21,22 @@ const error = ref('')
 const unavailable = ref(false)
 const link = ref<{ code: string; deep_link?: string; expires_at: string } | null>(null)
 const digest = ref('08:00')
+
+const botToken = ref('')
+const chatID = ref('')
+const isSaving = ref(false)
+const isTesting = ref(false)
+const testSuccess = ref(false)
+const showEditForm = ref(false)
+
+let testTimer: ReturnType<typeof setTimeout> | null = null
+
+onBeforeUnmount(() => {
+  if (testTimer) {
+    clearTimeout(testTimer)
+    testTimer = null
+  }
+})
 
 function apply(s: TelegramStatus) {
   st.value = s
@@ -33,6 +51,7 @@ onMounted(async () => {
     error.value = describeError(e)
   }
 })
+
 // The one-time code is dropped when the section goes away.
 onBeforeUnmount(() => (link.value = null))
 
@@ -54,11 +73,65 @@ async function refresh() {
   }
 }
 
+async function saveBot() {
+  error.value = ''
+  testSuccess.value = false
+  isSaving.value = true
+  try {
+    const rawCid = chatID.value.trim()
+    let parsedCid: number | undefined
+    if (rawCid) {
+      if (!/^-?\d+$/.test(rawCid)) {
+        error.value = 'Invalid chat ID'
+        isSaving.value = false
+        return
+      }
+      parsedCid = parseInt(rawCid, 10)
+    }
+    const res = await setupTelegramBot({
+      bot_token: botToken.value.trim() || undefined,
+      chat_id: parsedCid,
+    })
+    apply(res)
+    botToken.value = ''
+    chatID.value = ''
+    showEditForm.value = false
+    if (!res.linked) {
+      await connect()
+    }
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 503) unavailable.value = true
+    else error.value = describeError(e)
+  } finally {
+    isSaving.value = false
+  }
+}
+
+async function sendTest() {
+  error.value = ''
+  testSuccess.value = false
+  isTesting.value = true
+  try {
+    await testTelegram()
+    testSuccess.value = true
+    if (testTimer) clearTimeout(testTimer)
+    testTimer = setTimeout(() => {
+      testSuccess.value = false
+      testTimer = null
+    }, 4000)
+  } catch (e) {
+    error.value = describeError(e)
+  } finally {
+    isTesting.value = false
+  }
+}
+
 async function unlink() {
   error.value = ''
   try {
     await unlinkTelegram()
     link.value = null
+    showEditForm.value = false
     await refresh()
   } catch (e) {
     error.value = describeError(e)
@@ -114,27 +187,53 @@ async function patch(body: {
       </div>
 
       <template v-else-if="st">
+        <!-- LINKED STATE -->
         <template v-if="st.linked">
           <div
             class="flex items-center justify-between rounded-xl bg-success/10 border border-success/20 p-4"
           >
             <div class="flex items-center gap-3">
               <div class="size-2 rounded-full bg-success"></div>
-              <p class="text-sm font-medium" data-testid="tg-linked">
-                {{
-                  st.linked_at
-                    ? t('settings.telegram.linkedSince', { date: st.linked_at.slice(0, 10) })
-                    : t('settings.telegram.linked')
-                }}
-              </p>
+              <div>
+                <p class="text-sm font-medium" data-testid="tg-linked">
+                  {{
+                    st.linked_at
+                      ? t('settings.telegram.linkedSince', { date: st.linked_at.slice(0, 10) })
+                      : t('settings.telegram.linked')
+                  }}
+                  <span v-if="st.bot_username" class="opacity-70 font-mono text-xs">
+                    (@{{ st.bot_username }})
+                  </span>
+                </p>
+              </div>
             </div>
-            <button
-              class="btn btn-xs sm:btn-sm btn-ghost text-error hover:bg-error/10"
-              data-testid="tg-unlink"
-              @click="unlink"
-            >
-              {{ t('settings.telegram.unlink') }}
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                class="btn btn-xs sm:btn-sm btn-outline gap-1"
+                :disabled="isTesting"
+                data-testid="tg-test"
+                @click="sendTest"
+              >
+                <Icon icon="lucide:send" class="size-3" aria-hidden="true" />
+                {{ t('settings.telegram.test') }}
+              </button>
+              <button
+                class="btn btn-xs sm:btn-sm btn-ghost text-error hover:bg-error/10"
+                data-testid="tg-unlink"
+                @click="unlink"
+              >
+                {{ t('settings.telegram.unlink') }}
+              </button>
+            </div>
+          </div>
+
+          <div
+            v-if="testSuccess"
+            class="alert alert-success text-sm py-2 px-4 shadow-sm"
+            data-testid="tg-test-success"
+          >
+            <Icon icon="lucide:check" class="size-4" aria-hidden="true" />
+            <span>{{ t('settings.telegram.testSuccess') }}</span>
           </div>
 
           <div class="space-y-3">
@@ -191,9 +290,96 @@ async function patch(body: {
           </form>
         </template>
 
+        <!-- UNLINKED STATE -->
         <template v-else>
-          <div class="rounded-xl border border-base-300 bg-base-100/40 p-5 space-y-4">
-            <p class="text-sm opacity-80">{{ t('settings.telegram.notLinked') }}</p>
+          <!-- SETUP BOT FORM (when no bot configured or user requested edit) -->
+          <div
+            v-if="(!st.bot_username && !st.has_token) || showEditForm"
+            class="rounded-xl border border-base-300 bg-base-100/40 p-5 space-y-4"
+          >
+            <div class="space-y-1">
+              <p class="text-sm font-medium">{{ t('settings.telegram.setupDesc') }}</p>
+              <p class="text-xs opacity-70">{{ t('settings.telegram.botTokenHint') }}</p>
+            </div>
+
+            <form class="space-y-3" @submit.prevent="saveBot">
+              <label class="form-control gap-1">
+                <span class="label-text text-xs font-medium">{{
+                  t('settings.telegram.botToken')
+                }}</span>
+                <input
+                  v-model="botToken"
+                  type="password"
+                  class="input input-bordered input-sm font-mono"
+                  :placeholder="t('settings.telegram.botTokenPlaceholder')"
+                  data-testid="tg-bot-token"
+                  :required="!st?.has_token"
+                />
+              </label>
+
+              <label class="form-control gap-1">
+                <span class="label-text text-xs font-medium">{{
+                  t('settings.telegram.chatID')
+                }}</span>
+                <input
+                  v-model="chatID"
+                  type="text"
+                  class="input input-bordered input-sm font-mono max-w-xs"
+                  :placeholder="t('settings.telegram.chatIDPlaceholder')"
+                  data-testid="tg-chat-id"
+                />
+              </label>
+
+              <div class="flex items-center gap-3 pt-1">
+                <button
+                  class="btn btn-sm btn-primary gap-1.5"
+                  type="submit"
+                  :disabled="isSaving"
+                  data-testid="tg-save-bot"
+                >
+                  <Icon icon="lucide:check" class="size-3.5" aria-hidden="true" />
+                  {{ t('settings.telegram.saveBot') }}
+                </button>
+                <button
+                  v-if="showEditForm"
+                  type="button"
+                  class="btn btn-sm btn-ghost"
+                  @click="showEditForm = false"
+                >
+                  {{ t('common.cancel') }}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- BOT CONFIGURED BUT CHAT NOT LINKED -->
+          <div v-else class="rounded-xl border border-base-300 bg-base-100/40 p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-medium">
+                  <template v-if="st.bot_username">
+                    {{ t('settings.telegram.botConfigured', { bot: st.bot_username }) }}
+                  </template>
+                  <template v-else>
+                    {{ t('settings.telegram.title') }}
+                  </template>
+                </p>
+                <p class="text-xs opacity-70">{{ t('settings.telegram.notLinked') }}</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button class="btn btn-xs btn-ghost text-xs" @click="showEditForm = true">
+                  {{ t('common.edit') }}
+                </button>
+                <button
+                  class="btn btn-xs btn-ghost text-error"
+                  data-testid="tg-unlink"
+                  @click="unlink"
+                >
+                  {{ t('settings.telegram.unlink') }}
+                </button>
+              </div>
+            </div>
+
             <button
               v-if="!link"
               class="btn btn-sm btn-primary gap-1.5"

@@ -70,9 +70,9 @@ func TestSchemaMatchesDesign(t *testing.T) {
 			"last_used_at": tTime}},
 		{&IdempotencyKey{}, "idempotency_keys", map[string]string{"user_id": tStr, "key": tStr, "status_code": tInt,
 			"response_body": tStr, "created_at": tTime}},
-		{&TelegramLink{}, "telegram_links", map[string]string{"user_id": tStr, "chat_id": tInt, "enabled": tBool,
+		{&TelegramLink{}, "telegram_links", map[string]string{"user_id": tStr, "token_enc": tStr, "bot_username": tStr, "chat_id": tInt, "enabled": tBool,
 			"remind_sensitive": tBool, "digest_time": tStr, "linked_at": tTime}},
-		{&TelegramLinkCode{}, "telegram_link_codes", map[string]string{"code_hash": tStr, "user_id": tStr, "expires_at": tTime}},
+		{&TelegramLinkCode{}, "telegram_link_codes", map[string]string{"code_hash": tStr, "user_id": tStr, "token_enc": tStr, "bot_username": tStr, "expires_at": tTime}},
 		{&ReminderLog{}, "reminder_logs", map[string]string{"user_id": tStr, "item_id": tInt, "remind_date": tStr, "sent_at": tTime}},
 	}
 	for _, tc := range tests {

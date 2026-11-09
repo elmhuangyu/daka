@@ -19,6 +19,7 @@ import (
 	"github.com/elmhuangyu/daka/backend/lib/db"
 	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
 	"github.com/elmhuangyu/daka/backend/lib/schedule"
+	"github.com/elmhuangyu/daka/backend/lib/secret"
 )
 
 const testToken = "123456:SECRET-TOKEN-VALUE"
@@ -640,4 +641,88 @@ func TestTokenNotStoredInDB(t *testing.T) {
 	require.NotEmpty(t, logs)
 	b, _ := json.Marshal(logs)
 	require.NotContains(t, string(b), testToken)
+}
+
+func TestPerUserBotSetupAndDelivery(t *testing.T) {
+	ring, err := secret.NewKeyring("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	require.NoError(t, err)
+
+	e := newEnv(t, "UTC", mustTime(t, "2026-11-08T08:00:00Z"))
+	require.NoError(t, Unlink(e.g, "u1"))
+
+	svc := New(Options{
+		DB:      e.g,
+		Keys:    ring,
+		BaseURL: e.tg.URL,
+		Now:     func() time.Time { return e.now },
+	})
+	require.True(t, svc.Configured())
+
+	// 1. Initial status: unconfigured and unlinked
+	st, err := svc.GetStatus(context.Background(), "u1")
+	require.NoError(t, err)
+	require.True(t, st.Configured)
+	require.False(t, st.HasToken)
+	require.False(t, st.Linked)
+
+	// 2. SetBot without chat ID: creates a link code with the token
+	_, err = svc.SetBot(context.Background(), "u1", testToken, 0)
+	require.NoError(t, err)
+
+	code, _, _, err := svc.CreateLinkCode(context.Background(), "u1")
+	require.NoError(t, err)
+	require.NotEmpty(t, code)
+
+	st, err = svc.GetStatus(context.Background(), "u1")
+	require.NoError(t, err)
+	require.True(t, st.HasToken)
+	require.Equal(t, "daka_bot", st.BotUsername)
+	require.False(t, st.Linked)
+
+	// 3. Bare /start does NOT link (security check: requires code)
+	e.say(888, "private", "/start")
+	st, err = svc.GetStatus(context.Background(), "u1")
+	require.NoError(t, err)
+	require.False(t, st.Linked)
+
+	// Sending /start <code> successfully binds! Advance clock past debounce.
+	e.at("2026-11-08T08:00:10Z")
+	e.say(888, "private", "/start "+code)
+	st, err = svc.GetStatus(context.Background(), "u1")
+	require.NoError(t, err)
+	require.True(t, st.Linked)
+	require.True(t, st.Enabled)
+	require.Equal(t, "daka_bot", st.BotUsername)
+
+	// Confirmation message was sent
+	msgs := e.tg.messages()
+	require.NotEmpty(t, msgs)
+	require.EqualValues(t, 888, msgs[len(msgs)-1].Chat)
+
+	// 4. SendTestMessage
+	require.NoError(t, svc.SendTestMessage(context.Background(), "u1"))
+	msgs = e.tg.messages()
+	require.Contains(t, msgs[len(msgs)-1].Text, "working")
+
+	// 5. Scheduler delivery with decrypted token in mixed-mode (DefaultToken set)
+	sched := &Scheduler{
+		DB:           e.g,
+		Keys:         ring,
+		DefaultToken: "global-fallback-token",
+		BaseURL:      e.tg.URL,
+		Now:          func() time.Time { return e.now },
+	}
+	e.tg.reset()
+	e.item("Habit", nil, dbmodels.ItemRuleVersion{})
+	sched.Tick(context.Background())
+	msgs = e.tg.messages()
+	require.NotEmpty(t, msgs)
+	require.EqualValues(t, 888, msgs[0].Chat)
+
+	// 6. Unlink
+	require.NoError(t, svc.Unlink(context.Background(), "u1"))
+	st, err = svc.GetStatus(context.Background(), "u1")
+	require.NoError(t, err)
+	require.False(t, st.Linked)
+	require.False(t, st.HasToken)
 }

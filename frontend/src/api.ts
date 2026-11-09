@@ -806,6 +806,7 @@ export function deleteToken(id: number): Promise<unknown> {
 
 export interface TelegramStatus {
   configured: boolean
+  has_token?: boolean
   linked: boolean
   enabled: boolean
   remind_sensitive: boolean
@@ -816,6 +817,17 @@ export interface TelegramStatus {
 
 export function getTelegram(): Promise<TelegramStatus> {
   return request<TelegramStatus>('/api/telegram')
+}
+
+export function setupTelegramBot(body: {
+  bot_token?: string
+  chat_id?: number
+}): Promise<TelegramStatus> {
+  return request<TelegramStatus>('/api/telegram', jsonInit('PUT', body))
+}
+
+export function testTelegram(): Promise<{ sent?: boolean; ok?: boolean }> {
+  return request<{ sent?: boolean; ok?: boolean }>('/api/telegram/test', { method: 'POST' })
 }
 
 export function createTelegramLinkCode(): Promise<{

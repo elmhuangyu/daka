@@ -46,11 +46,11 @@ Before finishing a change, run `just fmt lint build test`.
 
 - Sensitive items (item flag OR category flag) must never appear in logs, error messages, Telegram messages, the ICS feed, or AI/read-token responses. Error strings must not include user data such as item names.
 - `?redact=1` is applied server-side. The frontend privacy guard (Ctrl+Shift+H) clears plaintext synchronously and discards stale responses.
-- Secrets (`DAKA_SECRET_KEY`, `DAKA_SECRET_KEY_OLD`, `DAKA_TELEGRAM_BOT_TOKEN`) come from the environment only. Never store them in the DB, config files, logs, or the repo.
+- Secrets (`DAKA_SECRET_KEY`, `DAKA_SECRET_KEY_OLD`) come from the environment only. Never store them in the DB, config files, logs, or the repo. User-configured secrets (such as per-user Telegram bot tokens and external calendar URLs) are encrypted at rest with `DAKA_SECRET_KEY`.
 - API tokens are read-only and hashed (SHA-256). `dk_` Bearer tokens go through `tokenGate` (GET allowlist in `readAllowed`); the feed token works only on `/api/calendar/feed.ics`. A new GET route is not token-accessible unless added to the allowlist on purpose.
 - Dangerous routes (delete item/category/account, tokens, export, import, Telegram link) sit behind `Reauth`. Mutating requests require the `X-Daka-CSRF` header.
 - Outbound fetches (external calendars, holiday data) must stay SSRF-safe.
-- Telegram is notify-only: a daily morning digest plus optional per-item `remind_time`. No inline check-in.
+- Telegram is per-user and notify-only: each user can configure their own bot token to receive a daily morning digest plus optional per-item `remind_time`. No inline check-in.
 
 ## Testing expectations
 

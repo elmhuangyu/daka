@@ -27,9 +27,9 @@ COPY --from=server /out/daka /app/daka
 COPY --from=web /src/frontend/dist /app/web
 USER daka
 WORKDIR /data
-# No secrets are baked in. Provide DAKA_SECRET_KEY, DAKA_TELEGRAM_BOT_TOKEN,
-# DAKA_AUTH_* etc. at runtime. Listening on a non-loopback address requires
-# DAKA_AUTH_ALLOW_INSECURE_PUBLIC=1 with DAKA_AUTH_SHARED_SECRET, or OIDC.
+# No secrets are baked in. Provide DAKA_SECRET_KEY, DAKA_AUTH_* etc. at runtime.
+# Listening on a non-loopback address requires DAKA_AUTH_ALLOW_INSECURE_PUBLIC=1
+# with DAKA_AUTH_SHARED_SECRET, or OIDC.
 ENV DAKA_STATIC_DIR=/app/web \
     DAKA_LISTEN=0.0.0.0:8080 \
     DAKA_DB_DSN=/data/daka.db

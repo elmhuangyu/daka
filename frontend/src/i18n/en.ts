@@ -75,6 +75,10 @@ export const en = {
   'errors.tokenNotAccepted': 'API tokens cannot be used here',
   'errors.telegramNotLinked': 'Telegram is not linked',
   'errors.telegramNotConfigured': 'Telegram is not configured on this server',
+  'errors.invalidBotToken': 'Invalid Telegram bot token',
+  'errors.botTokenRequired': 'Telegram bot token is required',
+  'errors.telegramChatTaken': 'That Telegram chat is already linked to another account',
+  'errors.telegramSendFailed': 'Failed to send Telegram message',
   'errors.encryptionKeyMissing': 'The server has no encryption key configured',
   'errors.confirmationRequired': 'Confirmation is required',
   'errors.importTooLarge': 'The import file is too large',
@@ -712,6 +716,15 @@ export const en = {
   'settings.account.logout': 'Log out',
   'settings.telegram.title': 'Telegram',
   'settings.telegram.unconfigured': 'The Telegram bot is not configured on this server.',
+  'settings.telegram.setupDesc':
+    'Set up your personal Telegram bot to receive daily digests and habit reminders.',
+  'settings.telegram.botToken': 'Bot Token',
+  'settings.telegram.botTokenPlaceholder': '123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ_0123456',
+  'settings.telegram.botTokenHint': 'Create a bot with @BotFather on Telegram to obtain a token.',
+  'settings.telegram.chatID': 'Chat ID (optional)',
+  'settings.telegram.chatIDPlaceholder': 'e.g. 123456789 (leave blank to connect automatically)',
+  'settings.telegram.saveBot': 'Save Bot',
+  'settings.telegram.botConfigured': 'Bot @{bot} configured.',
   'settings.telegram.linked': 'Linked.',
   'settings.telegram.linkedSince': 'Linked since {date}.',
   'settings.telegram.enabled': 'Send reminders and the daily digest',
@@ -725,6 +738,8 @@ export const en = {
   'settings.telegram.sendCode': 'Send {code} to the bot {bot}. The code expires at {time}.',
   'settings.telegram.openTelegram': 'Open Telegram',
   'settings.telegram.sent': 'I have sent it',
+  'settings.telegram.test': 'Send test message',
+  'settings.telegram.testSuccess': 'Test message sent successfully!',
 } as const
 
 export type MessageKey = keyof typeof en

@@ -20,6 +20,8 @@ let calls: {
   body?: Record<string, unknown> & { external_calendars?: unknown }
 }[]
 let telegramConfigured = true
+let telegramBotUsername = 'dakabot'
+let telegramLinked = false
 
 const cal = {
   timezone: 'Asia/Shanghai',
@@ -33,6 +35,8 @@ beforeEach(() => {
   localStorage.clear()
   calls = []
   telegramConfigured = true
+  telegramBotUsername = 'dakabot'
+  telegramLinked = false
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
     calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined })
@@ -61,13 +65,29 @@ beforeEach(() => {
     if (url === '/api/telegram' && method === 'GET') {
       return jsonRes({
         configured: telegramConfigured,
-        linked: false,
+        linked: telegramLinked,
         enabled: false,
         remind_sensitive: true,
         digest_time: '08:00',
-        linked_at: null,
-        bot_username: 'dakabot',
+        linked_at: telegramLinked ? '2026-11-08T00:00:00Z' : null,
+        bot_username: telegramBotUsername,
       })
+    }
+    if (url === '/api/telegram' && method === 'PUT') {
+      telegramBotUsername = 'my_new_bot'
+      telegramLinked = true
+      return jsonRes({
+        configured: true,
+        linked: true,
+        enabled: true,
+        remind_sensitive: true,
+        digest_time: '08:00',
+        linked_at: '2026-11-08T00:00:00Z',
+        bot_username: 'my_new_bot',
+      })
+    }
+    if (url === '/api/telegram/test' && method === 'POST') {
+      return jsonRes({ ok: true, sent: true })
     }
     if (url === '/api/telegram/link-code')
       return jsonRes({ error: 'telegram is not configured' }, 503)
@@ -183,5 +203,32 @@ describe('SettingsView', () => {
     const w = await mountView()
     expect(w.find('[data-testid=tg-unconfigured]').exists()).toBe(true)
     expect(w.find('[data-testid=tg-connect]').exists()).toBe(false)
+  })
+
+  it('saves bot token and links telegram bot', async () => {
+    telegramBotUsername = ''
+    const w = await mountView()
+    expect(w.find('[data-testid=tg-bot-token]').exists()).toBe(true)
+    await w.get('[data-testid=tg-bot-token]').setValue('123:abc')
+    await w.get('[data-testid=tg-chat-id]').setValue('999')
+    await w.get('[data-testid=tg-save-bot]').trigger('submit')
+    await flushPromises()
+
+    const putCall = calls.find((c) => c.url === '/api/telegram' && c.method === 'PUT')
+    expect(putCall).toBeDefined()
+    expect(putCall?.body).toEqual({ bot_token: '123:abc', chat_id: 999 })
+    expect(w.find('[data-testid=tg-linked]').exists()).toBe(true)
+  })
+
+  it('sends test notification when linked', async () => {
+    telegramLinked = true
+    const w = await mountView()
+    expect(w.find('[data-testid=tg-test]').exists()).toBe(true)
+    await w.get('[data-testid=tg-test]').trigger('click')
+    await flushPromises()
+
+    const testCall = calls.find((c) => c.url === '/api/telegram/test' && c.method === 'POST')
+    expect(testCall).toBeDefined()
+    expect(w.find('[data-testid=tg-test-success]').exists()).toBe(true)
   })
 })

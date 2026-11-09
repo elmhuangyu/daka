@@ -45,7 +45,7 @@ The backend serves the built frontend from a plain directory (no `go:embed`). Se
 
 - The server binds to `127.0.0.1:8080` by default and runs in single-user mode (no login). Binding a non-loopback address requires `server.allow_insecure_public: true` and an `auth.shared_secret` of at least 16 characters, or OIDC login. Put it behind TLS (and set `DAKA_AUTH_SECURE_COOKIE=1`).
 - Behind a reverse proxy, set `server.allowed_hosts` (DNS-rebinding guard) and configure trusted proxies for client IPs. Make the proxy redact the `token=` query parameter from access logs (ICS feed URLs).
-- Secrets are read from the environment only and are never stored in the database or config files: `DAKA_SECRET_KEY` (encrypts external calendar URLs; rotate with `DAKA_SECRET_KEY_OLD`) and `DAKA_TELEGRAM_BOT_TOKEN` (enables Telegram reminders, long polling, notify-only).
+- Secrets are read from the environment only and are never stored in the database or config files: `DAKA_SECRET_KEY` (encrypts per-user Telegram bot tokens and external calendar URLs; rotate with `DAKA_SECRET_KEY_OLD`). Telegram bots are configured per-user in Settings.
 - API tokens are read-only (`feed:read` for the ICS feed, `read` for the AI API) and sensitive items are never exposed through them.
 
 ## Manual verification
