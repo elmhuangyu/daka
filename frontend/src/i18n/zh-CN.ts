@@ -363,7 +363,7 @@ const zhCN: Record<MessageKey, string> = {
   'items.editor.tracker.metric': '指标',
   'items.editor.tracker.maintenance': '周期',
   'items.editor.positive': '培养',
-  'items.editor.negative': '戒除',
+  'items.editor.negative': '限制',
   'items.editor.immutable': '创建后无法更改类型和极性。',
   'items.editor.measurement': '度量',
   'items.editor.unit': '单位',
