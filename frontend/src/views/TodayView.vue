@@ -10,7 +10,7 @@ import CompletionRing from '../components/today/CompletionRing.vue'
 import CategoryFilter from '../components/today/CategoryFilter.vue'
 import ItemCard from '../components/today/ItemCard.vue'
 import QuickAddForm from '../components/today/QuickAddForm.vue'
-import { createAdHocEvent, type CheckinInput } from '../api'
+import { createAdHocEvent, createScheduledEvent, describeError, type CheckinInput } from '../api'
 import { useI18n } from '../i18n'
 import { weekdayName } from '../i18n/format'
 
@@ -20,6 +20,7 @@ const privacy = usePrivacyStore()
 const store = useTodayStore()
 const offline = useOfflineStore()
 
+const datePickerInput = ref<HTMLInputElement | null>(null)
 const upcomingDays = ref<3 | 7 | 14>(7)
 
 const filteredUpcoming = computed(() =>
@@ -36,23 +37,44 @@ const matchingUnscheduled = computed(() => {
   return store.unscheduledItems.filter((it) => it.name.toLowerCase().includes(q))
 })
 
+function onBlurQuickLog() {
+  setTimeout(() => {
+    quickLogOpen.value = false
+  }, 200)
+}
+
 async function submitQuickLog(target: { id?: number; name: string }) {
   if (quickLogBusy.value) return
+  const targetDate = store.view?.date
+  if (!targetDate) return
   const name = target.name.trim()
   if (!name && !target.id) return
   quickLogBusy.value = true
   try {
-    if (target.id) {
-      await store.submit({ item_id: target.id, mode: 'set', value: 1 })
+    if (store.isFuture) {
+      await createScheduledEvent(name, targetDate)
     } else {
-      const created = await createAdHocEvent(name)
-      await store.submit({ item_id: created.id, mode: 'set', value: 1 })
+      let itemId = target.id
+      if (!itemId) {
+        const exact = matchingUnscheduled.value.find(
+          (it) => it.name.toLowerCase() === name.toLowerCase(),
+        )
+        if (exact) {
+          itemId = exact.id
+        }
+      }
+      if (itemId) {
+        await store.submit({ item_id: itemId, mode: 'set', value: 1 })
+      } else {
+        const created = await createAdHocEvent(name)
+        await store.submit({ item_id: created.id, mode: 'set', value: 1 })
+      }
     }
     quickLogQuery.value = ''
     quickLogOpen.value = false
-    await store.refresh()
+    await store.refresh(targetDate)
   } catch (e) {
-    console.error('Quick log failed:', e)
+    store.error = describeError(e)
   } finally {
     quickLogBusy.value = false
   }
@@ -100,8 +122,8 @@ watch(
 
 <template>
   <section class="mx-auto max-w-2xl space-y-4 p-4">
-    <header v-if="store.view" class="flex flex-wrap items-center justify-between gap-3 pb-1">
-      <div class="flex items-center gap-1.5 flex-nowrap shrink-0">
+    <header v-if="store.view" class="flex items-center justify-between gap-3 pb-1">
+      <div class="flex items-center gap-1 sm:gap-1.5 flex-nowrap shrink-0">
         <button
           type="button"
           class="btn btn-sm btn-circle btn-ghost shrink-0"
@@ -111,22 +133,30 @@ watch(
         >
           <Icon icon="lucide:chevron-left" class="size-5" />
         </button>
-        <div class="flex items-center gap-2 flex-nowrap shrink-0 whitespace-nowrap">
+        <div class="relative flex items-center shrink-0">
           <input
+            ref="datePickerInput"
             type="date"
-            class="input input-sm input-ghost font-bold text-lg sm:text-xl px-1 cursor-pointer focus:bg-base-200 shrink-0"
+            class="sr-only"
             :value="store.view.date"
+            data-testid="today-date-picker"
             @change="store.goToDate(($event.target as HTMLInputElement).value)"
           />
-          <span class="text-sm font-normal text-base-content/70 whitespace-nowrap shrink-0">
-            {{ weekdayName(store.view.weekday) }}
-          </span>
-          <span
-            v-if="store.isToday"
-            class="badge badge-primary badge-outline badge-xs text-[10px] whitespace-nowrap shrink-0"
+          <button
+            type="button"
+            class="btn btn-sm btn-ghost gap-1.5 font-bold text-base sm:text-lg cursor-pointer px-2"
+            :title="t('calendar.pickDate')"
+            data-testid="open-date-picker"
+            @click="
+              datePickerInput?.showPicker ? datePickerInput.showPicker() : datePickerInput?.focus()
+            "
           >
-            {{ t('today.todayBadge') }}
-          </span>
+            <Icon icon="lucide:calendar" class="size-4 opacity-70 shrink-0" />
+            <span class="font-mono tracking-tight">{{ store.view.date }}</span>
+            <span class="text-xs sm:text-sm font-normal text-base-content/70 whitespace-nowrap">
+              {{ weekdayName(store.view.weekday) }}
+            </span>
+          </button>
         </div>
         <button
           type="button"
@@ -140,8 +170,11 @@ watch(
       </div>
 
       <div class="flex items-center gap-2 shrink-0">
+        <span v-if="store.isToday" class="badge badge-primary badge-outline badge-sm">
+          {{ t('today.todayBadge') }}
+        </span>
         <button
-          v-if="!store.isToday"
+          v-else
           type="button"
           class="btn btn-xs btn-outline btn-primary shrink-0"
           @click="store.goToToday()"
@@ -284,10 +317,16 @@ watch(
                 v-model="quickLogQuery"
                 type="text"
                 class="input input-sm input-bordered w-full join-item pr-8"
-                :placeholder="t('today.quickLogPlaceholder')"
+                :placeholder="
+                  store.isFuture
+                    ? t('today.quickAddFuturePlaceholder')
+                    : t('today.quickLogPlaceholder')
+                "
                 autocomplete="off"
                 data-testid="quick-log-input"
                 @focus="quickLogOpen = true"
+                @blur="onBlurQuickLog"
+                @keydown.escape="quickLogOpen = false"
                 @keydown.enter.prevent="submitQuickLog({ name: quickLogQuery })"
               />
               <button
@@ -308,42 +347,52 @@ watch(
             >
               <span v-if="quickLogBusy" class="loading loading-spinner loading-xs" />
               <Icon v-else icon="lucide:plus" class="size-4" />
-              {{ t('today.logNow') }}
+              {{ store.isFuture ? t('today.addFutureEvent') : t('today.logNow') }}
             </button>
           </div>
 
           <!-- Dropdown suggestions -->
           <div
-            v-if="quickLogOpen && (matchingUnscheduled.length > 0 || quickLogQuery.trim())"
+            v-if="
+              quickLogOpen &&
+              ((!store.isFuture && matchingUnscheduled.length > 0) || quickLogQuery.trim())
+            "
             class="absolute left-0 right-0 z-30 mt-1 max-h-60 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-lg"
           >
-            <!-- Create new option if typed text doesn't match an exact existing item -->
+            <!-- Create new option -->
             <button
               v-if="
                 quickLogQuery.trim() &&
-                !matchingUnscheduled.some(
-                  (it) => it.name.toLowerCase() === quickLogQuery.trim().toLowerCase(),
-                )
+                (store.isFuture ||
+                  !matchingUnscheduled.some(
+                    (it) => it.name.toLowerCase() === quickLogQuery.trim().toLowerCase(),
+                  ))
               "
               type="button"
               class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-primary/10 text-primary font-medium flex items-center gap-2 cursor-pointer"
               @mousedown.prevent="submitQuickLog({ name: quickLogQuery })"
             >
               <Icon icon="lucide:sparkles" class="size-4 shrink-0" />
-              <span>{{ t('today.createAndLog', { name: quickLogQuery.trim() }) }}</span>
+              <span>{{
+                store.isFuture
+                  ? t('today.createFutureEvent', { name: quickLogQuery.trim() })
+                  : t('today.createAndLog', { name: quickLogQuery.trim() })
+              }}</span>
             </button>
 
-            <!-- Matching existing unscheduled items -->
-            <button
-              v-for="u in matchingUnscheduled"
-              :key="u.id"
-              type="button"
-              class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-base-200 flex items-center justify-between cursor-pointer"
-              @mousedown.prevent="submitQuickLog(u)"
-            >
-              <span class="font-medium text-base-content/90">{{ u.name }}</span>
-              <span class="text-xs text-base-content/50">{{ t('today.card.check') }}</span>
-            </button>
+            <!-- Matching existing unscheduled items (today or past dates) -->
+            <template v-if="!store.isFuture">
+              <button
+                v-for="u in matchingUnscheduled"
+                :key="u.id"
+                type="button"
+                class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-base-200 flex items-center justify-between cursor-pointer"
+                @mousedown.prevent="submitQuickLog(u)"
+              >
+                <span class="font-medium text-base-content/90">{{ u.name }}</span>
+                <span class="text-xs text-base-content/50">{{ t('today.card.check') }}</span>
+              </button>
+            </template>
           </div>
         </div>
       </div>

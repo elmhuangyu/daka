@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { Icon } from '@iconify/vue'
 import type { CalendarDay, CalendarDayItem, ExternalEvent } from '../../api'
 import { RIBBON_CLASS, dayLabel, dayNumber, eventTime, joinParts } from '../../calendar/logic'
-import { useI18n } from '../../i18n'
+import { useI18n, type MessageKey } from '../../i18n'
 
 const { t, tn } = useI18n()
 
@@ -44,6 +44,32 @@ function dotClass(i: CalendarDayItem): string {
       return 'bg-secondary/60'
   }
 }
+
+const STATUS_TEXT: Record<string, MessageKey> = {
+  done: 'calendar.badge.done',
+  partial: 'calendar.badge.partial',
+  missed: 'calendar.badge.missed',
+  frozen: 'calendar.badge.frozen',
+  pending: 'calendar.badge.pending',
+  upcoming: 'calendar.badge.upcoming',
+  extra: 'calendar.badge.extra',
+}
+
+function dotTooltip(i: CalendarDayItem): string {
+  const parts: string[] = [i.name]
+  if (i.overdue) {
+    parts.push(`(${t('calendar.badge.overdue')})`)
+  } else if (i.status && STATUS_TEXT[i.status]) {
+    parts.push(`(${t(STATUS_TEXT[i.status]!)})`)
+  }
+  return parts.join(' ')
+}
+
+const extraDotsTooltip = computed(() => {
+  const rest = dueItems.value.slice(MAX_DOTS)
+  return rest.map(dotTooltip).join('\n')
+})
+
 const label = computed(() => {
   const base = props.day ? dayLabel(props.day) : props.date
   return props.external.length
@@ -124,8 +150,11 @@ const label = computed(() => {
         :key="i.item_id"
         class="size-2 rounded-full"
         :class="dotClass(i)"
+        :title="dotTooltip(i)"
       ></span>
-      <span v-if="extraDots" class="text-[10px] leading-none opacity-70">+{{ extraDots }}</span>
+      <span v-if="extraDots" class="text-[10px] leading-none opacity-70" :title="extraDotsTooltip"
+        >+{{ extraDots }}</span
+      >
     </span>
 
     <span

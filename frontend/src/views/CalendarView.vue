@@ -17,6 +17,15 @@ const store = useCalendarStore()
 
 const gridEl = ref<HTMLElement | null>(null)
 const focusDate = ref(store.anchor)
+const calDatePickerInput = ref<HTMLInputElement | null>(null)
+
+async function onCalDatePick(pickedDate: string) {
+  if (!pickedDate) return
+  store.anchor = pickedDate
+  await store.refresh()
+  focusDate.value = pickedDate
+  void store.select(pickedDate)
+}
 
 const todayStr = computed(() => store.view?.today ?? '')
 const headers = computed(() => weekdayHeaders(store.weekStart))
@@ -143,6 +152,30 @@ watch(
         >
           {{ t('nav.today') }}
         </button>
+        <div class="relative flex items-center">
+          <input
+            ref="calDatePickerInput"
+            type="date"
+            class="sr-only"
+            :value="store.anchor"
+            data-testid="calendar-date-picker"
+            @change="onCalDatePick(($event.target as HTMLInputElement).value)"
+          />
+          <button
+            type="button"
+            class="btn btn-sm shadow-xs gap-1.5"
+            :title="t('calendar.pickDate')"
+            data-testid="open-calendar-date-picker"
+            @click="
+              calDatePickerInput?.showPicker
+                ? calDatePickerInput.showPicker()
+                : calDatePickerInput?.focus()
+            "
+          >
+            <Icon icon="lucide:calendar" class="size-4" />
+            <span class="hidden sm:inline">{{ t('calendar.pickDate') }}</span>
+          </button>
+        </div>
         <div class="join shadow-xs">
           <button
             type="button"

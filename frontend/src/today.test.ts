@@ -57,14 +57,21 @@ beforeEach(() => {
       url = String(url)
       if (url === '/api/auth/status')
         return jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
-      if (url.startsWith('/api/view/today'))
+      if (url.startsWith('/api/view/today')) {
+        const u = new URL(url, 'http://localhost')
+        const qDate = u.searchParams.get('date') || '2026-11-07'
         return jsonRes({
-          date: '2026-11-07',
+          date: qDate,
           weekday: 6,
           timezone: 'UTC',
           progress: world.progress,
           items: world.today,
         })
+      }
+      if (url === '/api/items' && init?.method === 'POST') {
+        const body = JSON.parse(init.body as string)
+        return jsonRes({ id: 99, ...body }, 201)
+      }
       if (url.startsWith('/api/items')) return jsonRes({ items: world.items })
       if (url.startsWith('/api/categories')) return jsonRes({ categories: world.cats })
       if (url.startsWith('/api/checkins') && (!init || !init.method))
@@ -478,5 +485,39 @@ describe('Today page', () => {
       (c) => c[1]?.method === 'POST' && String(c[0]) === '/api/items',
     )!
     expect(JSON.parse(call[1].body).rule.rrule_string).toBe('FREQ=DAILY;INTERVAL=3')
+  })
+
+  it('supports date picker and schedules future events without check-in', async () => {
+    const w = await mountApp()
+    expect(w.find('[data-testid=open-date-picker]').exists()).toBe(true)
+    expect(w.find('[data-testid=today-date-picker]').exists()).toBe(true)
+
+    // Navigate to next day (future)
+    await w.get('[data-testid=next-day]').trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('2026-11-08')
+
+    // Quick log on future date creates scheduled event
+    await w.get('[data-testid=quick-log-input]').setValue('Dentist')
+    await w.get('[data-testid=quick-log-submit]').trigger('click')
+    await flushPromises()
+
+    const itemPost = fetchMock.mock.calls.find((c) => {
+      if (c[1]?.method !== 'POST' || String(c[0]) !== '/api/items') return false
+      const b = JSON.parse(c[1].body)
+      return b.name === 'Dentist'
+    })
+    expect(itemPost).toBeTruthy()
+    const itemBody = JSON.parse(itemPost![1].body)
+    expect(itemBody.kind).toBe('event')
+    expect(itemBody.rule.schedule_type).toBe('fixed_rrule')
+    expect(itemBody.rule.dtstart).toBe('2026-11-08')
+    expect(itemBody.rule.until).toBe('2026-11-08')
+
+    // No check-in was posted for this future date
+    const checkinPost = fetchMock.mock.calls.find(
+      (c) => c[1]?.method === 'POST' && String(c[0]) === '/api/checkins',
+    )
+    expect(checkinPost).toBeUndefined()
   })
 })

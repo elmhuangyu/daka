@@ -720,6 +720,25 @@ export function createAdHocEvent(name: string): Promise<{ id: number }> {
   )
 }
 
+export function createScheduledEvent(name: string, date: string): Promise<{ id: number }> {
+  return request<{ id: number }>(
+    '/api/items',
+    jsonInit('POST', {
+      name: name.trim(),
+      tracker_type: 'boolean',
+      kind: 'event',
+      polarity: 'positive',
+      rule: {
+        schedule_type: 'fixed_rrule',
+        rrule_string: 'FREQ=DAILY;COUNT=1',
+        dtstart: date,
+        until: date,
+        holiday_mode: 'none',
+      },
+    }),
+  )
+}
+
 // ---- Settings (P3-5) ----
 
 export interface ExternalCalendarDto {

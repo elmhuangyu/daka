@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
+import * as api from '../../api'
 import type { CalendarDayItem, CheckinInput } from '../../api'
 import { canMakeUp, dayStatusText, eventTime, longDate } from '../../calendar/logic'
 import { useI18n, type MessageKey } from '../../i18n'
@@ -15,26 +16,73 @@ const day = computed(() => store.selectedDay)
 const date = computed(() => store.selected ?? '')
 const today = computed(() => store.view?.today ?? '')
 const editable = computed(() => canMakeUp(date.value, today.value))
+const isFuture = computed(() => !!today.value && !!date.value && date.value > today.value)
 const external = computed(() => store.externalByDate.get(date.value) ?? [])
 
 // Items added by hand for a retroactive entry although they were not scheduled.
 const added = ref<number[]>([])
-const pick = ref('')
+const quickQuery = ref('')
+const quickOpen = ref(false)
+const quickBusy = ref(false)
+
 watch(date, () => {
   added.value = []
-  pick.value = ''
+  quickQuery.value = ''
+  quickOpen.value = false
 })
 
 const listed = computed(() => (day.value?.items ?? []).filter((i) => !i.forecast || i.overdue))
 const forecast = computed(() => (day.value?.items ?? []).filter((i) => i.forecast && !i.overdue))
 const shownIds = computed(() => new Set([...listed.value.map((i) => i.item_id), ...added.value]))
 const addable = computed(() => store.items.filter((d) => !shownIds.value.has(d.id)))
+const matchingAddable = computed(() => {
+  const q = quickQuery.value.trim().toLowerCase()
+  if (!q) return addable.value
+  return addable.value.filter((d) => d.name.toLowerCase().includes(q))
+})
 const addedDetails = computed(() => added.value.flatMap((id) => store.detailById.get(id) ?? []))
 
-function addPicked() {
-  const id = Number(pick.value)
-  if (id && !added.value.includes(id)) added.value.push(id)
-  pick.value = ''
+function onBlur() {
+  setTimeout(() => {
+    quickOpen.value = false
+  }, 200)
+}
+
+async function submitQuick(target: { id?: number; name: string }) {
+  if (quickBusy.value) return
+  const targetDate = date.value
+  if (!targetDate) return
+  const name = target.name.trim()
+  if (!name && !target.id) return
+  quickBusy.value = true
+  try {
+    if (isFuture.value) {
+      await api.createScheduledEvent(name, targetDate)
+      await Promise.all([store.refresh(false), store.loadPanel()])
+    } else {
+      let itemId = target.id
+      if (!itemId) {
+        const exact = matchingAddable.value.find(
+          (it) => it.name.toLowerCase() === name.toLowerCase(),
+        )
+        if (exact) {
+          itemId = exact.id
+        }
+      }
+      if (itemId) {
+        await makeUp({ item_id: itemId, mode: 'set', value: 1 })
+      } else {
+        const created = await api.createAdHocEvent(name)
+        await makeUp({ item_id: created.id, mode: 'set', value: 1 })
+      }
+    }
+    quickQuery.value = ''
+    quickOpen.value = false
+  } catch (e) {
+    store.panelError = api.describeError(e)
+  } finally {
+    quickBusy.value = false
+  }
 }
 
 const STATUS_BADGE = {
@@ -187,26 +235,97 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
         </li>
       </ul>
 
-      <div v-if="editable && addable.length" class="mt-3 flex items-center gap-2">
-        <label class="sr-only" for="makeup-pick">{{ t('calendar.panel.addLabel') }}</label>
-        <select
-          id="makeup-pick"
-          v-model="pick"
-          class="select select-sm min-w-0 flex-1"
-          data-testid="makeup-pick"
-        >
-          <option value="">{{ t('calendar.panel.addPlaceholder') }}</option>
-          <option v-for="d in addable" :key="d.id" :value="String(d.id)">{{ d.name }}</option>
-        </select>
-        <button
-          type="button"
-          class="btn btn-sm"
-          :disabled="!pick"
-          data-testid="makeup-add"
-          @click="addPicked"
-        >
-          {{ t('common.add') }}
-        </button>
+      <!-- Quick add / log for this day (same combobox experience as today view) -->
+      <div
+        class="mt-4 pt-3 border-t border-base-300/60 space-y-2"
+        data-testid="panel-quick-section"
+      >
+        <h4 class="text-xs font-semibold text-base-content/80 flex items-center gap-1.5">
+          <Icon icon="lucide:pencil" class="size-3.5 text-primary" />
+          {{ t('calendar.panel.addEventTitle') }}
+        </h4>
+        <div class="relative w-full">
+          <div class="join w-full">
+            <div class="relative flex-1">
+              <input
+                v-model="quickQuery"
+                type="text"
+                class="input input-sm input-bordered w-full join-item pr-8"
+                :placeholder="
+                  isFuture
+                    ? t('today.quickAddFuturePlaceholder')
+                    : t('calendar.panel.quickPlaceholder')
+                "
+                autocomplete="off"
+                data-testid="panel-quick-input"
+                @focus="quickOpen = true"
+                @blur="onBlur"
+                @keydown.escape="quickOpen = false"
+                @keydown.enter.prevent="submitQuick({ name: quickQuery })"
+              />
+              <button
+                v-if="quickQuery"
+                type="button"
+                class="absolute right-2 top-1.5 text-base-content/40 hover:text-base-content/80"
+                @click="quickQuery = ''"
+              >
+                <Icon icon="lucide:x" class="size-4" />
+              </button>
+            </div>
+            <button
+              type="button"
+              class="btn btn-sm btn-primary join-item shadow-xs"
+              :disabled="!quickQuery.trim() || quickBusy"
+              data-testid="panel-quick-submit"
+              @click="submitQuick({ name: quickQuery })"
+            >
+              <span v-if="quickBusy" class="loading loading-spinner loading-xs" />
+              <Icon v-else icon="lucide:plus" class="size-4" />
+              {{ isFuture ? t('today.addFutureEvent') : t('today.logNow') }}
+            </button>
+          </div>
+
+          <!-- Dropdown suggestions -->
+          <div
+            v-if="quickOpen && ((!isFuture && matchingAddable.length > 0) || quickQuery.trim())"
+            class="absolute left-0 right-0 z-30 mt-1 max-h-60 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-lg"
+          >
+            <!-- Create new option -->
+            <button
+              v-if="
+                quickQuery.trim() &&
+                (isFuture ||
+                  !matchingAddable.some(
+                    (it) => it.name.toLowerCase() === quickQuery.trim().toLowerCase(),
+                  ))
+              "
+              type="button"
+              class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-primary/10 text-primary font-medium flex items-center gap-2 cursor-pointer"
+              @mousedown.prevent="submitQuick({ name: quickQuery })"
+            >
+              <Icon icon="lucide:sparkles" class="size-4 shrink-0" />
+              <span>{{
+                isFuture
+                  ? t('today.createFutureEvent', { name: quickQuery.trim() })
+                  : t('today.createAndLog', { name: quickQuery.trim() })
+              }}</span>
+            </button>
+
+            <!-- Matching items (for today/past dates) -->
+            <template v-if="!isFuture">
+              <button
+                v-for="u in matchingAddable"
+                :key="u.id"
+                type="button"
+                class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-base-200 flex items-center justify-between cursor-pointer"
+                @mousedown.prevent="submitQuick(u)"
+              >
+                <span class="font-medium text-base-content/90">{{ u.name }}</span>
+                <span class="text-xs text-base-content/50">{{ t('today.card.check') }}</span>
+              </button>
+            </template>
+          </div>
+        </div>
       </div>
     </section>
 

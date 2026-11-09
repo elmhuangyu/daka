@@ -309,9 +309,13 @@ describe('CalendarView', () => {
     await w.get('[data-testid=day-2026-11-06]').trigger('click')
     await flushPromises()
     expect(w.text()).toContain('Water')
+    const dot = w.get('[data-testid=day-2026-11-06] [data-testid=dots] span')
+    expect(dot.attributes('title')).toContain('Water')
+
     usePrivacyStore(pinia).set(true)
     await w.vm.$nextTick()
     expect(w.text()).not.toContain('Water')
+    expect(w.html()).not.toContain('Water')
     await flushPromises()
     expect(viewCalls().at(-1)).toContain('redact=1')
     expect(calls.filter((c) => c.url.startsWith('/api/items')).at(-1)!.url).toContain('redact=1')
@@ -323,6 +327,42 @@ describe('CalendarView', () => {
     const { w } = await mountView()
     expect(w.get('[data-testid=error]').text()).toContain('went wrong')
     expect(w.find('[data-testid=retry]').exists()).toBe(true)
+    w.unmount()
+  })
+
+  it('dots have title attributes with item name and status', async () => {
+    const { w } = await mountView()
+    const dot = w.get('[data-testid=day-2026-11-06] [data-testid=dots] span')
+    expect(dot.attributes('title')).toContain('Water')
+    w.unmount()
+  })
+
+  it('supports header date picker', async () => {
+    const { w } = await mountView()
+    expect(w.find('[data-testid=open-calendar-date-picker]').exists()).toBe(true)
+    const picker = w.get('[data-testid=calendar-date-picker]')
+    await picker.setValue('2026-12-15')
+    await picker.trigger('change')
+    await flushPromises()
+    expect(w.find('[data-testid=day-2026-12-15]').exists()).toBe(true)
+    w.unmount()
+  })
+
+  it('quick add on a future date in day panel creates scheduled event', async () => {
+    const { w } = await mountView()
+    await w.get('[data-testid=day-2026-11-20]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid=day-panel]').exists()).toBe(true)
+    await w.get('[data-testid=panel-quick-input]').setValue('Dentist')
+    await w.get('[data-testid=panel-quick-submit]').trigger('click')
+    await flushPromises()
+
+    const itemPost = calls.find(
+      (c) => c.method === 'POST' && c.url === '/api/items' && c.body?.name === 'Dentist',
+    )
+    expect(itemPost).toBeTruthy()
+    const rule = itemPost!.body!.rule as Record<string, unknown>
+    expect(rule.dtstart).toBe('2026-11-20')
     w.unmount()
   })
 })
