@@ -4,7 +4,7 @@
 # The pnpm image ships only pnpm; pnpm installs the Node.js runtime itself.
 FROM ghcr.io/pnpm/pnpm:12.17.0 AS web
 WORKDIR /src/frontend
-RUN pnpm add -g node@runtime:24
+RUN pnpm add -g node@runtime:26
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY frontend/ ./

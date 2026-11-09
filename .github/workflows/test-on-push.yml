@@ -11,7 +11,7 @@ permissions:
 env:
   GOIMPORTS_VERSION: latest
   GOLANGCI_LINT_VERSION: latest
-  NODE_VERSION: 24
+  NODE_VERSION: 26
   PNPM_VERSION: 12.17.0
 
 jobs:
