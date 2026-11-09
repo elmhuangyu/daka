@@ -149,12 +149,12 @@ function addAdhoc() {
 
 <template>
   <article
-    class="card card-border bg-base-100 border-base-300"
-    :class="{ done: variant === 'done' }"
+    class="card card-border bg-base-100 border-base-300 shadow-xs transition-all duration-200 hover:border-primary/30"
+    :class="{ 'done opacity-70 bg-base-100/60': variant === 'done' }"
     :data-testid="`card-${d.id}`"
     :aria-busy="busy"
   >
-    <div class="card-body gap-3 p-3 sm:p-4">
+    <div class="card-body gap-3 p-3.5 sm:p-4">
       <header class="flex flex-wrap items-center justify-between gap-2">
         <h3 class="name text-base font-semibold" :class="{ sensitive: d.effective_sensitive }">
           {{ d.name }}

@@ -5,6 +5,10 @@
   color: var(--color-error);
 }
 
+summary::-webkit-details-marker {
+  display: none;
+}
+
 /* Privacy guard: names are already placeholders when redacted server-side; blur adds a visual layer. */
 .name.sensitive {
   transition: filter 0.15s;

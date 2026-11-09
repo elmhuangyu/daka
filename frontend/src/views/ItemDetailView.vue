@@ -120,174 +120,226 @@ const streakText = computed(() => {
     </p>
 
     <template v-if="store.item && store.stats">
-      <header class="flex flex-wrap items-center justify-between gap-2">
-        <h2 class="text-xl font-bold" data-testid="item-name">{{ store.item.name }}</h2>
-        <div class="flex flex-wrap gap-2">
-          <button
-            type="button"
-            class="btn btn-sm"
-            :class="{ 'btn-primary': store.item.pinned }"
-            data-testid="pin"
-            :aria-pressed="!!store.item.pinned"
-            @click="togglePin"
-          >
-            <Icon icon="lucide:pin" aria-hidden="true" />
-            {{ store.item.pinned ? t('items.unpin') : t('items.pin') }}
-          </button>
-          <RouterLink :to="`/items/${store.item.id}/edit`" class="btn btn-sm" data-testid="edit">
-            <Icon icon="lucide:pencil" aria-hidden="true" /> {{ t('items.detail.editExpectation') }}
-          </RouterLink>
-        </div>
-      </header>
-      <p v-if="store.item.description" class="opacity-80">{{ store.item.description }}</p>
-
-      <div class="stats stats-vertical w-full border sm:stats-horizontal" data-testid="stats">
-        <div class="stat">
-          <div class="stat-title">{{ t('items.detail.last') }}</div>
-          <div class="stat-value text-lg" data-testid="stat-last">
-            {{
-              store.stats.days_since_last === null
-                ? t('items.detail.never')
-                : tn('items.detail.daysAgo', store.stats.days_since_last)
-            }}
+      <!-- Header Card -->
+      <div class="card card-border bg-base-100 border-base-300 p-5 shadow-sm space-y-3">
+        <header class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <h2 class="text-xl font-bold tracking-tight" data-testid="item-name">
+              {{ store.item.name }}
+            </h2>
           </div>
-          <div class="stat-desc">{{ store.stats.last_date ?? '' }}</div>
-        </div>
-        <div v-if="store.stats.streak.applicable" class="stat">
-          <div class="stat-title">{{ t('items.detail.streak') }}</div>
-          <div class="stat-value text-lg" data-testid="stat-streak">{{ streakText }}</div>
-          <div class="stat-desc">
-            {{ t('items.detail.longest', { count: store.stats.streak.longest }) }}
+          <div class="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              class="btn btn-sm shadow-xs"
+              :class="{ 'btn-primary': store.item.pinned }"
+              data-testid="pin"
+              :aria-pressed="!!store.item.pinned"
+              @click="togglePin"
+            >
+              <Icon icon="lucide:pin" aria-hidden="true" />
+              {{ store.item.pinned ? t('items.unpin') : t('items.pin') }}
+            </button>
+            <RouterLink
+              :to="`/items/${store.item.id}/edit`"
+              class="btn btn-sm shadow-xs"
+              data-testid="edit"
+            >
+              <Icon icon="lucide:pencil" aria-hidden="true" />
+              {{ t('items.detail.editExpectation') }}
+            </RouterLink>
           </div>
-        </div>
-        <div class="stat">
-          <div class="stat-title">{{ t('items.detail.completion') }}</div>
-          <div class="stat-value text-lg" data-testid="stat-completion">
-            {{ pct(store.stats.completion_rate_90) }}
-          </div>
-        </div>
-        <div class="stat">
-          <div class="stat-title">{{ t('items.detail.checkins') }}</div>
-          <div class="stat-value text-lg">{{ store.stats.counts.total }}</div>
-          <div class="stat-desc">
-            {{
-              t('items.detail.checkinsDesc', {
-                last30: store.stats.counts.last_30_days,
-                year: store.stats.counts.this_year,
-              })
-            }}
-          </div>
-        </div>
-      </div>
-      <p class="text-sm opacity-80" data-testid="summary">{{ summary }}</p>
-
-      <section>
-        <h3 class="mb-1 font-semibold">{{ t('items.detail.schedule') }}</h3>
-        <p data-testid="rule">{{ rule }}</p>
-        <p class="text-sm opacity-70" data-testid="rule-note">
-          {{ t('items.detail.ruleNote') }}
+        </header>
+        <p v-if="store.item.description" class="text-sm opacity-80">
+          {{ store.item.description }}
         </p>
-      </section>
 
-      <section>
-        <h3 class="mb-1 font-semibold">{{ t('items.detail.last365') }}</h3>
-        <Heatmap
-          :days="store.stats.heatmap"
-          :week-start="weekStart"
-          :negative="store.item?.polarity === 'negative'"
-          :redact="privacy.redact"
-          :label="t('items.detail.heatmapLabel')"
-        />
-      </section>
-
-      <section>
-        <div class="mb-1 flex items-center justify-between">
-          <h3 class="font-semibold">
-            {{ t('items.detail.calendar', { month: formatMonthYear(`${store.month}-01`) }) }}
-          </h3>
-          <div class="join">
-            <button
-              type="button"
-              class="btn btn-sm join-item"
-              :aria-label="t('items.detail.prevMonth')"
-              data-testid="cal-prev"
-              @click="store.setMonth(shiftMonth(store.month, -1))"
-            >
-              <Icon icon="lucide:chevron-left" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              class="btn btn-sm join-item"
-              :aria-label="t('items.detail.nextMonth')"
-              data-testid="cal-next"
-              @click="store.setMonth(shiftMonth(store.month, 1))"
-            >
-              <Icon icon="lucide:chevron-right" aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-        <div class="grid grid-cols-7 gap-1 text-center text-xs" data-testid="calendar">
-          <template v-for="(d, i) in calendarCells" :key="i">
-            <span v-if="d" class="rounded p-1" :class="dayClass(d)" :data-date="d.date">{{
-              Number(d.date.slice(8))
-            }}</span>
-            <span v-else></span>
-          </template>
-        </div>
-        <p class="mt-1 text-xs opacity-70">{{ t('items.detail.legend') }}</p>
-      </section>
-
-      <section>
-        <h3 class="mb-1 font-semibold">{{ t('items.detail.history') }}</h3>
-        <p v-if="!store.history.length" class="opacity-70" data-testid="history-empty">
-          {{ t('items.detail.noCheckins') }}
-        </p>
-        <ul class="divide-y" data-testid="history">
-          <li
-            v-for="l in store.history"
-            :key="l.id"
-            class="flex items-center justify-between gap-2 py-1"
-            :data-testid="`log-${l.id}`"
-          >
-            <span class="min-w-0 truncate">
-              {{ l.date }} <span v-if="optionName(l.option_id)">{{ optionName(l.option_id) }}</span>
-              <span
-                v-if="
-                  store.item.tracker_type !== 'boolean' && store.item.tracker_type !== 'maintenance'
-                "
-              >
-                {{ l.value }}</span
-              >
-              <span v-if="l.note" class="opacity-70"> {{ l.note }}</span>
-              <span v-if="l.is_supplement" class="badge badge-ghost badge-sm ml-1">{{
-                t('items.detail.backfilled')
-              }}</span>
-            </span>
-            <button
-              type="button"
-              class="btn btn-ghost btn-xs"
-              :class="{ 'btn-error': pendingLog === l.id }"
-              :data-testid="`del-${l.id}`"
-              @click="removeLog(l.id)"
-            >
-              <Icon icon="lucide:trash-2" aria-hidden="true" />
-              {{ pendingLog === l.id ? t('items.detail.confirm') : t('common.delete') }}
-            </button>
-          </li>
-        </ul>
-        <button
-          v-if="store.nextCursor"
-          type="button"
-          class="btn btn-sm mt-2"
-          data-testid="more"
-          @click="store.loadMore()"
+        <!-- Stats Block -->
+        <div
+          class="stats stats-vertical w-full border border-base-300 bg-base-200/40 rounded-xl shadow-xs sm:stats-horizontal"
+          data-testid="stats"
         >
-          {{ t('common.loadMore') }}
-        </button>
-      </section>
+          <div class="stat">
+            <div class="stat-title text-xs font-medium">{{ t('items.detail.last') }}</div>
+            <div class="stat-value text-lg" data-testid="stat-last">
+              {{
+                store.stats.days_since_last === null
+                  ? t('items.detail.never')
+                  : tn('items.detail.daysAgo', store.stats.days_since_last)
+              }}
+            </div>
+            <div class="stat-desc">{{ store.stats.last_date ?? '' }}</div>
+          </div>
+          <div v-if="store.stats.streak.applicable" class="stat">
+            <div class="stat-title text-xs font-medium">{{ t('items.detail.streak') }}</div>
+            <div class="stat-value text-lg" data-testid="stat-streak">{{ streakText }}</div>
+            <div class="stat-desc">
+              {{ t('items.detail.longest', { count: store.stats.streak.longest }) }}
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-title text-xs font-medium">{{ t('items.detail.completion') }}</div>
+            <div class="stat-value text-lg text-primary" data-testid="stat-completion">
+              {{ pct(store.stats.completion_rate_90) }}
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-title text-xs font-medium">{{ t('items.detail.checkins') }}</div>
+            <div class="stat-value text-lg">{{ store.stats.counts.total }}</div>
+            <div class="stat-desc">
+              {{
+                t('items.detail.checkinsDesc', {
+                  last30: store.stats.counts.last_30_days,
+                  year: store.stats.counts.this_year,
+                })
+              }}
+            </div>
+          </div>
+        </div>
+        <p class="text-xs text-base-content/70 flex items-center gap-1.5" data-testid="summary">
+          <Icon icon="lucide:info" class="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
+          {{ summary }}
+        </p>
+      </div>
 
-      <section class="flex flex-wrap gap-2 border-t pt-3">
-        <button type="button" class="btn btn-sm" data-testid="archive" @click="toggleArchive">
+      <!-- Schedule & Heatmap Card -->
+      <div class="card card-border bg-base-100 border-base-300 p-5 shadow-sm space-y-4">
+        <section>
+          <h3 class="mb-1 text-xs font-semibold uppercase tracking-wider text-base-content/70">
+            {{ t('items.detail.schedule') }}
+          </h3>
+          <p class="font-medium" data-testid="rule">{{ rule }}</p>
+          <p class="text-xs text-base-content/60 mt-0.5" data-testid="rule-note">
+            {{ t('items.detail.ruleNote') }}
+          </p>
+        </section>
+
+        <section class="border-t border-base-300/60 pt-4">
+          <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-base-content/70">
+            {{ t('items.detail.last365') }}
+          </h3>
+          <Heatmap
+            :days="store.stats.heatmap"
+            :week-start="weekStart"
+            :negative="store.item?.polarity === 'negative'"
+            :redact="privacy.redact"
+            :label="t('items.detail.heatmapLabel')"
+          />
+        </section>
+      </div>
+
+      <!-- Month Calendar & History Card -->
+      <div class="card card-border bg-base-100 border-base-300 p-5 shadow-sm space-y-5">
+        <section>
+          <div class="mb-3 flex items-center justify-between">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-base-content/70">
+              {{ t('items.detail.calendar', { month: formatMonthYear(`${store.month}-01`) }) }}
+            </h3>
+            <div class="join shadow-xs">
+              <button
+                type="button"
+                class="btn btn-xs join-item"
+                :aria-label="t('items.detail.prevMonth')"
+                data-testid="cal-prev"
+                @click="store.setMonth(shiftMonth(store.month, -1))"
+              >
+                <Icon icon="lucide:chevron-left" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                class="btn btn-xs join-item"
+                :aria-label="t('items.detail.nextMonth')"
+                data-testid="cal-next"
+                @click="store.setMonth(shiftMonth(store.month, 1))"
+              >
+                <Icon icon="lucide:chevron-right" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+          <div class="grid grid-cols-7 gap-1.5 text-center text-xs" data-testid="calendar">
+            <template v-for="(d, i) in calendarCells" :key="i">
+              <span
+                v-if="d"
+                class="rounded-md p-1.5 transition-colors font-medium"
+                :class="dayClass(d)"
+                :data-date="d.date"
+                >{{ Number(d.date.slice(8)) }}</span
+              >
+              <span v-else></span>
+            </template>
+          </div>
+          <p class="mt-2 text-xs opacity-60">{{ t('items.detail.legend') }}</p>
+        </section>
+
+        <section class="border-t border-base-300/60 pt-4">
+          <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-base-content/70">
+            {{ t('items.detail.history') }}
+          </h3>
+          <p
+            v-if="!store.history.length"
+            class="text-xs text-base-content/60 py-2"
+            data-testid="history-empty"
+          >
+            {{ t('items.detail.noCheckins') }}
+          </p>
+          <ul class="divide-y divide-base-300/60" data-testid="history">
+            <li
+              v-for="l in store.history"
+              :key="l.id"
+              class="flex items-center justify-between gap-2 py-2"
+              :data-testid="`log-${l.id}`"
+            >
+              <span class="min-w-0 truncate text-sm">
+                <span class="font-medium">{{ l.date }}</span>
+                <span v-if="optionName(l.option_id)" class="ml-1 text-base-content/80">{{
+                  optionName(l.option_id)
+                }}</span>
+                <span
+                  v-if="
+                    store.item.tracker_type !== 'boolean' &&
+                    store.item.tracker_type !== 'maintenance'
+                  "
+                  class="ml-1 font-semibold"
+                >
+                  {{ l.value }}</span
+                >
+                <span v-if="l.note" class="opacity-70 ml-1"> &middot; {{ l.note }}</span>
+                <span v-if="l.is_supplement" class="badge badge-ghost badge-xs ml-1.5">{{
+                  t('items.detail.backfilled')
+                }}</span>
+              </span>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs"
+                :class="{ 'btn-error': pendingLog === l.id }"
+                :data-testid="`del-${l.id}`"
+                @click="removeLog(l.id)"
+              >
+                <Icon icon="lucide:trash-2" aria-hidden="true" />
+                {{ pendingLog === l.id ? t('items.detail.confirm') : t('common.delete') }}
+              </button>
+            </li>
+          </ul>
+          <button
+            v-if="store.nextCursor"
+            type="button"
+            class="btn btn-sm btn-ghost border-base-300 mt-2"
+            data-testid="more"
+            @click="store.loadMore()"
+          >
+            {{ t('common.loadMore') }}
+          </button>
+        </section>
+      </div>
+
+      <!-- Management / Danger Actions -->
+      <section class="flex flex-wrap items-center gap-2 pt-1">
+        <button
+          type="button"
+          class="btn btn-sm btn-outline"
+          data-testid="archive"
+          @click="toggleArchive"
+        >
           <Icon icon="lucide:archive" aria-hidden="true" />
           {{ store.item.archived ? t('items.detail.unarchive') : t('items.detail.archive') }}
         </button>
@@ -301,16 +353,18 @@ const streakText = computed(() => {
           <Icon icon="lucide:trash-2" aria-hidden="true" /> {{ t('items.detail.deleteItem') }}
         </button>
         <template v-else>
-          <span class="self-center text-sm">{{ t('items.detail.deleteAsk') }}</span>
+          <span class="self-center text-sm text-error font-medium">{{
+            t('items.detail.deleteAsk')
+          }}</span>
           <button
             type="button"
-            class="btn btn-sm btn-error"
+            class="btn btn-sm btn-error shadow-xs"
             data-testid="delete-confirm"
             @click="removeItem"
           >
             {{ t('items.detail.deleteConfirm') }}
           </button>
-          <button type="button" class="btn btn-sm" @click="confirmDelete = false">
+          <button type="button" class="btn btn-sm btn-ghost" @click="confirmDelete = false">
             {{ t('common.cancel') }}
           </button>
         </template>

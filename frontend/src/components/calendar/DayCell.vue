@@ -56,11 +56,11 @@ const label = computed(() => {
   <button
     type="button"
     role="gridcell"
-    class="relative flex min-w-0 flex-col gap-1 overflow-hidden border border-base-300 p-1 text-left align-top hover:bg-base-200 focus-visible:outline-2 focus-visible:outline-primary"
+    class="relative flex min-w-0 flex-col gap-1 overflow-hidden border-r border-base-300 last:border-r-0 p-1.5 text-left align-top hover:bg-base-200/60 transition-colors focus-visible:outline-2 focus-visible:outline-primary"
     :class="[
       expanded ? 'min-h-32' : 'min-h-16 sm:min-h-24',
-      inMonth ? 'bg-base-100' : 'bg-base-200/60 text-base-content/60',
-      selected ? 'outline-2 -outline-offset-2 outline-primary' : '',
+      inMonth ? 'bg-base-100' : 'bg-base-200/40 text-base-content/50',
+      selected ? 'ring-2 ring-primary ring-inset z-10' : '',
     ]"
     :tabindex="focusable ? 0 : -1"
     :aria-selected="selected"

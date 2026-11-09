@@ -86,6 +86,15 @@ const ICONS: Record<string, string> = {
     '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
   ),
   'lucide:info': wrap('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>'),
+  'lucide:sparkles': wrap(
+    '<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/>',
+  ),
+  'lucide:chevron-down': wrap('<path d="m6 9 6 6 6-6"/>'),
+  'lucide:calendar-days': wrap(
+    '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M8 2v4m8-4v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/>',
+  ),
+  'lucide:check-circle-2': wrap('<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>'),
+  'lucide:filter': wrap('<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>'),
 }
 
 for (const [name, body] of Object.entries(ICONS)) addIcon(name, { body, width: 24, height: 24 })

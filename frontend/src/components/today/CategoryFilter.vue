@@ -16,15 +16,19 @@ defineEmits<{ 'update:modelValue': [CategoryFilter] }>()
 
 <template>
   <div
-    class="flex flex-wrap gap-2"
+    class="flex flex-wrap items-center gap-1.5"
     role="group"
     :aria-label="t('today.filter.label')"
     data-testid="category-filter"
   >
     <button
       type="button"
-      class="btn btn-sm"
-      :class="modelValue === 'all' ? 'btn-primary' : 'btn-outline'"
+      class="btn btn-sm rounded-full transition-all"
+      :class="
+        modelValue === 'all'
+          ? 'btn-primary shadow-xs'
+          : 'btn-ghost bg-base-200/80 hover:bg-base-200 border-base-300 text-base-content/80'
+      "
       :aria-pressed="modelValue === 'all'"
       data-testid="filter-all"
       @click="$emit('update:modelValue', 'all')"
@@ -35,8 +39,12 @@ defineEmits<{ 'update:modelValue': [CategoryFilter] }>()
       v-for="c in categories"
       :key="c.id"
       type="button"
-      class="btn btn-sm"
-      :class="modelValue === c.id ? 'btn-primary' : 'btn-outline'"
+      class="btn btn-sm rounded-full transition-all"
+      :class="
+        modelValue === c.id
+          ? 'btn-primary shadow-xs'
+          : 'btn-ghost bg-base-200/80 hover:bg-base-200 border-base-300 text-base-content/80'
+      "
       :aria-pressed="modelValue === c.id"
       :data-testid="`filter-${c.id}`"
       @click="$emit('update:modelValue', c.id)"
@@ -46,8 +54,12 @@ defineEmits<{ 'update:modelValue': [CategoryFilter] }>()
     <button
       v-if="counts.get('none')"
       type="button"
-      class="btn btn-sm"
-      :class="modelValue === 'none' ? 'btn-primary' : 'btn-outline'"
+      class="btn btn-sm rounded-full transition-all"
+      :class="
+        modelValue === 'none'
+          ? 'btn-primary shadow-xs'
+          : 'btn-ghost bg-base-200/80 hover:bg-base-200 border-base-300 text-base-content/80'
+      "
       :aria-pressed="modelValue === 'none'"
       data-testid="filter-none"
       @click="$emit('update:modelValue', 'none')"

@@ -60,7 +60,7 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
 <template>
   <aside
     v-if="store.selected"
-    class="space-y-3 rounded-box border border-base-300 bg-base-100 p-3"
+    class="space-y-4 card card-border bg-base-100 border-base-300 p-4 shadow-sm h-fit"
     aria-labelledby="day-panel-title"
     data-testid="day-panel"
   >
