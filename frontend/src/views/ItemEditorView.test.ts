@@ -127,4 +127,32 @@ describe('ItemEditorView', () => {
       setDateFormat('YYYY-MM-DD')
     }
   })
+
+  it('creates a one-time task via the separated tab', async () => {
+    const { w } = await mountAt('/items/new')
+    // Click on the One-time Task tab
+    await w.get('[data-testid=kind-event]').trigger('click')
+    await w.get('[data-testid=f-name]').setValue('Dentist Appointment')
+
+    const dueDate = w.get<HTMLInputElement>('[data-testid=f-due-date]')
+    await dueDate.setValue('2026-11-20')
+    await dueDate.trigger('blur')
+
+    expect(w.get('[data-testid=preview-sentence]').text()).toBe('Once on 2026-11-20.')
+
+    await w.get('form').trigger('submit')
+    await flushPromises()
+
+    const post = calls.find((c) => c.url === '/api/items' && c.method === 'POST')!
+    expect(post.body).toMatchObject({
+      name: 'Dentist Appointment',
+      kind: 'event',
+      rule: {
+        schedule_type: 'fixed_rrule',
+        rrule_string: 'FREQ=DAILY;COUNT=1',
+        dtstart: '2026-11-20',
+        until: '2026-11-20',
+      },
+    })
+  })
 })

@@ -572,6 +572,14 @@ export function previewRule(f: ItemForm, today: string, dtstart?: string): RuleP
       }
     }
     case 'fixed_rrule': {
+      if (f.periodKind === 'once') {
+        const d = f.dtstart || dtstart || today
+        return {
+          sentence: t('items.preview.once', { date: formatCustomDate(d) }),
+          dates: [d],
+          note: '',
+        }
+      }
       const r = formRRule(f)
       if ('error' in r) return { sentence: r.error, dates: null, note: '' }
       let sentence = describeRRule(r.rrule)
