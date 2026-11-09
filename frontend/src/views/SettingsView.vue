@@ -78,7 +78,7 @@ watch(
     <!-- Main settings container -->
     <div class="flex flex-col lg:flex-row gap-6 items-start">
       <!-- Desktop sidebar tabs -->
-      <aside class="hidden lg:block w-60 shrink-0 sticky top-20">
+      <aside class="hidden lg:block w-60 shrink-0 sticky top-0">
         <nav
           class="flex flex-col gap-1 p-1.5 rounded-2xl bg-base-200/50 border border-base-300 shadow-sm"
           :aria-label="t('nav.settings')"

@@ -5,6 +5,12 @@
 @plugin './themes/catppuccinTheme.macchiato.ts';
 @plugin './themes/catppuccinTheme.mocha.ts';
 
+html,
+body,
+#app {
+  height: 100%;
+}
+
 .error {
   color: var(--color-error);
 }

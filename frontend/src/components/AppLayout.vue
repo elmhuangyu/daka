@@ -41,13 +41,16 @@ function isNavActive(path: string) {
 </script>
 
 <template>
-  <div class="min-h-screen md:flex" :data-privacy="privacy.redact ? 'on' : 'off'">
+  <div
+    class="h-full flex flex-col md:flex-row overflow-hidden"
+    :data-privacy="privacy.redact ? 'on' : 'off'"
+  >
     <!-- Desktop sidebar -->
     <aside
-      class="hidden shrink-0 border-r border-base-300 bg-base-200/50 md:block transition-[width] duration-200"
+      class="hidden shrink-0 border-r border-base-300 bg-base-200/50 md:flex flex-col h-full overflow-y-auto transition-[width] duration-200"
       :class="collapsed ? 'w-16' : 'w-60'"
     >
-      <div class="sticky top-0 flex flex-col p-3">
+      <div class="flex flex-col p-3 flex-1">
         <div
           class="flex items-center gap-2 px-1 py-3 mb-2"
           :class="{ 'justify-center': collapsed }"
@@ -105,9 +108,9 @@ function isNavActive(path: string) {
       </div>
     </aside>
 
-    <div class="flex min-w-0 flex-1 flex-col">
+    <div class="flex min-w-0 flex-1 flex-col h-full overflow-hidden">
       <header
-        class="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-base-300 bg-base-100 px-4 py-2"
+        class="shrink-0 z-20 flex items-center justify-between gap-2 border-b border-base-300 bg-base-100 px-4 py-2"
       >
         <div class="flex items-center gap-2">
           <button
@@ -131,7 +134,7 @@ function isNavActive(path: string) {
         </div>
       </header>
       <OfflineBanner />
-      <div class="flex-1 pb-20 md:pb-0">
+      <div class="flex-1 overflow-y-auto pb-20 md:pb-6" data-testid="main-content">
         <slot />
       </div>
     </div>
