@@ -7,6 +7,7 @@ import { useItemDetailStore, useItemsStore } from '../stores/items'
 import { describeRule, shiftMonth } from '../items/logic'
 import Heatmap from '../components/Heatmap.vue'
 import { getCalendarSettings } from '../api'
+import type { HistoryLog } from '../api'
 import { useI18n } from '../i18n'
 import { formatMonthYear } from '../i18n/format'
 
@@ -101,6 +102,94 @@ const streakText = computed(() => {
   if (st.unit === 'period') return tn('items.span.period', st.current)
   return String(st.current)
 })
+
+interface DayGroup {
+  date: string
+  logs: HistoryLog[]
+  totalValue: number
+}
+
+const historyByDay = computed<DayGroup[]>(() => {
+  const map = new Map<string, DayGroup>()
+  for (const log of store.history) {
+    let g = map.get(log.date)
+    if (!g) {
+      g = { date: log.date, logs: [], totalValue: 0 }
+      map.set(log.date, g)
+    }
+    g.logs.push(log)
+    g.totalValue += log.value
+  }
+  return Array.from(map.values())
+})
+
+const expandedDays = ref<Record<string, boolean>>({})
+
+function toggleDay(date: string) {
+  expandedDays.value[date] = !expandedDays.value[date]
+}
+
+function isDayExpanded(date: string): boolean {
+  return !!expandedDays.value[date]
+}
+
+const hasMultiLogDays = computed(() => historyByDay.value.some((d) => d.logs.length > 1))
+const allExpanded = computed(() => {
+  const multi = historyByDay.value.filter((d) => d.logs.length > 1)
+  return multi.length > 0 && multi.every((d) => expandedDays.value[d.date])
+})
+
+function toggleAllDays() {
+  const target = !allExpanded.value
+  for (const d of historyByDay.value) {
+    if (d.logs.length > 1) {
+      expandedDays.value[d.date] = target
+    }
+  }
+}
+
+function formatNumber(n: number): string {
+  const rounded = Math.round(n * 10000) / 10000
+  return String(rounded)
+}
+
+function formatTime(iso: string): string {
+  if (!iso) return ''
+  try {
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return ''
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  } catch {
+    return ''
+  }
+}
+
+function formatLogValue(l: HistoryLog): string {
+  const unit = store.item?.unit
+  if (store.item?.tracker_type === 'counter') {
+    const sign = l.value > 0 ? `+${formatNumber(l.value)}` : formatNumber(l.value)
+    return unit ? `${sign} ${unit}` : sign
+  }
+  const val = formatNumber(l.value)
+  return unit ? `${val} ${unit}` : val
+}
+
+function formatDaySummary(day: DayGroup): string {
+  const unit = store.item?.unit
+  const agg = store.item?.aggregate
+  let val = day.totalValue
+  if (store.item?.tracker_type === 'metric') {
+    if (agg === 'latest' && day.logs.length > 0) {
+      val = day.logs[0].value
+    } else if (agg === 'avg' && day.logs.length > 0) {
+      val = day.totalValue / day.logs.length
+    }
+  }
+  const str = formatNumber(val)
+  return unit
+    ? t('items.detail.dayTotal', { total: str, unit })
+    : t('items.detail.dayTotalNoUnit', { total: str })
+}
 </script>
 
 <template>
@@ -273,9 +362,20 @@ const streakText = computed(() => {
         </section>
 
         <section class="border-t border-base-300/60 pt-4">
-          <h3 class="mb-2 text-xs font-semibold uppercase tracking-wider text-base-content/70">
-            {{ t('items.detail.history') }}
-          </h3>
+          <div class="mb-2 flex items-center justify-between">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-base-content/70">
+              {{ t('items.detail.history') }}
+            </h3>
+            <button
+              v-if="hasMultiLogDays"
+              type="button"
+              class="btn btn-ghost btn-xs text-xs opacity-70 hover:opacity-100"
+              data-testid="toggle-all-days"
+              @click="toggleAllDays"
+            >
+              {{ allExpanded ? t('items.detail.collapseAll') : t('items.detail.expandAll') }}
+            </button>
+          </div>
           <p
             v-if="!store.history.length"
             class="text-xs text-base-content/60 py-2"
@@ -284,42 +384,140 @@ const streakText = computed(() => {
             {{ t('items.detail.noCheckins') }}
           </p>
           <ul class="divide-y divide-base-300/60" data-testid="history">
-            <li
-              v-for="l in store.history"
-              :key="l.id"
-              class="flex items-center justify-between gap-2 py-2"
-              :data-testid="`log-${l.id}`"
-            >
-              <span class="min-w-0 truncate text-sm">
-                <span class="font-medium">{{ l.date }}</span>
-                <span v-if="optionName(l.option_id)" class="ml-1 text-base-content/80">{{
-                  optionName(l.option_id)
-                }}</span>
-                <span
-                  v-if="
-                    store.item.tracker_type !== 'boolean' &&
-                    store.item.tracker_type !== 'maintenance'
-                  "
-                  class="ml-1 font-semibold"
-                >
-                  {{ l.value }}</span
-                >
-                <span v-if="l.note" class="opacity-70 ml-1"> &middot; {{ l.note }}</span>
-                <span v-if="l.is_supplement" class="badge badge-ghost badge-xs ml-1.5">{{
-                  t('items.detail.backfilled')
-                }}</span>
-              </span>
-              <button
-                type="button"
-                class="btn btn-ghost btn-xs"
-                :class="{ 'btn-error': pendingLog === l.id }"
-                :data-testid="`del-${l.id}`"
-                @click="removeLog(l.id)"
+            <template v-for="day in historyByDay" :key="day.date">
+              <!-- Single-entry day: rendered directly on one line -->
+              <li
+                v-if="day.logs.length === 1"
+                class="flex items-center justify-between gap-2 py-2"
+                :data-testid="`log-${day.logs[0].id}`"
               >
-                <Icon icon="lucide:trash-2" aria-hidden="true" />
-                {{ pendingLog === l.id ? t('items.detail.confirm') : t('common.delete') }}
-              </button>
-            </li>
+                <span class="min-w-0 truncate text-sm">
+                  <span class="font-medium mr-1.5">{{ day.date }}</span>
+                  <span
+                    v-if="formatTime(day.logs[0].time)"
+                    class="font-mono text-xs opacity-60 mr-1.5"
+                    >{{ formatTime(day.logs[0].time) }}</span
+                  >
+                  <span
+                    v-if="optionName(day.logs[0].option_id)"
+                    class="text-base-content/80 mr-1.5"
+                    >{{ optionName(day.logs[0].option_id) }}</span
+                  >
+                  <span
+                    v-if="
+                      store.item.tracker_type !== 'boolean' &&
+                      store.item.tracker_type !== 'maintenance'
+                    "
+                    class="font-semibold mr-1.5"
+                  >
+                    {{ formatLogValue(day.logs[0]) }}</span
+                  >
+                  <span v-if="day.logs[0].note" class="opacity-70 mr-1.5">
+                    &middot; {{ day.logs[0].note }}</span
+                  >
+                  <span v-if="day.logs[0].is_supplement" class="badge badge-ghost badge-xs">{{
+                    t('items.detail.backfilled')
+                  }}</span>
+                </span>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs"
+                  :class="{ 'btn-error': pendingLog === day.logs[0].id }"
+                  :data-testid="`del-${day.logs[0].id}`"
+                  @click="removeLog(day.logs[0].id)"
+                >
+                  <Icon icon="lucide:trash-2" aria-hidden="true" />
+                  {{
+                    pendingLog === day.logs[0].id ? t('items.detail.confirm') : t('common.delete')
+                  }}
+                </button>
+              </li>
+
+              <!-- Multi-entry day: day header with summary and collapsible details -->
+              <li v-else class="py-2 space-y-1.5" :data-testid="`day-group-${day.date}`">
+                <div
+                  class="flex items-center justify-between gap-2 cursor-pointer select-none rounded p-1 -m-1 hover:bg-base-200/50 transition-colors"
+                  :data-testid="`day-header-${day.date}`"
+                  @click="toggleDay(day.date)"
+                >
+                  <div class="flex flex-wrap items-center gap-2 min-w-0">
+                    <span class="font-medium text-sm">{{ day.date }}</span>
+                    <span
+                      v-if="
+                        store.item.tracker_type !== 'boolean' &&
+                        store.item.tracker_type !== 'maintenance'
+                      "
+                      class="badge badge-sm badge-neutral"
+                      :data-testid="`day-summary-${day.date}`"
+                    >
+                      {{ formatDaySummary(day) }}
+                    </span>
+                    <span class="text-xs text-base-content/60">
+                      {{ tn('items.detail.dayCount', day.logs.length) }}
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-1 shrink-0 text-xs text-base-content/70">
+                    <span>{{
+                      isDayExpanded(day.date)
+                        ? t('items.detail.collapse')
+                        : t('items.detail.expand')
+                    }}</span>
+                    <Icon
+                      :icon="
+                        isDayExpanded(day.date) ? 'lucide:chevron-down' : 'lucide:chevron-right'
+                      "
+                      class="size-3.5"
+                      aria-hidden="true"
+                    />
+                  </div>
+                </div>
+
+                <ul
+                  v-show="isDayExpanded(day.date)"
+                  class="ml-2 pl-3 border-l-2 border-base-300 divide-y divide-base-200/60"
+                  :data-testid="`day-list-${day.date}`"
+                >
+                  <li
+                    v-for="l in day.logs"
+                    :key="l.id"
+                    class="flex items-center justify-between gap-2 py-1.5"
+                    :data-testid="`log-${l.id}`"
+                  >
+                    <span class="min-w-0 truncate text-xs sm:text-sm">
+                      <span v-if="formatTime(l.time)" class="font-mono text-xs opacity-60 mr-1.5">{{
+                        formatTime(l.time)
+                      }}</span>
+                      <span v-if="optionName(l.option_id)" class="text-base-content/80 mr-1.5">{{
+                        optionName(l.option_id)
+                      }}</span>
+                      <span
+                        v-if="
+                          store.item.tracker_type !== 'boolean' &&
+                          store.item.tracker_type !== 'maintenance'
+                        "
+                        class="font-medium mr-1.5"
+                      >
+                        {{ formatLogValue(l) }}</span
+                      >
+                      <span v-if="l.note" class="opacity-70 mr-1.5"> &middot; {{ l.note }}</span>
+                      <span v-if="l.is_supplement" class="badge badge-ghost badge-xs">{{
+                        t('items.detail.backfilled')
+                      }}</span>
+                    </span>
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-xs"
+                      :class="{ 'btn-error': pendingLog === l.id }"
+                      :data-testid="`del-${l.id}`"
+                      @click="removeLog(l.id)"
+                    >
+                      <Icon icon="lucide:trash-2" aria-hidden="true" />
+                      {{ pendingLog === l.id ? t('items.detail.confirm') : t('common.delete') }}
+                    </button>
+                  </li>
+                </ul>
+              </li>
+            </template>
           </ul>
           <button
             v-if="store.nextCursor"

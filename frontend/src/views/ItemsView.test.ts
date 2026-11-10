@@ -268,6 +268,69 @@ describe('item detail', () => {
     w.unmount()
   })
 
+  it('aggregates check-ins by day with expand and collapse', async () => {
+    hist = {
+      checkins: [
+        {
+          id: 12,
+          item_id: 1,
+          option_id: null,
+          date: '2026-11-10',
+          time: '2026-11-10T15:30:00Z',
+          value: 1,
+          note: 'second coke',
+          source: 'web',
+          is_supplement: false,
+        },
+        {
+          id: 11,
+          item_id: 1,
+          option_id: null,
+          date: '2026-11-10',
+          time: '2026-11-10T12:00:00Z',
+          value: 1,
+          note: 'first coke',
+          source: 'web',
+          is_supplement: false,
+        },
+        {
+          id: 10,
+          item_id: 1,
+          option_id: null,
+          date: '2026-11-09',
+          time: '2026-11-09T09:00:00Z',
+          value: 1,
+          note: '',
+          source: 'web',
+          is_supplement: false,
+        },
+      ],
+    }
+    const { w } = await mountAt('/items/1')
+    // Multi-entry day group exists
+    expect(w.find('[data-testid=day-group-2026-11-10]').exists()).toBe(true)
+    expect(w.find('[data-testid=day-header-2026-11-10]').text()).toContain('2')
+
+    // Single-entry day renders directly
+    expect(w.find('[data-testid=log-10]').exists()).toBe(true)
+    expect(w.find('[data-testid=day-group-2026-11-09]').exists()).toBe(false)
+
+    // Sub-items of 2026-11-10 are hidden initially
+    const subList = w.get('[data-testid=day-list-2026-11-10]')
+    expect(subList.attributes('style')).toContain('display: none')
+
+    // Click header to expand
+    await w.get('[data-testid=day-header-2026-11-10]').trigger('click')
+    expect(subList.attributes('style')).not.toContain('display: none')
+    expect(w.find('[data-testid=log-11]').exists()).toBe(true)
+    expect(w.find('[data-testid=log-12]').exists()).toBe(true)
+
+    // Toggle all days collapses it
+    await w.get('[data-testid=toggle-all-days]').trigger('click')
+    expect(subList.attributes('style')).toContain('display: none')
+    w.unmount()
+  })
+
   it('guard on clears the detail synchronously and refetches with redact', async () => {
     const { w } = await mountAt('/items/1')
     expect(w.find('[data-testid=item-name]').exists()).toBe(true)
