@@ -10,7 +10,13 @@ import CompletionRing from '../components/today/CompletionRing.vue'
 import CategoryFilter from '../components/today/CategoryFilter.vue'
 import ItemCard from '../components/today/ItemCard.vue'
 import OccurrenceDetailModal from '../components/today/OccurrenceDetailModal.vue'
-import { createAdHocEvent, createScheduledEvent, describeError, type CheckinInput } from '../api'
+import {
+  createAdHocEvent,
+  createScheduledEvent,
+  createTodoItem,
+  describeError,
+  type CheckinInput,
+} from '../api'
 import { useI18n } from '../i18n'
 import { formatCustomDate, weekdayName } from '../i18n/format'
 
@@ -28,8 +34,25 @@ const filteredUpcoming = computed(() =>
 )
 
 const quickLogQuery = ref('')
+const quickTodoDate = ref('')
 const quickLogOpen = ref(false)
 const quickLogBusy = ref(false)
+
+watch(
+  () => store.isFuture,
+  (future) => {
+    quickTodoDate.value = future ? (store.view?.date ?? '') : ''
+  },
+)
+
+watch(
+  () => store.view?.date,
+  (d) => {
+    if (store.isFuture && d) {
+      quickTodoDate.value = d
+    }
+  },
+)
 
 const matchingUnscheduled = computed(() => {
   const q = quickLogQuery.value.trim().toLowerCase()
@@ -41,6 +64,27 @@ function onBlurQuickLog() {
   setTimeout(() => {
     quickLogOpen.value = false
   }, 200)
+}
+
+async function submitQuickTodo(target: { name: string; dueDate?: string | null }) {
+  if (quickLogBusy.value) return
+  const name = target.name.trim()
+  if (!name) return
+  quickLogBusy.value = true
+  try {
+    const due = target.dueDate?.trim() || (store.isFuture ? (store.view?.date ?? null) : null)
+    await createTodoItem(name, due)
+    quickLogQuery.value = ''
+    if (!store.isFuture) {
+      quickTodoDate.value = ''
+    }
+    quickLogOpen.value = false
+    await store.refresh(store.view?.date)
+  } catch (e) {
+    store.error = describeError(e)
+  } finally {
+    quickLogBusy.value = false
+  }
 }
 
 async function submitQuickLog(target: { id?: number; name: string }) {
@@ -71,6 +115,9 @@ async function submitQuickLog(target: { id?: number; name: string }) {
       }
     }
     quickLogQuery.value = ''
+    if (!store.isFuture) {
+      quickTodoDate.value = ''
+    }
     quickLogOpen.value = false
     await store.refresh(targetDate)
   } catch (e) {
@@ -97,6 +144,7 @@ const visibleCount = computed(
   () =>
     store.overdueCards.length +
     store.todoCards.length +
+    store.unscheduledTodoCards.length +
     store.maintenanceCards.length +
     store.quotaCards.length +
     store.doneCards.length,
@@ -111,6 +159,7 @@ const detailItemId = ref<number | null>(null)
 const allCards = computed<CardVM[]>(() => [
   ...store.overdueCards,
   ...store.todoCards,
+  ...store.unscheduledTodoCards,
   ...store.maintenanceCards,
   ...store.quotaCards,
   ...store.doneCards,
@@ -315,6 +364,35 @@ watch(
         </section>
       </template>
 
+      <!-- Unscheduled Todos / 待办池 -->
+      <section
+        v-if="store.unscheduledTodoCards.length"
+        class="card card-border bg-base-100 border-base-300 p-4 shadow-xs space-y-3"
+        data-testid="section-unscheduled-todos"
+      >
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-bold text-base-content/90 flex items-center gap-2">
+            <Icon icon="lucide:inbox" class="size-4 text-primary" />
+            {{ t('today.section.unscheduledTodos') }} ({{ store.unscheduledTodoCards.length }})
+          </h2>
+          <span class="text-xs text-base-content/60">{{ t('today.unscheduledTodosHint') }}</span>
+        </div>
+        <ul class="space-y-2" data-testid="unscheduled-todos-list">
+          <li v-for="c in store.unscheduledTodoCards" :key="c.detail.id">
+            <ItemCard
+              :vm="c"
+              :category="cat(c)"
+              variant="todo"
+              :busy="store.busy.includes(c.detail.id)"
+              :pending="offline.pendingItems.includes(c.detail.id)"
+              @log="log"
+              @remove="store.remove(c.detail.id, $event)"
+              @open-details="detailItemId = c.detail.id"
+            />
+          </li>
+        </ul>
+      </section>
+
       <!-- Quick Log for Unscheduled items / 随手记 -->
       <div
         class="card card-border bg-base-100 border-base-300 p-4 shadow-xs space-y-3"
@@ -327,8 +405,15 @@ watch(
           </h3>
         </div>
         <div class="relative w-full">
-          <div class="join w-full">
-            <div class="relative flex-1">
+          <div class="join w-full flex-wrap sm:flex-nowrap">
+            <input
+              v-model="quickTodoDate"
+              type="date"
+              class="input input-sm input-bordered join-item w-full sm:w-36 text-xs font-mono"
+              :title="t('today.todoDueDateOptional')"
+              data-testid="quick-todo-date"
+            />
+            <div class="relative flex-1 min-w-[160px]">
               <input
                 v-model="quickLogQuery"
                 type="text"
@@ -343,7 +428,11 @@ watch(
                 @focus="quickLogOpen = true"
                 @blur="onBlurQuickLog"
                 @keydown.escape="quickLogOpen = false"
-                @keydown.enter.prevent="submitQuickLog({ name: quickLogQuery })"
+                @keydown.enter.prevent="
+                  store.isFuture
+                    ? submitQuickLog({ name: quickLogQuery })
+                    : submitQuickTodo({ name: quickLogQuery, dueDate: quickTodoDate })
+                "
               />
               <button
                 v-if="quickLogQuery"
@@ -354,15 +443,32 @@ watch(
                 <Icon icon="lucide:x" class="size-4" />
               </button>
             </div>
+            <!-- Add Todo button -->
             <button
               type="button"
               class="btn btn-sm btn-primary join-item shadow-xs"
               :disabled="!quickLogQuery.trim() || quickLogBusy"
-              data-testid="quick-log-submit"
-              @click="submitQuickLog({ name: quickLogQuery })"
+              data-testid="quick-todo-submit"
+              @click="
+                submitQuickTodo({
+                  name: quickLogQuery,
+                  dueDate: quickTodoDate || (store.isFuture ? store.view?.date : null),
+                })
+              "
             >
               <span v-if="quickLogBusy" class="loading loading-spinner loading-xs" />
               <Icon v-else icon="lucide:plus" class="size-4" />
+              {{ store.isFuture ? t('today.addFutureEvent') : t('today.addTodo') }}
+            </button>
+            <!-- Log Done button -->
+            <button
+              type="button"
+              class="btn btn-sm btn-outline join-item shadow-xs"
+              :disabled="!quickLogQuery.trim() || quickLogBusy"
+              data-testid="quick-log-submit"
+              @click="submitQuickLog({ name: quickLogQuery })"
+            >
+              <Icon icon="lucide:check" class="size-4" />
               {{ store.isFuture ? t('today.addFutureEvent') : t('today.logNow') }}
             </button>
           </div>
@@ -375,7 +481,24 @@ watch(
             "
             class="absolute left-0 right-0 z-30 mt-1 max-h-60 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-lg"
           >
-            <!-- Create new option -->
+            <!-- Create new Todo option -->
+            <button
+              v-if="quickLogQuery.trim()"
+              type="button"
+              class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-primary/10 text-primary font-medium flex items-center gap-2 cursor-pointer"
+              data-testid="quick-create-todo"
+              @mousedown.prevent="
+                submitQuickTodo({
+                  name: quickLogQuery,
+                  dueDate: quickTodoDate || (store.isFuture ? (store.view?.date ?? null) : null),
+                })
+              "
+            >
+              <Icon icon="lucide:check-square" class="size-4 shrink-0" />
+              <span>{{ t('today.createTodo', { name: quickLogQuery.trim() }) }}</span>
+            </button>
+
+            <!-- Create new option (Log Done immediately) -->
             <button
               v-if="
                 quickLogQuery.trim() &&
@@ -385,7 +508,7 @@ watch(
                   ))
               "
               type="button"
-              class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-primary/10 text-primary font-medium flex items-center gap-2 cursor-pointer"
+              class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-base-200 text-base-content/80 font-medium flex items-center gap-2 cursor-pointer"
               @mousedown.prevent="submitQuickLog({ name: quickLogQuery })"
             >
               <Icon icon="lucide:sparkles" class="size-4 shrink-0" />
@@ -524,6 +647,7 @@ watch(
         @log="log"
         @remove="detailCard && store.remove(detailCard.detail.id, $event)"
         @patch-note="(id, note) => store.updateNote(id, note)"
+        @set-due-date="(itemId, date) => store.setDueDate(itemId, date)"
       />
     </template>
   </section>

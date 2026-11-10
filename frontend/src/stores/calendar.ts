@@ -278,6 +278,10 @@ export const useCalendarStore = defineStore('calendar', () => {
     }
   }
 
+  function setDueDate(itemId: number, dueDate: string | null) {
+    return guarded(itemId, () => api.setTodoDueDate(itemId, dueDate))
+  }
+
   return {
     mode,
     anchor,
@@ -306,6 +310,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     makeUp,
     removeLog,
     updateNote,
+    setDueDate,
     clearPlaintext,
   }
 })

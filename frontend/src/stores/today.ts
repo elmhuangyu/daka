@@ -160,6 +160,20 @@ export const useTodayStore = defineStore('today', () => {
   const todoCards = computed(() =>
     scoped(dueCards.value.filter((c) => !c.today?.overdue && !c.today?.done)),
   )
+  const unscheduledTodoCards = computed(() => {
+    if (isFuture.value) return []
+    return scoped(
+      items.value
+        .filter(
+          (d) =>
+            d.kind === 'event' &&
+            d.current_rule.schedule_type === 'none' &&
+            (d.stats?.counts?.total ?? 0) === 0,
+        )
+        .map(vm)
+        .filter((c) => c.logs.length === 0),
+    )
+  })
   const rollingDone = computed(() =>
     items.value
       .filter((d) => d.current_rule.schedule_type === 'rolling' && !needsAttention(d))
@@ -167,10 +181,17 @@ export const useTodayStore = defineStore('today', () => {
       .filter((c) => c.logs.length > 0),
   )
   const unscheduledItems = computed(() =>
-    items.value.filter((d) => d.current_rule.schedule_type === 'none'),
+    items.value.filter(
+      (d) =>
+        d.current_rule.schedule_type === 'none' &&
+        (d.kind !== 'event' || (d.stats?.counts?.total ?? 0) === 0),
+    ),
   )
   const unscheduledDone = computed(() =>
-    unscheduledItems.value.map(vm).filter((c) => c.logs.length > 0),
+    items.value
+      .filter((d) => d.current_rule.schedule_type === 'none')
+      .map(vm)
+      .filter((c) => c.logs.length > 0),
   )
   const doneCards = computed(() =>
     scoped([
@@ -189,14 +210,26 @@ export const useTodayStore = defineStore('today', () => {
   /** Ring over the filtered due items; the unfiltered view uses the server's progress. */
   const ring = computed(() => {
     if (!view.value) return { done: 0, total: 0 }
-    if (filter.value === 'all') return view.value.progress
+    if (filter.value === 'all') return view.value.progress ?? { done: 0, total: 0 }
     return ringStats(scoped(dueCards.value))
   })
 
   /** Filter chips: counts cover every visible card of a category. */
   const categoryCounts = computed(() => {
+    const rawUnscheduledTodos = isFuture.value
+      ? []
+      : items.value
+          .filter(
+            (d) =>
+              d.kind === 'event' &&
+              d.current_rule.schedule_type === 'none' &&
+              (d.stats?.counts?.total ?? 0) === 0,
+          )
+          .map(vm)
+          .filter((c) => c.logs.length === 0)
     const all = [
       ...dueCards.value,
+      ...rawUnscheduledTodos,
       ...items.value
         .filter((d) => needsAttention(d) || d.current_rule.schedule_type === 'quota')
         .map(vm),
@@ -265,6 +298,10 @@ export const useTodayStore = defineStore('today', () => {
     }
   }
 
+  function setDueDate(itemId: number, dueDate: string | null) {
+    return guarded(itemId, () => api.setTodoDueDate(itemId, dueDate))
+  }
+
   return {
     view,
     items,
@@ -280,6 +317,7 @@ export const useTodayStore = defineStore('today', () => {
     isFuture,
     overdueCards,
     todoCards,
+    unscheduledTodoCards,
     doneCards,
     maintenanceCards,
     quotaCards,
@@ -296,5 +334,6 @@ export const useTodayStore = defineStore('today', () => {
     submit,
     remove,
     updateNote,
+    setDueDate,
   }
 })

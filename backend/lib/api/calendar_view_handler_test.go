@@ -442,3 +442,118 @@ func TestCalendarViewRequiresDayFormatStrictness(t *testing.T) {
 	// Non-zero-padded dates are rejected rather than silently normalized.
 	require.Equal(t, 400, e.do("GET", "/api/view/calendar?start=2026-1-1&end=2026-1-2", "", "", nil).Code)
 }
+
+func TestCalendarViewTodoRescheduleAndUndate(t *testing.T) {
+	e := newEnv(t)
+	// 1. Create an overdue event due on 2026-11-05 (today is 2026-11-07).
+	w := e.do("POST", "/api/items", "", "", m{
+		"name":         "Overdue Todo",
+		"kind":         "event",
+		"tracker_type": "boolean",
+		"rule": m{
+			"schedule_type": "fixed_rrule",
+			"rrule_string":  "FREQ=DAILY;COUNT=1",
+			"dtstart":       "2026-11-05",
+			"holiday_mode":  "none",
+		},
+	})
+	require.Equal(t, 201, w.Code)
+	var ev itemResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &ev))
+	require.NoError(t, e.db.Write().Model(&dbmodels.ItemRuleVersion{}).
+		Where("item_id = ?", ev.ID).Update("effective_from", "2026-11-05").Error)
+
+	r := e.calView("", "?start=2026-11-01&end=2026-11-10")
+	// On past due date 2026-11-05: missed.
+	d5 := r.day(t, "2026-11-05")
+	require.True(t, d5.has(ev.ID))
+	require.Equal(t, calMissed, d5.item(t, ev.ID).Status)
+
+	// On today 2026-11-07: surfaced as overdue.
+	d7 := r.day(t, "2026-11-07")
+	require.True(t, d7.has(ev.ID))
+	require.True(t, d7.item(t, ev.ID).Overdue)
+	require.Equal(t, calPending, d7.item(t, ev.ID).Status)
+
+	// 2. Rescheduling to a future date (2026-11-10) clears overdue status and updates due date.
+	w = e.do("PATCH", fmt.Sprintf("/api/items/%d", ev.ID), "", "", m{
+		"rule": m{
+			"schedule_type": "fixed_rrule",
+			"rrule_string":  "FREQ=DAILY;COUNT=1",
+			"dtstart":       "2026-11-10",
+			"until":         "2026-11-10",
+			"holiday_mode":  "none",
+		},
+	})
+	require.Equal(t, 200, w.Code)
+
+	r = e.calView("", "?start=2026-11-01&end=2026-11-10")
+	// No longer due or missed on 2026-11-05.
+	require.False(t, r.day(t, "2026-11-05").has(ev.ID))
+	// No longer overdue on 2026-11-07.
+	require.False(t, r.day(t, "2026-11-07").has(ev.ID))
+	// Due on 2026-11-10.
+	d10 := r.day(t, "2026-11-10")
+	require.True(t, d10.has(ev.ID))
+	require.True(t, d10.item(t, ev.ID).Due)
+	require.Equal(t, calUpcoming, d10.item(t, ev.ID).Status)
+
+	// 3. Clearing to schedule_type: "none" makes it undated (not due anywhere).
+	w = e.do("PATCH", fmt.Sprintf("/api/items/%d", ev.ID), "", "", m{
+		"rule": m{
+			"schedule_type": "none",
+			"holiday_mode":  "none",
+		},
+	})
+	require.Equal(t, 200, w.Code)
+
+	r = e.calView("", "?start=2026-11-01&end=2026-11-10")
+	for _, day := range r.Days {
+		require.False(t, day.has(ev.ID), fmt.Sprintf("day %s should not have undated item", day.Date))
+	}
+
+	// 4. Assigning a due date to undated event makes it due on that date.
+	w = e.do("PATCH", fmt.Sprintf("/api/items/%d", ev.ID), "", "", m{
+		"rule": m{
+			"schedule_type": "fixed_rrule",
+			"rrule_string":  "FREQ=DAILY;COUNT=1",
+			"dtstart":       "2026-11-08",
+			"until":         "2026-11-08",
+			"holiday_mode":  "none",
+		},
+	})
+	require.Equal(t, 200, w.Code)
+
+	r = e.calView("", "?start=2026-11-01&end=2026-11-10")
+	d8 := r.day(t, "2026-11-08")
+	require.True(t, d8.has(ev.ID))
+	require.True(t, d8.item(t, ev.ID).Due)
+	require.Equal(t, calUpcoming, d8.item(t, ev.ID).Status)
+
+	// 5. Completing an event on a later date does NOT mark original due date as calMissed.
+	w = e.do("POST", "/api/items", "", "", m{
+		"name":         "Late completed event",
+		"kind":         "event",
+		"tracker_type": "boolean",
+		"rule": m{
+			"schedule_type": "fixed_rrule",
+			"rrule_string":  "FREQ=DAILY;COUNT=1",
+			"dtstart":       "2026-11-03",
+			"holiday_mode":  "none",
+		},
+	})
+	require.Equal(t, 201, w.Code)
+	var ev2 itemResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &ev2))
+	require.NoError(t, e.db.Write().Model(&dbmodels.ItemRuleVersion{}).
+		Where("item_id = ?", ev2.ID).Update("effective_from", "2026-11-03").Error)
+
+	// Check-in on 2026-11-07 (later than 2026-11-03).
+	e.checkin(ev2.ID, "2026-11-07")
+
+	r = e.calView("", "?start=2026-11-01&end=2026-11-10")
+	d3 := r.day(t, "2026-11-03")
+	require.True(t, d3.has(ev2.ID))
+	require.Equal(t, calDone, d3.item(t, ev2.ID).Status)
+	require.True(t, d3.item(t, ev2.ID).Done)
+}

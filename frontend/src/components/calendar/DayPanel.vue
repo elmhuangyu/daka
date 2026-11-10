@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
 import * as api from '../../api'
-import type { CalendarDayItem, CheckinInput } from '../../api'
+import type { CalendarDayItem, CheckinInput, CheckinLog } from '../../api'
 import { canMakeUp, dayStatusText, eventTime, longDate } from '../../calendar/logic'
 import { useI18n, type MessageKey } from '../../i18n'
 import { useCalendarStore } from '../../stores/calendar'
@@ -111,6 +111,11 @@ function badge(i: CalendarDayItem) {
   return { text: t(b.text as MessageKey), cls: b.cls }
 }
 const logsOf = (id: number) => store.dayLogs.filter((l) => l.item_id === id)
+const activeNoteFor = (logs: CheckinLog[]) =>
+  [...logs]
+    .reverse()
+    .find((l) => l.note && l.note.trim())
+    ?.note?.trim() ?? ''
 const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
 </script>
 
@@ -224,9 +229,7 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
             :data-testid="`panel-note-${i.item_id}`"
           >
             <Icon icon="lucide:pencil" class="size-3 shrink-0 opacity-70" aria-hidden="true" />
-            <span class="truncate">{{
-              logsOf(i.item_id).find((l) => l.note && l.note.trim())?.note
-            }}</span>
+            <span class="truncate">{{ activeNoteFor(logsOf(i.item_id)) }}</span>
           </div>
           <p v-if="i.overdue" class="text-sm text-error">{{ t('calendar.panel.overdueNote') }}</p>
           <div v-if="editable && !(i.forecast && !i.overdue)" class="mt-2">
@@ -269,9 +272,7 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
             :data-testid="`panel-note-${d.id}`"
           >
             <Icon icon="lucide:pencil" class="size-3 shrink-0 opacity-70" aria-hidden="true" />
-            <span class="truncate">{{
-              logsOf(d.id).find((l) => l.note && l.note.trim())?.note
-            }}</span>
+            <span class="truncate">{{ activeNoteFor(logsOf(d.id)) }}</span>
           </div>
           <div class="mt-2">
             <MakeupControl
@@ -401,6 +402,7 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
       @log="makeUp"
       @remove="modalDetail && store.removeLog(modalDetail.id, $event)"
       @patch-note="(id, note) => store.updateNote(id, note)"
+      @set-due-date="(itemId, date) => store.setDueDate(itemId, date)"
     />
   </aside>
 </template>

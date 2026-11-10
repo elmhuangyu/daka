@@ -366,3 +366,78 @@ func TestTodayOverdueEventAndUpcoming(t *testing.T) {
 	require.NotNil(t, dueItem, "event should be present on its due date")
 	require.True(t, dueItem.Done, "event completed on a later date should show Done on its due date")
 }
+
+func TestTodayTodoRescheduleAndUndate(t *testing.T) {
+	e := newEnv(t)
+	// 1. Create an overdue event due on 2026-11-05 (today is 2026-11-07).
+	code, ev := e.createItem("", m{
+		"name":         "Overdue Todo",
+		"kind":         "event",
+		"tracker_type": "boolean",
+		"rule": m{
+			"schedule_type": "fixed_rrule",
+			"rrule_string":  "FREQ=DAILY;COUNT=1",
+			"dtstart":       "2026-11-05",
+			"holiday_mode":  "none",
+		},
+	})
+	require.Equal(t, 201, code)
+	require.NoError(t, e.db.Write().Model(&dbmodels.ItemRuleVersion{}).
+		Where("item_id = ?", ev.ID).Update("effective_from", "2026-11-05").Error)
+
+	td := e.today("", "")
+	require.Len(t, td.Items, 1)
+	require.Equal(t, ev.ID, td.Items[0].ID)
+	require.True(t, td.Items[0].Overdue)
+	require.Equal(t, "2026-11-05", td.Items[0].DueDate)
+
+	// 2. Rescheduling to a future date clears overdue status on Today and updates Upcoming.
+	w := e.do("PATCH", fmt.Sprintf("/api/items/%d", ev.ID), "", "", m{
+		"rule": m{
+			"schedule_type": "fixed_rrule",
+			"rrule_string":  "FREQ=DAILY;COUNT=1",
+			"dtstart":       "2026-11-10",
+			"until":         "2026-11-10",
+			"holiday_mode":  "none",
+		},
+	})
+	require.Equal(t, 200, w.Code, w.Body.String())
+
+	td = e.today("", "")
+	require.Empty(t, td.Items, "rescheduled event must not be overdue on today")
+	require.Len(t, td.Upcoming, 1)
+	require.Equal(t, ev.ID, td.Upcoming[0].ID)
+	require.Equal(t, "2026-11-10", td.Upcoming[0].DueDate)
+
+	// 3. Clearing schedule to "none" makes it an undated event.
+	w = e.do("PATCH", fmt.Sprintf("/api/items/%d", ev.ID), "", "", m{
+		"rule": m{
+			"schedule_type": "none",
+			"holiday_mode":  "none",
+		},
+	})
+	require.Equal(t, 200, w.Code, w.Body.String())
+
+	td = e.today("", "")
+	require.Empty(t, td.Items)
+	require.Empty(t, td.Upcoming)
+
+	// 4. Assigning a due date to an undated event makes it due on that date.
+	w = e.do("PATCH", fmt.Sprintf("/api/items/%d", ev.ID), "", "", m{
+		"rule": m{
+			"schedule_type": "fixed_rrule",
+			"rrule_string":  "FREQ=DAILY;COUNT=1",
+			"dtstart":       "2026-11-07",
+			"until":         "2026-11-07",
+			"holiday_mode":  "none",
+		},
+	})
+	require.Equal(t, 200, w.Code, w.Body.String())
+
+	td = e.today("", "")
+	require.Len(t, td.Items, 1)
+	require.Equal(t, ev.ID, td.Items[0].ID)
+	require.True(t, td.Items[0].Due)
+	require.False(t, td.Items[0].Overdue)
+	require.False(t, td.Items[0].Done)
+}

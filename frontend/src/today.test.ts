@@ -70,7 +70,34 @@ beforeEach(() => {
       }
       if (url === '/api/items' && init?.method === 'POST') {
         const body = JSON.parse(init.body as string)
+        const newItem = {
+          id: 99,
+          name: body.name,
+          tracker_type: body.tracker_type || 'boolean',
+          kind: body.kind || 'habit',
+          polarity: body.polarity || 'positive',
+          category_id: body.category_id ?? null,
+          effective_sensitive: false,
+          options: [],
+          current_rule: body.rule || rule(),
+          stats: { counts: { last_30_days: 0, this_year: 0, total: 0 } },
+        } as unknown as ItemDetail
+        world.items.push(newItem)
         return jsonRes({ id: 99, ...body }, 201)
+      }
+      if (url.startsWith('/api/items/') && init?.method === 'PATCH') {
+        const id = Number(url.split('/').pop())
+        const body = JSON.parse(init.body as string)
+        const it = world.items.find((x) => x.id === id)
+        if (it && body.rule) {
+          it.current_rule = { ...it.current_rule, ...body.rule }
+          if (body.rule.schedule_type === 'fixed_rrule') {
+            world.today.push(tItem(id, it.name, { due: true, done: false }))
+          } else if (body.rule.schedule_type === 'none') {
+            world.today = world.today.filter((x: any) => x.id !== id)
+          }
+        }
+        return jsonRes({ id, ...body })
       }
       if (url.startsWith('/api/items')) return jsonRes({ items: world.items })
       if (url.startsWith('/api/categories')) return jsonRes({ categories: world.cats })
@@ -588,5 +615,107 @@ describe('Today page', () => {
     // Modal shows redact notice and hides note input
     expect(w.find('[data-testid="modal-redact-notice"]').exists()).toBe(true)
     expect(w.find('[data-testid="occurrence-note-input"]').exists()).toBe(false)
+  })
+
+  it('creates an uncompleted undated Todo via quick-todo-submit and verifies section-unscheduled-todos', async () => {
+    const w = await mountApp()
+    expect(w.find('[data-testid="section-unscheduled-todos"]').exists()).toBe(false)
+
+    await w.get('[data-testid="quick-log-input"]').setValue('Buy groceries')
+    await w.get('[data-testid="quick-todo-submit"]').trigger('click')
+    await flushPromises()
+
+    const itemPost = fetchMock.mock.calls.find((c) => {
+      if (c[1]?.method !== 'POST' || String(c[0]) !== '/api/items') return false
+      const b = JSON.parse(c[1].body)
+      return b.name === 'Buy groceries'
+    })
+    expect(itemPost).toBeTruthy()
+    const itemBody = JSON.parse(itemPost![1].body)
+    expect(itemBody.kind).toBe('event')
+    expect(itemBody.rule.schedule_type).toBe('none')
+
+    // Appears in unscheduled todos section
+    expect(w.find('[data-testid="section-unscheduled-todos"]').exists()).toBe(true)
+    expect(w.find('[data-testid="card-99"]').exists()).toBe(true)
+    expect(w.get('[data-testid="card-99"] [data-testid="todo-date-badge"]').text()).toBe('Undated')
+
+    // Check off the todo
+    await w.get('[data-testid="card-99"] button[data-testid="toggle"]').trigger('click')
+    // Push the log to world.logs to simulate backend state
+    world.logs.push({ id: 101, item_id: 99, date: '2026-11-07', value: 1 })
+    const { useTodayStore } = await import('./stores/today')
+    await useTodayStore().refresh('2026-11-07')
+    await flushPromises()
+
+    // Unscheduled todos section is now gone, card is in done section
+    expect(w.find('[data-testid="section-unscheduled-todos"]').exists()).toBe(false)
+    expect(w.find('[data-testid="section-done"]').exists()).toBe(true)
+  })
+
+  it('creates a dated Todo with quick-todo-date + quick-todo-submit', async () => {
+    const w = await mountApp()
+
+    await w.get('[data-testid="quick-todo-date"]').setValue('2026-11-15')
+    await w.get('[data-testid="quick-log-input"]').setValue('Dentist checkup')
+    await w.get('[data-testid="quick-todo-submit"]').trigger('click')
+    await flushPromises()
+
+    const itemPost = fetchMock.mock.calls.find((c) => {
+      if (c[1]?.method !== 'POST' || String(c[0]) !== '/api/items') return false
+      const b = JSON.parse(c[1].body)
+      return b.name === 'Dentist checkup'
+    })
+    expect(itemPost).toBeTruthy()
+    const itemBody = JSON.parse(itemPost![1].body)
+    expect(itemBody.kind).toBe('event')
+    expect(itemBody.rule.schedule_type).toBe('fixed_rrule')
+    expect(itemBody.rule.dtstart).toBe('2026-11-15')
+    expect(itemBody.rule.until).toBe('2026-11-15')
+  })
+
+  it('assigns or clears a Todo due date inside OccurrenceDetailModal', async () => {
+    world.items = [
+      detail({
+        id: 10,
+        name: 'File taxes',
+        kind: 'event',
+        current_rule: rule({ schedule_type: 'none' }),
+        stats: { counts: { last_30_days: 0, this_year: 0, total: 0 } },
+      }),
+    ]
+    const w = await mountApp()
+
+    // Card exists in unscheduled todos section
+    expect(w.find('[data-testid="section-unscheduled-todos"]').exists()).toBe(true)
+    await w.get('[data-testid="card-10"] [data-testid="open-details"]').trigger('click')
+    await flushPromises()
+
+    expect(w.find('[data-testid="occurrence-modal"]').exists()).toBe(true)
+    expect(w.find('[data-testid="modal-todo-date-section"]').exists()).toBe(true)
+
+    // Assign due date
+    await w.get('[data-testid="modal-todo-date-input"]').setValue('2026-11-20')
+    await w.get('[data-testid="modal-todo-date-save"]').trigger('click')
+    await flushPromises()
+
+    const patchCall = fetchMock.mock.calls.find(
+      (c) => c[1]?.method === 'PATCH' && String(c[0]) === '/api/items/10',
+    )
+    expect(patchCall).toBeTruthy()
+    const patchBody = JSON.parse(patchCall![1].body)
+    expect(patchBody.rule.schedule_type).toBe('fixed_rrule')
+    expect(patchBody.rule.dtstart).toBe('2026-11-20')
+
+    // Clear due date (make undated)
+    await w.get('[data-testid="modal-todo-date-clear"]').trigger('click')
+    await flushPromises()
+
+    const clearCall = fetchMock.mock.calls
+      .filter((c) => c[1]?.method === 'PATCH' && String(c[0]) === '/api/items/10')
+      .pop()
+    expect(clearCall).toBeTruthy()
+    const clearBody = JSON.parse(clearCall![1].body)
+    expect(clearBody.rule.schedule_type).toBe('none')
   })
 })

@@ -112,6 +112,27 @@ func currentOrLatest(vs []dbmodels.ItemRuleVersion, date string) (dbmodels.ItemR
 	return *best, true
 }
 
+// effectiveVersionsFor returns the rule versions to evaluate for an item.
+// For KindHabit, rule history is preserved intact.
+// For KindEvent, it is a one-off Todo whose schedule is governed by its
+// latest ItemRuleVersion, even if later rescheduled, undated, or retroactively dated.
+func effectiveVersionsFor(it dbmodels.Item, vs []dbmodels.ItemRuleVersion) []dbmodels.ItemRuleVersion {
+	if it.Kind != dbmodels.KindEvent || len(vs) == 0 {
+		return vs
+	}
+	cur, ok := currentOrLatest(vs, "9999-12-31")
+	if !ok {
+		return vs
+	}
+	if cur.ScheduleType == dbmodels.ScheduleFixedRRule && cur.DtStart != "" && cur.DtStart < cur.EffectiveFrom {
+		cur.EffectiveFrom = cur.DtStart
+	}
+	if cur.ScheduleType == dbmodels.ScheduleNone {
+		cur.EffectiveFrom = "1900-01-01"
+	}
+	return []dbmodels.ItemRuleVersion{cur}
+}
+
 func optionTargetsOf(v dbmodels.ItemRuleVersion) map[string]float64 {
 	t := map[string]float64{}
 	if v.OptionTargets != "" {

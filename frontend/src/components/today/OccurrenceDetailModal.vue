@@ -23,6 +23,7 @@ const emit = defineEmits<{
   log: [CheckinInput]
   remove: [number]
   patchNote: [id: number, note: string]
+  setDueDate: [itemId: number, dueDate: string | null]
 }>()
 
 const isToggle = computed(() => {
@@ -38,6 +39,7 @@ const adhoc = computed(() => (props.detail ? adhocLogs(props.detail, props.logs)
 const hasOptions = computed(() => (props.detail ? props.detail.options.length > 0 : false))
 
 const toggleNote = ref('')
+const todoDate = ref('')
 const logNotes = reactive<Record<number, string>>({})
 const inputs = reactive<Record<string, string>>({})
 const adhocName = ref('')
@@ -46,8 +48,19 @@ const localError = ref('')
 
 function syncState() {
   localError.value = ''
+  toggleNote.value = ''
+  for (const k of Object.keys(logNotes)) delete logNotes[Number(k)]
+  todoDate.value = ''
   if (!props.open || !props.detail) return
-  toggleNote.value = props.logs[0]?.note ?? ''
+  todoDate.value =
+    (props.detail.current_rule.schedule_type === 'fixed_rrule'
+      ? props.detail.current_rule.dtstart
+      : '') || ''
+  toggleNote.value =
+    [...props.logs]
+      .reverse()
+      .find((l) => l.note && l.note.trim())
+      ?.note?.trim() ?? ''
   for (const l of props.logs) {
     logNotes[l.id] = l.note ?? ''
   }
@@ -74,8 +87,10 @@ function optionPart(r: ValueRow): { option_id?: number } {
 function saveToggleNote() {
   if (!props.detail) return
   const n = toggleNote.value.trim()
-  if (props.logs.length > 0) {
-    emit('patchNote', props.logs[0]!.id, n)
+  const latestLogWithNote = [...props.logs].reverse().find((l) => l.note && l.note.trim())
+  const targetLog = latestLogWithNote ?? props.logs[props.logs.length - 1] ?? props.logs[0]
+  if (targetLog) {
+    emit('patchNote', targetLog.id, n)
   } else {
     emit('log', {
       item_id: props.detail.id,
@@ -83,6 +98,19 @@ function saveToggleNote() {
       value: 1,
       ...(n ? { note: n } : {}),
     })
+  }
+}
+
+function saveDueDate() {
+  if (props.detail) {
+    emit('setDueDate', props.detail.id, todoDate.value || null)
+  }
+}
+
+function clearDueDate() {
+  todoDate.value = ''
+  if (props.detail) {
+    emit('setDueDate', props.detail.id, null)
   }
 }
 
@@ -288,6 +316,47 @@ function logUnit(l: CheckinLog): string {
           </p>
         </div>
       </div>
+
+      <!-- Due Date / Schedule section for Todos (KindEvent) -->
+      <section
+        v-if="detail.kind === 'event'"
+        class="border-t border-base-200 pt-3 space-y-2"
+        data-testid="modal-todo-date-section"
+      >
+        <h4
+          class="text-xs font-semibold uppercase tracking-wider text-base-content/60 flex items-center gap-1.5"
+        >
+          <Icon icon="lucide:calendar" class="size-3.5" />
+          {{ t('today.modal.dueDateSection') }}
+        </h4>
+        <div class="flex flex-wrap items-center gap-2">
+          <input
+            v-model="todoDate"
+            type="date"
+            class="input input-sm input-bordered font-mono"
+            data-testid="modal-todo-date-input"
+          />
+          <button
+            type="button"
+            class="btn btn-sm btn-primary"
+            :disabled="busy"
+            data-testid="modal-todo-date-save"
+            @click="saveDueDate"
+          >
+            {{ t('common.save') }}
+          </button>
+          <button
+            v-if="detail.current_rule.schedule_type === 'fixed_rrule' || todoDate"
+            type="button"
+            class="btn btn-sm btn-ghost text-base-content/70"
+            :disabled="busy"
+            data-testid="modal-todo-date-clear"
+            @click="clearDueDate"
+          >
+            {{ t('today.modal.makeUndated') }}
+          </button>
+        </div>
+      </section>
 
       <!-- Secondary Controls moved from ItemCard.vue -->
       <section

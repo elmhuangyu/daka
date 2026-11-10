@@ -356,7 +356,13 @@ export interface OptionDetail {
 }
 
 export interface RuleDetail {
+  id?: number
+  effective_from?: string
   schedule_type: 'fixed_rrule' | 'rolling' | 'quota' | 'none' | string
+  rrule_string?: string
+  dtstart?: string
+  until?: string
+  holiday_mode?: string
   rolling_interval?: number
   rolling_unit?: string
   target_value?: number
@@ -385,10 +391,11 @@ export interface MaintenanceInfo {
 }
 
 export interface ItemStatsSummary {
-  last_at: string | null
-  days_since_last: number | null
-  quota: QuotaProgress | null
-  maintenance: MaintenanceInfo | null
+  last_at?: string | null
+  days_since_last?: number | null
+  counts?: { last_30_days: number; this_year: number; total: number }
+  quota?: QuotaProgress | null
+  maintenance?: MaintenanceInfo | null
 }
 
 /** One item of GET /api/items?include=stats (the fields the Today view uses). */
@@ -729,6 +736,33 @@ export function createScheduledEvent(name: string, date: string): Promise<{ id: 
       },
     }),
   )
+}
+
+export function createTodoItem(name: string, dueDate?: string | null): Promise<{ id: number }> {
+  if (dueDate && dueDate.trim()) {
+    return createScheduledEvent(name, dueDate.trim())
+  }
+  return createAdHocEvent(name)
+}
+
+export function setTodoDueDate(itemId: number, dueDate: string | null): Promise<ItemDto> {
+  if (dueDate && dueDate.trim()) {
+    return patchItem(itemId, {
+      rule: {
+        schedule_type: 'fixed_rrule',
+        rrule_string: 'FREQ=DAILY;COUNT=1',
+        dtstart: dueDate.trim(),
+        until: dueDate.trim(),
+        holiday_mode: 'none',
+      },
+    })
+  }
+  return patchItem(itemId, {
+    rule: {
+      schedule_type: 'none',
+      holiday_mode: 'none',
+    },
+  })
 }
 
 // ---- Settings (P3-5) ----

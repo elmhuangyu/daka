@@ -125,7 +125,7 @@ func (s *server) today(db *gorm.DB, userID string, requestedDate string, redact,
 
 	endRange := day.AddDate(0, 0, 14).Format(dbmodels.DateLayout)
 	var versions []dbmodels.ItemRuleVersion
-	if err := db.Where("item_id IN ? AND effective_from <= ?", ids, endRange).Find(&versions).Error; err != nil {
+	if err := db.Where("item_id IN ?", ids).Find(&versions).Error; err != nil {
 		return nil, err
 	}
 	byItem := map[uint][]dbmodels.ItemRuleVersion{}
@@ -165,7 +165,7 @@ func (s *server) today(db *gorm.DB, userID string, requestedDate string, redact,
 		if hideSensitive && sens(it) {
 			continue
 		}
-		vs := byItem[it.ID]
+		vs := effectiveVersionsFor(it, byItem[it.ID])
 		due, err := schedule.IsDueWith(vs, date, cal)
 		if errors.Is(err, schedule.ErrUnsupported) {
 			continue // rolling/quota items have their own sections (later phases)
@@ -252,7 +252,7 @@ func (s *server) today(db *gorm.DB, userID string, requestedDate string, redact,
 		if hideSensitive && sens(it) {
 			continue
 		}
-		vs := byItem[it.ID]
+		vs := effectiveVersionsFor(it, byItem[it.ID])
 		fvs := fixedOnly(vs)
 		futureDates, err := schedule.DueDatesWith(fvs, tomorrow, endRange, cal)
 		if err != nil {

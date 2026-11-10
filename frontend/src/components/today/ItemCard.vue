@@ -2,6 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { Icon } from '@iconify/vue'
 import type { Category, CheckinInput } from '../../api'
+import { formatCustomDate } from '../../i18n/format'
 import { useI18n } from '../../i18n'
 import {
   fmt,
@@ -139,6 +140,27 @@ function record(r: ValueRow) {
           {{ d.name }}
         </h3>
         <div class="flex items-center gap-1.5">
+          <span
+            v-if="d.kind === 'event'"
+            class="badge badge-sm"
+            :class="
+              d.current_rule.schedule_type === 'none'
+                ? 'badge-ghost'
+                : 'badge-primary badge-outline font-mono'
+            "
+            data-testid="todo-date-badge"
+          >
+            <Icon
+              :icon="d.current_rule.schedule_type === 'none' ? 'lucide:inbox' : 'lucide:calendar'"
+              class="size-3"
+              aria-hidden="true"
+            />
+            {{
+              d.current_rule.schedule_type === 'none'
+                ? t('today.undated')
+                : formatCustomDate(props.vm.today?.due_date || d.current_rule.dtstart || '')
+            }}
+          </span>
           <span v-if="pending" class="badge badge-warning badge-sm" data-testid="pending-badge">
             <Icon icon="lucide:cloud-off" aria-hidden="true" /> {{ t('today.card.pendingSync') }}
           </span>

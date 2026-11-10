@@ -163,6 +163,8 @@ type calendarData struct {
 	// rollingDates holds every completion date of items governed by a rolling
 	// rule today (NextDue needs the whole history, not just the window).
 	rollingDates map[uint][]string
+	// eventLogs holds all completion logs of KindEvent items across all dates.
+	eventLogs map[uint][]dbmodels.CheckinLog
 }
 
 func (s *server) calendarView(db *gorm.DB, userID, start, end string, onlyItem uint, redact, hideSensitive bool) (*calendarViewResponse, error) {
@@ -248,7 +250,7 @@ func (s *server) calendarView(db *gorm.DB, userID, start, end string, onlyItem u
 		if hideSensitive && sens(it) {
 			continue
 		}
-		vs := d.versions[it.ID]
+		vs := effectiveVersionsFor(it, d.versions[it.ID])
 		entries := map[string]*calendarDayItem{}
 		get := func(date string) *calendarDayItem {
 			e := entries[date]
@@ -289,12 +291,55 @@ func (s *server) calendarView(db *gorm.DB, userID, start, end string, onlyItem u
 		}
 		addRollingForecast(it, vs, d, today, start, end, get)
 
+		// Overdue Todo items (KindEvent): surface on today if overdue with 0 logs.
+		if it.Kind == dbmodels.KindEvent && today >= start && today <= end && len(vs) > 0 {
+			cur := vs[0]
+			if cur.ScheduleType == dbmodels.ScheduleFixedRRule {
+				lookbackStart := "0001-01-01"
+				if cur.DtStart != "" {
+					lookbackStart = cur.DtStart
+				}
+				tToday, pErr := time.Parse(dbmodels.DateLayout, today)
+				if pErr == nil {
+					yesterday := tToday.AddDate(0, 0, -1).Format(dbmodels.DateLayout)
+					if lookbackStart <= yesterday {
+						pastDates, pErr := schedule.DueDatesWith(fixedOnly(vs), lookbackStart, yesterday, cal)
+						if pErr == nil && len(pastDates) > 0 {
+							hasLogsToday := len(d.logs[it.ID][today]) > 0
+							if len(d.eventLogs[it.ID]) == 0 {
+								e := get(today)
+								e.Due = true
+								e.Overdue = true
+							} else if hasLogsToday {
+								e := get(today)
+								e.Due = true
+							}
+						}
+					}
+				}
+			}
+		}
+
 		for ds, e := range entries {
 			day := index[ds]
 			if day == nil {
 				continue
 			}
 			finishEntry(e, ds, today, day.Frozen)
+			if it.Kind == dbmodels.KindEvent && e.Due && ds < today && e.Status == calMissed {
+				// If an event item has totalLogs > 0 completed on a later date, do not mark its original past due date as calMissed.
+				completedLater := false
+				for _, l := range d.eventLogs[it.ID] {
+					if l.CheckinDate > ds {
+						completedLater = true
+						break
+					}
+				}
+				if completedLater {
+					e.Status = calDone
+					e.Done = true
+				}
+			}
 			day.Items = append(day.Items, *e)
 		}
 	}
@@ -402,6 +447,7 @@ func (s *server) loadCalendarData(db *gorm.DB, userID, start, end, today string,
 	d := &calendarData{
 		versions: map[uint][]dbmodels.ItemRuleVersion{}, options: map[uint][]dbmodels.ItemOption{},
 		logs: map[uint]map[string][]dbmodels.CheckinLog{}, rollingDates: map[uint][]string{},
+		eventLogs: map[uint][]dbmodels.CheckinLog{},
 	}
 	q := db.Where("user_id = ?", userID)
 	if onlyItem != 0 {
@@ -419,16 +465,28 @@ func (s *server) loadCalendarData(db *gorm.DB, userID, start, end, today string,
 	for i, it := range d.items {
 		ids[i] = it.ID
 	}
-	horizon := end
-	if today > horizon {
-		horizon = today
-	}
 	var versions []dbmodels.ItemRuleVersion
-	if err := db.Where("item_id IN ? AND effective_from <= ?", ids, horizon).Find(&versions).Error; err != nil {
+	if err := db.Where("item_id IN ?", ids).Find(&versions).Error; err != nil {
 		return nil, err
 	}
 	for _, v := range versions {
 		d.versions[v.ItemID] = append(d.versions[v.ItemID], v)
+	}
+	var eventIDs []uint
+	for _, it := range d.items {
+		if it.Kind == dbmodels.KindEvent {
+			eventIDs = append(eventIDs, it.ID)
+		}
+	}
+	if len(eventIDs) > 0 {
+		var evLogs []dbmodels.CheckinLog
+		if err := db.Where("user_id = ? AND item_id IN ?", userID, eventIDs).
+			Order("checkin_date ASC, id ASC").Find(&evLogs).Error; err != nil {
+			return nil, err
+		}
+		for _, l := range evLogs {
+			d.eventLogs[l.ItemID] = append(d.eventLogs[l.ItemID], l)
+		}
 	}
 	rolling := []uint{}
 	for _, id := range ids {

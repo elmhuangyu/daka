@@ -25,6 +25,14 @@ beforeEach(() => {
     if (url === '/api/auth/status')
       return jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
     if (url === '/api/categories' && method === 'GET') return jsonRes({ categories: [] })
+    if (url.startsWith('/api/view/today'))
+      return jsonRes({
+        date: '2026-11-07',
+        weekday: 6,
+        timezone: 'UTC',
+        progress: { done: 0, total: 0 },
+        items: [],
+      })
     if (url === '/api/items' && method === 'POST') {
       return (calls.at(-1)!.body as { name: string }).name === 'bad'
         ? jsonRes({ error: 'invalid combination', reason: 'quota_option_required' }, 400)
