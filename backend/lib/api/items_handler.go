@@ -306,7 +306,7 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 		if req.ParentID != nil {
 			var parent dbmodels.Item
 			err := tx.Where("id = ? AND user_id = ?", *req.ParentID, userID).Take(&parent).Error
-			if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && parent.ParentID != nil) {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
 				out = errResult(http.StatusBadRequest, "invalid parent")
 				return nil
 			}

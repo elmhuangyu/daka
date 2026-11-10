@@ -561,9 +561,13 @@ func TestSubItems(t *testing.T) {
 	require.NotNil(t, row.ProjectID)
 	require.Equal(t, p.ID, *row.ProjectID)
 
-	// Only one level of nesting; unknown parents are rejected.
-	code, _ = create(base(m{"parent_id": child}))
-	require.Equal(t, http.StatusBadRequest, code)
+	// Sub-items can nest further; unknown parents are rejected.
+	code, grand := create(base(m{"parent_id": child}))
+	require.Equal(t, http.StatusCreated, code)
+	var grow dbmodels.Item
+	require.NoError(t, e.db.Read().Where("id = ?", grand).Take(&grow).Error)
+	require.NotNil(t, grow.ProjectID)
+	require.Equal(t, p.ID, *grow.ProjectID)
 	code, _ = create(base(m{"parent_id": 99999}))
 	require.Equal(t, http.StatusBadRequest, code)
 
@@ -581,10 +585,10 @@ func TestSubItems(t *testing.T) {
 	require.NoError(t, e.db.Read().Where("id = ?", sc).Take(&srow).Error)
 	require.True(t, srow.IsSensitive)
 
-	// Deleting the parent deletes the sub-item.
+	// Deleting the parent deletes every descendant.
 	w := e.do("DELETE", fmt.Sprintf("/api/items/%d", parent), "u1", "", nil)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	var n int64
-	require.NoError(t, e.db.Read().Model(&dbmodels.Item{}).Where("id IN ?", []uint{parent, child}).Count(&n).Error)
+	require.NoError(t, e.db.Read().Model(&dbmodels.Item{}).Where("id IN ?", []uint{parent, child, grand}).Count(&n).Error)
 	require.Zero(t, n)
 }

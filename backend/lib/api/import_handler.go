@@ -231,15 +231,21 @@ func validateImport(doc *importDoc, applySettings bool, now time.Time) (*importP
 	}
 	p.summary.Items = len(doc.Items)
 
-	// Sub-items: the parent must be another item in the document that is
-	// itself a root (one level only, which also rules out cycles).
-	roots := make(map[uint]bool, len(doc.Items))
+	// Sub-items: the parent must be another item in the document, and the
+	// parent chain must not loop.
+	parentOf := make(map[uint]*uint, len(doc.Items))
 	for i := range doc.Items {
-		roots[doc.Items[i].ID] = doc.Items[i].ParentID == nil
+		parentOf[doc.Items[i].ID] = doc.Items[i].ParentID
 	}
 	for i := range doc.Items {
-		if pid := doc.Items[i].ParentID; pid != nil && !roots[*pid] {
-			return nil, bad("items["+strconv.Itoa(i)+"]", "bad_parent")
+		where := "items[" + strconv.Itoa(i) + "]"
+		cur := doc.Items[i].ParentID
+		for steps := 0; cur != nil; steps++ {
+			next, ok := parentOf[*cur]
+			if !ok || steps > len(doc.Items) {
+				return nil, bad(where, "bad_parent")
+			}
+			cur = next
 		}
 	}
 

@@ -91,10 +91,10 @@ const categoriesById = computed(() => {
   return map
 })
 
-const rootTasks = computed(() => {
-  const ids = new Set(tasks.value.map((t) => t.id))
-  return tasks.value.filter((t) => !t.parent_id || !ids.has(t.parent_id))
-})
+const subtaskParentId = ref<number | null>(null)
+const subtaskName = ref('')
+const addingSubtask = ref(false)
+
 const childrenByParent = computed(() => {
   const map = new Map<number, ItemDetail[]>()
   for (const t of tasks.value) {
@@ -105,6 +105,31 @@ const childrenByParent = computed(() => {
   }
   return map
 })
+
+type TreeRow =
+  | { kind: 'task'; task: ItemDetail; depth: number }
+  | { kind: 'form'; parent: ItemDetail; depth: number }
+
+// Depth-first flattening of the task tree; the add-sub-task form is placed
+// after the open node's subtree.
+const treeRows = computed<TreeRow[]>(() => {
+  const ids = new Set(tasks.value.map((t) => t.id))
+  const rows: TreeRow[] = []
+  const visit = (task: ItemDetail, depth: number) => {
+    rows.push({ kind: 'task', task, depth })
+    for (const c of childrenByParent.value.get(task.id) ?? []) visit(c, depth + 1)
+    if (subtaskParentId.value === task.id)
+      rows.push({ kind: 'form', parent: task, depth: depth + 1 })
+  }
+  for (const t of tasks.value) {
+    if (!t.parent_id || !ids.has(t.parent_id)) visit(t, 0)
+  }
+  return rows
+})
+
+function indentStyle(depth: number) {
+  return depth ? { marginLeft: `${Math.min(depth, 6) * 1.5}rem` } : {}
+}
 
 const totalTasks = computed(() => tasks.value.length)
 const completedTasks = computed(
@@ -289,10 +314,6 @@ async function handleQuickAddTask() {
 }
 
 // Task Management: Sub-tasks
-const subtaskParentId = ref<number | null>(null)
-const subtaskName = ref('')
-const addingSubtask = ref(false)
-
 function openSubtaskForm(task: ItemDetail) {
   subtaskParentId.value = task.id
   subtaskName.value = ''
@@ -359,7 +380,15 @@ async function toggleTask(task: ItemDetail) {
 }
 
 function removeTaskLocally(task: ItemDetail) {
-  tasks.value = tasks.value.filter((t) => t.id !== task.id && t.parent_id !== task.id)
+  const gone = new Set([task.id])
+  const walk = (id: number) => {
+    for (const c of childrenByParent.value.get(id) ?? []) {
+      gone.add(c.id)
+      walk(c.id)
+    }
+  }
+  walk(task.id)
+  tasks.value = tasks.value.filter((t) => !gone.has(t.id))
 }
 
 // Task Management: Unlink Task (sub-tasks move with their parent)
@@ -678,89 +707,84 @@ function taskDueDate(task: ItemDetail): string | null {
         </div>
 
         <div v-else class="space-y-2" data-testid="project-tasks-list">
-          <template v-for="root in rootTasks" :key="root.id">
-            <template
-              v-for="entry in [
-                { task: root, depth: 0 },
-                ...(childrenByParent.get(root.id) ?? []).map((c) => ({ task: c, depth: 1 })),
-              ]"
-              :key="entry.task.id"
+          <template
+            v-for="row in treeRows"
+            :key="`${row.kind}-${row.kind === 'task' ? row.task.id : row.parent.id}`"
+          >
+            <div
+              v-if="row.kind === 'task'"
+              class="group rounded-xl border border-base-300 bg-base-100 p-3 sm:px-4 flex flex-wrap items-center gap-x-3 gap-y-2 transition-colors hover:bg-base-200/40"
+              :style="indentStyle(row.depth)"
+              :data-testid="`task-item-${row.task.id}`"
             >
-              <div
-                class="group rounded-xl border border-base-300 bg-base-100 p-3 sm:px-4 flex flex-wrap items-center gap-x-3 gap-y-2 transition-colors hover:bg-base-200/40"
-                :class="entry.depth ? 'ml-6 sm:ml-8' : ''"
-                :data-testid="`task-item-${entry.task.id}`"
-              >
-                <div class="flex items-center gap-3 min-w-0 flex-1 basis-48">
-                  <input
-                    type="checkbox"
-                    class="checkbox checkbox-sm checkbox-primary"
-                    :checked="(entry.task.stats?.counts?.total ?? 0) > 0"
-                    :data-testid="`task-checkbox-${entry.task.id}`"
-                    @change="toggleTask(entry.task)"
-                  />
-                  <span
-                    class="text-sm font-medium truncate"
-                    :class="{
-                      'line-through text-base-content/40':
-                        (entry.task.stats?.counts?.total ?? 0) > 0,
-                    }"
-                    data-testid="task-name"
-                  >
-                    {{ entry.task.name }}
-                  </span>
-                </div>
-
-                <div class="flex items-center gap-1.5 shrink-0 ml-auto">
-                  <div class="w-40 sm:w-44 shrink-0" :data-testid="`task-date-${entry.task.id}`">
-                    <DateInput
-                      :model-value="taskDueDate(entry.task) ?? ''"
-                      clearable
-                      :placeholder="t('projects.setDate')"
-                      :aria-label="t('projects.setDate')"
-                      @update:model-value="changeTaskDate(entry.task, $event)"
-                    />
-                  </div>
-
-                  <button
-                    v-if="!entry.depth"
-                    type="button"
-                    class="btn btn-xs btn-ghost btn-circle text-base-content/60 hover:text-primary"
-                    :title="t('projects.addSubtask')"
-                    :data-testid="`btn-add-subtask-${entry.task.id}`"
-                    @click="openSubtaskForm(entry.task)"
-                  >
-                    <Icon icon="lucide:list-plus" class="size-3.5" />
-                  </button>
-
-                  <button
-                    v-if="!entry.depth"
-                    type="button"
-                    class="btn btn-xs btn-ghost btn-circle text-base-content/60 hover:text-warning"
-                    :title="t('projects.unlinkTask')"
-                    :data-testid="`btn-unlink-task-${entry.task.id}`"
-                    @click="unlinkTask(entry.task)"
-                  >
-                    <Icon icon="lucide:unlink" class="size-3.5" />
-                  </button>
-
-                  <button
-                    type="button"
-                    class="btn btn-xs btn-ghost btn-circle text-base-content/60 hover:text-error"
-                    :title="t('projects.deleteTask')"
-                    :data-testid="`btn-delete-task-${entry.task.id}`"
-                    @click="deleteTask(entry.task)"
-                  >
-                    <Icon icon="lucide:trash-2" class="size-3.5" />
-                  </button>
-                </div>
+              <div class="flex items-center gap-3 min-w-0 flex-1 basis-48">
+                <input
+                  type="checkbox"
+                  class="checkbox checkbox-sm checkbox-primary"
+                  :checked="(row.task.stats?.counts?.total ?? 0) > 0"
+                  :data-testid="`task-checkbox-${row.task.id}`"
+                  @change="toggleTask(row.task)"
+                />
+                <span
+                  class="text-sm font-medium truncate"
+                  :class="{
+                    'line-through text-base-content/40': (row.task.stats?.counts?.total ?? 0) > 0,
+                  }"
+                  data-testid="task-name"
+                >
+                  {{ row.task.name }}
+                </span>
               </div>
-            </template>
+
+              <div class="flex items-center gap-1.5 shrink-0 ml-auto">
+                <div class="w-40 sm:w-44 shrink-0" :data-testid="`task-date-${row.task.id}`">
+                  <DateInput
+                    :model-value="taskDueDate(row.task) ?? ''"
+                    clearable
+                    :placeholder="t('projects.setDate')"
+                    :aria-label="t('projects.setDate')"
+                    @update:model-value="changeTaskDate(row.task, $event)"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  class="btn btn-xs btn-ghost btn-circle text-base-content/60 hover:text-primary"
+                  :title="t('projects.addSubtask')"
+                  :data-testid="`btn-add-subtask-${row.task.id}`"
+                  @click="openSubtaskForm(row.task)"
+                >
+                  <Icon icon="lucide:list-plus" class="size-3.5" />
+                </button>
+
+                <button
+                  v-if="!row.depth"
+                  type="button"
+                  class="btn btn-xs btn-ghost btn-circle text-base-content/60 hover:text-warning"
+                  :title="t('projects.unlinkTask')"
+                  :data-testid="`btn-unlink-task-${row.task.id}`"
+                  @click="unlinkTask(row.task)"
+                >
+                  <Icon icon="lucide:unlink" class="size-3.5" />
+                </button>
+
+                <button
+                  type="button"
+                  class="btn btn-xs btn-ghost btn-circle text-base-content/60 hover:text-error"
+                  :title="t('projects.deleteTask')"
+                  :data-testid="`btn-delete-task-${row.task.id}`"
+                  @click="deleteTask(row.task)"
+                >
+                  <Icon icon="lucide:trash-2" class="size-3.5" />
+                </button>
+              </div>
+            </div>
 
             <form
-              v-if="subtaskParentId === root.id"
-              class="ml-6 sm:ml-8 flex items-center gap-2"
-              @submit.prevent="handleAddSubtask(root)"
+              v-else
+              class="flex items-center gap-2"
+              :style="indentStyle(row.depth)"
+              @submit.prevent="handleAddSubtask(row.parent)"
             >
               <input
                 v-model="subtaskName"
@@ -769,14 +793,14 @@ function taskDueDate(task: ItemDetail): string | null {
                 :placeholder="t('projects.subtaskPlaceholder')"
                 autocomplete="off"
                 autofocus
+                :data-testid="`input-subtask-name-${row.parent.id}`"
                 @keydown.esc="closeSubtaskForm"
-                :data-testid="`input-subtask-name-${root.id}`"
               />
               <button
                 type="submit"
                 class="btn btn-sm btn-primary"
                 :disabled="!subtaskName.trim() || addingSubtask"
-                :data-testid="`btn-submit-subtask-${root.id}`"
+                :data-testid="`btn-submit-subtask-${row.parent.id}`"
               >
                 {{ t('projects.addTask') }}
               </button>

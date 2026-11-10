@@ -290,8 +290,12 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 	// category freeze cannot be overwritten by this read-modify-write.
 	// Children are locked in the same statement, in id order, matching
 	// patchProject's ordering so concurrent updates cannot deadlock.
+	subtree, err := itemDescendants(tx, userID, id)
+	if err != nil {
+		return result{}, err
+	}
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Model(&dbmodels.Item{}).
-		Where("user_id = ? AND (id = ? OR parent_id = ?)", userID, id, id).Order("id").
+		Where("user_id = ? AND id IN ?", userID, append(subtree, id)).Order("id").
 		Pluck("id", &[]uint{}).Error; err != nil {
 		return result{}, err
 	}
@@ -500,9 +504,9 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 		}
 	}
 
-	if item.ParentID == nil {
+	if len(subtree) > 0 {
 		// Sub-items follow their parent's project and sensitivity.
-		if err := tx.Model(&dbmodels.Item{}).Where("user_id = ? AND parent_id = ?", userID, item.ID).
+		if err := tx.Model(&dbmodels.Item{}).Where("user_id = ? AND id IN ?", userID, subtree).
 			Updates(map[string]any{"project_id": item.ProjectID, "is_sensitive": gorm.Expr("is_sensitive OR ?", item.IsSensitive)}).Error; err != nil {
 			return result{}, err
 		}
@@ -556,8 +560,8 @@ func (s *server) deleteItem(w http.ResponseWriter, r *http.Request) {
 			return errResult(http.StatusNotFound, "item not found"), nil
 		}
 		// Sub-items are deleted together with their parent.
-		var ids []uint
-		if err := tx.Model(&dbmodels.Item{}).Where("user_id = ? AND parent_id = ?", userID, id).Pluck("id", &ids).Error; err != nil {
+		ids, err := itemDescendants(tx, userID, id)
+		if err != nil {
 			return result{}, err
 		}
 		ids = append(ids, id)
@@ -584,4 +588,28 @@ func (s *server) deleteItem(w http.ResponseWriter, r *http.Request) {
 	}
 	s.versions.Bump(id)
 	res.write(w)
+}
+
+// itemDescendants returns the ids of every sub-item below id (any depth), in
+// breadth-first order. A new sub-item always points at an existing parent, so
+// the tree cannot contain cycles; the seen set guards against bad legacy data.
+func itemDescendants(tx *gorm.DB, userID string, id uint) ([]uint, error) {
+	seen := map[uint]bool{id: true}
+	var out []uint
+	frontier := []uint{id}
+	for len(frontier) > 0 {
+		var next []uint
+		if err := tx.Model(&dbmodels.Item{}).Where("user_id = ? AND parent_id IN ?", userID, frontier).Pluck("id", &next).Error; err != nil {
+			return nil, err
+		}
+		frontier = frontier[:0]
+		for _, c := range next {
+			if !seen[c] {
+				seen[c] = true
+				out = append(out, c)
+				frontier = append(frontier, c)
+			}
+		}
+	}
+	return out, nil
 }
