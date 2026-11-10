@@ -60,6 +60,9 @@ func (s *server) getExport(w http.ResponseWriter, r *http.Request) {
 		if err := writeArray(bw, "categories", func(emit func(any) error) error { return exportCategories(tx, userID, emit) }); err != nil {
 			return err
 		}
+		if err := writeArray(bw, "projects", func(emit func(any) error) error { return exportProjects(tx, userID, emit) }); err != nil {
+			return err
+		}
 		if err := writeArray(bw, "items", func(emit func(any) error) error { return exportItems(tx, userID, emit) }); err != nil {
 			return err
 		}
@@ -133,6 +136,31 @@ func exportCategories(tx *gorm.DB, userID string, emit func(any) error) error {
 	return nil
 }
 
+func exportProjects(tx *gorm.DB, userID string, emit func(any) error) error {
+	var projs []dbmodels.Project
+	if err := tx.Where("user_id = ?", userID).Order("id").Find(&projs).Error; err != nil {
+		return err
+	}
+	for _, p := range projs {
+		if err := emit(exportProject{
+			ID:          p.ID,
+			Name:        p.Name,
+			Description: p.Description,
+			Color:       p.Color,
+			Status:      string(p.Status),
+			TargetDate:  p.TargetDate,
+			IsSensitive: p.IsSensitive,
+			SortOrder:   p.SortOrder,
+			CategoryID:  p.CategoryID,
+			CreatedAt:   p.CreatedAt.UTC().Format(time.RFC3339Nano),
+			UpdatedAt:   p.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func exportItems(tx *gorm.DB, userID string, emit func(any) error) error {
 	var after uint
 	for {
@@ -168,7 +196,7 @@ func exportItems(tx *gorm.DB, userID string, emit func(any) error) error {
 		}
 		for _, it := range items {
 			e := exportItem{
-				ID: it.ID, CategoryID: it.CategoryID, Name: it.Name, Description: it.Description,
+				ID: it.ID, CategoryID: it.CategoryID, ProjectID: it.ProjectID, Name: it.Name, Description: it.Description,
 				TrackerType: string(it.TrackerType), Unit: it.Unit, Aggregate: string(it.Aggregate), Step: it.Step,
 				MinVal: it.MinVal, MaxVal: it.MaxVal, WarningDays: it.WarningDays, Kind: string(it.Kind),
 				Polarity: string(it.Polarity), Pinned: it.Pinned, IsSensitive: it.IsSensitive, RemindTime: it.RemindTime,

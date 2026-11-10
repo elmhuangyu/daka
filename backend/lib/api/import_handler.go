@@ -24,6 +24,7 @@ import (
 const (
 	maxImportBytes        = 64 << 20
 	maxImportCategories   = 500
+	maxImportProjects     = 1000
 	maxImportItems        = 5000
 	maxImportVersions     = 1000 // per item
 	maxImportCheckins     = 500000
@@ -38,6 +39,7 @@ const (
 type importSummary struct {
 	DryRun       bool `json:"dry_run"`
 	Categories   int  `json:"categories"`
+	Projects     int  `json:"projects"`
 	Items        int  `json:"items"`
 	Options      int  `json:"options"`
 	RuleVersions int  `json:"rule_versions"`
@@ -121,6 +123,7 @@ type importPlan struct {
 	doc      *importDoc
 	summary  importSummary
 	settings *exportSettings
+	now      time.Time
 }
 
 func validateImport(doc *importDoc, applySettings bool, now time.Time) (*importPlan, *importFail) {
@@ -130,11 +133,11 @@ func validateImport(doc *importDoc, applySettings bool, now time.Time) (*importP
 	if doc.Version != exportSchemaVersion {
 		return nil, bad("version", "unsupported_version")
 	}
-	if len(doc.Categories) > maxImportCategories || len(doc.Items) > maxImportItems ||
+	if len(doc.Categories) > maxImportCategories || len(doc.Projects) > maxImportProjects || len(doc.Items) > maxImportItems ||
 		len(doc.Checkins) > maxImportCheckins || len(doc.Freezes) > maxImportFreezes {
 		return nil, &importFail{status: http.StatusRequestEntityTooLarge, msg: "invalid import: " + importErrCodeTooLarge}
 	}
-	p := &importPlan{doc: doc}
+	p := &importPlan{doc: doc, now: now.UTC()}
 	if applySettings {
 		if doc.Settings == nil {
 			return nil, bad("settings", "missing")
@@ -162,6 +165,46 @@ func validateImport(doc *importDoc, applySettings bool, now time.Time) (*importP
 	}
 	p.summary.Categories = len(doc.Categories)
 
+	projIDs := map[uint]bool{}
+	for i, pr := range doc.Projects {
+		where := "projects[" + strconv.Itoa(i) + "]"
+		n := strings.TrimSpace(pr.Name)
+		switch {
+		case pr.ID == 0 || projIDs[pr.ID]:
+			return nil, bad(where, "bad_id")
+		case n == "" || utf8.RuneCountInString(n) > maxNameLen:
+			return nil, bad(where, "bad_name")
+		case utf8.RuneCountInString(pr.Description) > maxDescriptionLen:
+			return nil, bad(where, "bad_description")
+		case len(pr.Color) > 32:
+			return nil, bad(where, "bad_field")
+		case pr.CategoryID != nil && !catIDs[*pr.CategoryID]:
+			return nil, bad(where, "unknown_category")
+		}
+		switch dbmodels.ProjectStatus(pr.Status) {
+		case "", dbmodels.ProjectStatusActive, dbmodels.ProjectStatusCompleted, dbmodels.ProjectStatusArchived:
+		default:
+			return nil, bad(where, "bad_field")
+		}
+		if pr.TargetDate != nil && *pr.TargetDate != "" {
+			if _, ok := strictDate(*pr.TargetDate); !ok {
+				return nil, bad(where, "bad_date")
+			}
+		}
+		if pr.CreatedAt != "" {
+			if _, err := time.Parse(time.RFC3339Nano, pr.CreatedAt); err != nil {
+				return nil, bad(where, "bad_time")
+			}
+		}
+		if pr.UpdatedAt != "" {
+			if _, err := time.Parse(time.RFC3339Nano, pr.UpdatedAt); err != nil {
+				return nil, bad(where, "bad_time")
+			}
+		}
+		projIDs[pr.ID] = true
+	}
+	p.summary.Projects = len(doc.Projects)
+
 	itemIDs := make(map[uint]map[uint]bool, len(doc.Items)) // item id -> option ids
 	for i := range doc.Items {
 		it := &doc.Items[i]
@@ -171,6 +214,9 @@ func validateImport(doc *importDoc, applySettings bool, now time.Time) (*importP
 		}
 		if it.CategoryID != nil && !catIDs[*it.CategoryID] {
 			return nil, bad(where, "unknown_category")
+		}
+		if it.ProjectID != nil && !projIDs[*it.ProjectID] {
+			return nil, bad(where, "unknown_project")
 		}
 		optIDs, f := validateImportItem(where, it)
 		if f != nil {
@@ -389,6 +435,46 @@ func (p *importPlan) write(tx *gorm.DB, userID string) error {
 		catSensitive[c.ID] = c.IsSensitive
 	}
 
+	projMap := make(map[uint]uint, len(doc.Projects))
+	for _, pr := range doc.Projects {
+		created := p.now
+		if pr.CreatedAt != "" {
+			if t, err := time.Parse(time.RFC3339Nano, pr.CreatedAt); err == nil {
+				created = t.UTC()
+			}
+		}
+		updated := p.now
+		if pr.UpdatedAt != "" {
+			if t, err := time.Parse(time.RFC3339Nano, pr.UpdatedAt); err == nil {
+				updated = t.UTC()
+			}
+		}
+		status := dbmodels.ProjectStatus(pr.Status)
+		if status == "" {
+			status = dbmodels.ProjectStatusActive
+		}
+		row := dbmodels.Project{
+			UserID:      userID,
+			Name:        strings.TrimSpace(pr.Name),
+			Description: pr.Description,
+			Color:       pr.Color,
+			Status:      status,
+			TargetDate:  pr.TargetDate,
+			IsSensitive: pr.IsSensitive,
+			SortOrder:   pr.SortOrder,
+			CreatedAt:   created,
+			UpdatedAt:   updated,
+		}
+		if pr.CategoryID != nil {
+			nid := catMap[*pr.CategoryID]
+			row.CategoryID = &nid
+		}
+		if err := tx.Create(&row).Error; err != nil {
+			return err
+		}
+		projMap[pr.ID] = row.ID
+	}
+
 	itemMap := make(map[uint]uint, len(doc.Items))
 	// Option ids are only unique per item in a document, so key on both.
 	type key struct{ item, opt uint }
@@ -406,6 +492,10 @@ func (p *importPlan) write(tx *gorm.DB, userID string) error {
 			nid := catMap[*it.CategoryID]
 			row.CategoryID = &nid
 			row.IsSensitive = row.IsSensitive || catSensitive[*it.CategoryID] // DESIGN 4.1 rule 1
+		}
+		if it.ProjectID != nil {
+			nid := projMap[*it.ProjectID]
+			row.ProjectID = &nid
 		}
 		if err := tx.Create(&row).Error; err != nil {
 			return err

@@ -214,3 +214,78 @@ func TestRedactHidesUnits(t *testing.T) {
 		require.NotContains(t, w.Body.String(), "secretunit", p)
 	}
 }
+
+func TestDeleteCategoryWithProjectNeedsMoveOrUncategorize(t *testing.T) {
+	e := newEnv(t)
+	cid := e.category("u1", false)
+	proj := dbmodels.Project{UserID: "u1", CategoryID: &cid, Name: "Proj 1", Status: dbmodels.ProjectStatusActive}
+	require.NoError(t, e.db.Write().Create(&proj).Error)
+
+	w := e.do("DELETE", fmt.Sprintf("/api/categories/%d", cid), "", "", nil)
+	require.Equal(t, 409, w.Code)
+
+	// move_to moves the project
+	c2 := e.category("u1", false)
+	w = e.do("DELETE", fmt.Sprintf("/api/categories/%d?move_to=%d", cid, c2), "", "", nil)
+	require.Equal(t, 200, w.Code)
+	var got dbmodels.Project
+	require.NoError(t, e.db.Read().First(&got, proj.ID).Error)
+	require.Equal(t, c2, *got.CategoryID)
+
+	// uncategorize clears category_id
+	w = e.do("DELETE", fmt.Sprintf("/api/categories/%d?uncategorize=1", c2), "", "", nil)
+	require.Equal(t, 200, w.Code)
+	require.NoError(t, e.db.Read().First(&got, proj.ID).Error)
+	require.Nil(t, got.CategoryID)
+}
+
+func TestDeleteSensitiveCategoryFreezesProjects(t *testing.T) {
+	e := newEnv(t)
+	cid := e.category("u1", true)
+	proj := dbmodels.Project{UserID: "u1", CategoryID: &cid, Name: "Secret Project", IsSensitive: false}
+	require.NoError(t, e.db.Write().Create(&proj).Error)
+
+	// uncategorize without confirm_exposure freezes project is_sensitive
+	w := e.do("DELETE", fmt.Sprintf("/api/categories/%d?uncategorize=1", cid), "", "", nil)
+	require.Equal(t, 200, w.Code)
+	var got dbmodels.Project
+	require.NoError(t, e.db.Read().First(&got, proj.ID).Error)
+	require.Nil(t, got.CategoryID)
+	require.True(t, got.IsSensitive)
+
+	// now test with confirm_exposure=1: does not freeze
+	cid2 := e.category("u1", true)
+	proj2 := dbmodels.Project{UserID: "u1", CategoryID: &cid2, Name: "Exposed Project", IsSensitive: false}
+	require.NoError(t, e.db.Write().Create(&proj2).Error)
+	w = e.do("DELETE", fmt.Sprintf("/api/categories/%d?uncategorize=1&confirm_exposure=1", cid2), "", "", nil)
+	require.Equal(t, 200, w.Code)
+	var got2 dbmodels.Project
+	require.NoError(t, e.db.Read().First(&got2, proj2.ID).Error)
+	require.Nil(t, got2.CategoryID)
+	require.False(t, got2.IsSensitive)
+
+	// move_to sensitive category preserves project is_sensitive=false
+	cid3 := e.category("u1", true)
+	cid4 := e.category("u1", true)
+	proj3 := dbmodels.Project{UserID: "u1", CategoryID: &cid3, Name: "Moving Project", IsSensitive: false}
+	require.NoError(t, e.db.Write().Create(&proj3).Error)
+	w = e.do("DELETE", fmt.Sprintf("/api/categories/%d?move_to=%d", cid3, cid4), "", "", nil)
+	require.Equal(t, 200, w.Code)
+	var got3 dbmodels.Project
+	require.NoError(t, e.db.Read().First(&got3, proj3.ID).Error)
+	require.Equal(t, cid4, *got3.CategoryID)
+	require.False(t, got3.IsSensitive)
+}
+
+func TestCategoryDesensitizeFreezesProjects(t *testing.T) {
+	e := newEnv(t)
+	cid := e.category("u1", true)
+	proj := dbmodels.Project{UserID: "u1", CategoryID: &cid, Name: "Secret Proj", IsSensitive: false}
+	require.NoError(t, e.db.Write().Create(&proj).Error)
+
+	w := e.do("PUT", fmt.Sprintf("/api/categories/%d", cid), "", "", m{"is_sensitive": false})
+	require.Equal(t, 200, w.Code)
+	var got dbmodels.Project
+	require.NoError(t, e.db.Read().First(&got, proj.ID).Error)
+	require.True(t, got.IsSensitive)
+}

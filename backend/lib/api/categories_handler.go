@@ -132,6 +132,14 @@ func lockCategoryItems(tx *gorm.DB, userID string, id uint) error {
 		Where("user_id = ? AND category_id = ?", userID, id).Order("id").Pluck("id", &ids).Error
 }
 
+// lockCategoryProjects takes row locks on the projects of category id (ordered)
+// before they are frozen or moved.
+func lockCategoryProjects(tx *gorm.DB, userID string, id uint) error {
+	var ids []uint
+	return tx.Clauses(clause.Locking{Strength: "UPDATE"}).Model(&dbmodels.Project{}).
+		Where("user_id = ? AND category_id = ?", userID, id).Order("id").Pluck("id", &ids).Error
+}
+
 // freezeCategoryItems applies DESIGN 4.1 rule 3 to the items of category id
 // that are not yet flagged themselves and returns how many there are. Without
 // confirm they are flagged sensitive, so they stay protected after the category
@@ -148,6 +156,19 @@ func freezeCategoryItems(tx *gorm.DB, userID string, id uint, confirm bool) (int
 		}
 	}
 	return n, nil
+}
+
+// freezeCategoryProjects applies sensitivity protection to the projects of category id
+// that are not yet flagged themselves. Without confirm they are flagged sensitive;
+// with confirm they are left as they are (exposed).
+func freezeCategoryProjects(tx *gorm.DB, userID string, id uint, confirm bool) error {
+	where := "user_id = ? AND category_id = ? AND is_sensitive = ?"
+	if !confirm {
+		if err := tx.Model(&dbmodels.Project{}).Where(where, userID, id, false).Update("is_sensitive", true).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PUT /api/categories/{id}[?confirm_exposure=1]. Absent fields keep their value.
@@ -182,8 +203,14 @@ func (s *server) putCategory(w http.ResponseWriter, r *http.Request) {
 			if err := lockCategoryItems(tx, userID, id); err != nil {
 				return result{}, err
 			}
+			if err := lockCategoryProjects(tx, userID, id); err != nil {
+				return result{}, err
+			}
 			n, err := freezeCategoryItems(tx, userID, id, confirm)
 			if err != nil {
+				return result{}, err
+			}
+			if err := freezeCategoryProjects(tx, userID, id, confirm); err != nil {
 				return result{}, err
 			}
 			affected = &n
@@ -262,11 +289,18 @@ func (s *server) deleteCategory(w http.ResponseWriter, r *http.Request) {
 		if err := lockCategoryItems(tx, userID, id); err != nil {
 			return result{}, err
 		}
+		if err := lockCategoryProjects(tx, userID, id); err != nil {
+			return result{}, err
+		}
 		var items int64
 		if err := tx.Model(&dbmodels.Item{}).Where("user_id = ? AND category_id = ?", userID, id).Count(&items).Error; err != nil {
 			return result{}, err
 		}
-		if items > 0 && moveTo == nil && !uncategorize {
+		var projects int64
+		if err := tx.Model(&dbmodels.Project{}).Where("user_id = ? AND category_id = ?", userID, id).Count(&projects).Error; err != nil {
+			return result{}, err
+		}
+		if (items > 0 || projects > 0) && moveTo == nil && !uncategorize {
 			return errResult(http.StatusConflict, "category has items; pass move_to or uncategorize=1"), nil
 		}
 		var affected int64
@@ -275,9 +309,18 @@ func (s *server) deleteCategory(w http.ResponseWriter, r *http.Request) {
 			if affected, err = freezeCategoryItems(tx, userID, id, confirm); err != nil {
 				return result{}, err
 			}
+			if err := freezeCategoryProjects(tx, userID, id, confirm); err != nil {
+				return result{}, err
+			}
 		}
 		if items > 0 {
 			if err := tx.Model(&dbmodels.Item{}).Where("user_id = ? AND category_id = ?", userID, id).
+				Update("category_id", moveTo).Error; err != nil {
+				return result{}, err
+			}
+		}
+		if projects > 0 {
+			if err := tx.Model(&dbmodels.Project{}).Where("user_id = ? AND category_id = ?", userID, id).
 				Update("category_id", moveTo).Error; err != nil {
 				return result{}, err
 			}

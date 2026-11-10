@@ -8,6 +8,7 @@ type Item struct {
 	ID          uint   `gorm:"primaryKey"`
 	UserID      string `gorm:"size:64;not null;index"`
 	CategoryID  *uint  `gorm:"index"`
+	ProjectID   *uint  `gorm:"index"`
 	Name        string `gorm:"size:255;not null"`
 	Description string `gorm:"type:text"`
 

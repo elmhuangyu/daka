@@ -13,6 +13,7 @@ func AllModels() []any {
 		&User{},
 		&UserSettings{},
 		&Category{},
+		&Project{},
 		&Item{},
 		&ItemOption{},
 		&ItemRuleVersion{},
@@ -34,6 +35,7 @@ func UserOwnedTables() []any {
 	return []any{
 		&UserSettings{},
 		&Category{},
+		&Project{},
 		&Item{},
 		&CheckinLog{},
 		&FreezePeriod{},

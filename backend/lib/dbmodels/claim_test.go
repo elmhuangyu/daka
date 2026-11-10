@@ -20,6 +20,7 @@ func seedClaim(t *testing.T, g *gorm.DB) {
 	require.NoError(t, g.Create(&UserSettings{UserID: claimFrom, Timezone: "Asia/Shanghai", WeekStart: 1}).Error)
 	require.NoError(t, g.Create(&UserSettings{UserID: claimTo, Timezone: "UTC", WeekStart: 1}).Error)
 	require.NoError(t, g.Create(&Category{UserID: claimFrom, Name: "c"}).Error)
+	require.NoError(t, g.Create(&Project{UserID: claimFrom, Name: "p"}).Error)
 	require.NoError(t, g.Create(&Item{UserID: claimFrom, Name: "i", TrackerType: "boolean"}).Error)
 	require.NoError(t, g.Create(&CheckinLog{UserID: claimFrom, ItemID: 1, CheckinDate: "2026-11-07", CheckinTime: time.Now()}).Error)
 	require.NoError(t, g.Create(&IdempotencyKey{UserID: claimFrom, Key: "k", StatusCode: 200}).Error)
@@ -43,7 +44,7 @@ func TestClaimUserMovesEverything(t *testing.T) {
 	for _, m := range UserOwnedTables() {
 		require.Zero(t, count(t, g, m, claimFrom), "%T still has rows for the source user", m)
 	}
-	for _, m := range []any{&Category{}, &Item{}, &CheckinLog{}, &IdempotencyKey{}, &FreezePeriod{}, &ApiToken{}} {
+	for _, m := range []any{&Category{}, &Project{}, &Item{}, &CheckinLog{}, &IdempotencyKey{}, &FreezePeriod{}, &ApiToken{}} {
 		require.EqualValues(t, 1, count(t, g, m, claimTo), "%T", m)
 	}
 	var st UserSettings
@@ -68,6 +69,7 @@ func TestClaimUserRefusals(t *testing.T) {
 	// nothing changed (transaction)
 	require.EqualValues(t, 1, count(t, g, &Item{}, claimFrom))
 	require.EqualValues(t, 1, count(t, g, &Category{}, claimFrom))
+	require.EqualValues(t, 1, count(t, g, &Project{}, claimFrom))
 	var st UserSettings
 	require.NoError(t, g.First(&st, "user_id = ?", claimTo).Error)
 	require.Equal(t, "UTC", st.Timezone)

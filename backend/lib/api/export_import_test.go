@@ -68,6 +68,22 @@ func (e *env) seedRich(user string) {
 		"rule":    m{"schedule_type": "fixed_rrule", "rrule_string": "FREQ=DAILY", "completion_rule": "all"},
 	}
 	it := e.mustCreate(user, body)
+	td := "2026-12-31"
+	proj := dbmodels.Project{
+		UserID:      user,
+		CategoryID:  &cat.ID,
+		Name:        "Fitness Goal",
+		Description: "Get fit",
+		Color:       "blue",
+		Status:      dbmodels.ProjectStatusActive,
+		TargetDate:  &td,
+		IsSensitive: false,
+		SortOrder:   1,
+		CreatedAt:   e.now.UTC(),
+		UpdatedAt:   e.now.UTC(),
+	}
+	require.NoError(e.t, e.db.Write().Create(&proj).Error)
+	require.NoError(e.t, e.db.Write().Model(&dbmodels.Item{}).Where("id = ?", it.ID).Update("project_id", proj.ID).Error)
 	run, push := it.Options[0].ID, it.Options[1].ID
 	patch := func(rule m) {
 		w := e.do("PATCH", itemPath(it.ID), user, "", m{"rule": rule})
@@ -107,6 +123,16 @@ func normalize(d importDoc) importDoc {
 		cat[d.Categories[i].ID] = uint(i + 1)
 		d.Categories[i].ID = uint(i + 1)
 	}
+	proj := map[uint]uint{}
+	for i := range d.Projects {
+		p := &d.Projects[i]
+		proj[p.ID] = uint(i + 1)
+		p.ID = uint(i + 1)
+		if p.CategoryID != nil {
+			c := cat[*p.CategoryID]
+			p.CategoryID = &c
+		}
+	}
 	item := map[uint]uint{}
 	opt := map[uint]map[uint]uint{}
 	origIDs := make([]uint, len(d.Items))
@@ -119,6 +145,10 @@ func normalize(d importDoc) importDoc {
 		if it.CategoryID != nil {
 			c := cat[*it.CategoryID]
 			it.CategoryID = &c
+		}
+		if it.ProjectID != nil {
+			p := proj[*it.ProjectID]
+			it.ProjectID = &p
 		}
 	}
 	for i := range d.Items {
@@ -158,7 +188,9 @@ func TestExportImportRoundTripPreservesHistory(t *testing.T) {
 	e := dataEnv(t)
 	e.seedRich("u1")
 	orig := e.export("u1")
+	require.Len(t, orig.Projects, 1)
 	require.Len(t, orig.Items, 3)
+	require.Equal(t, &orig.Projects[0].ID, orig.Items[0].ProjectID)
 	require.GreaterOrEqual(t, len(orig.Items[0].RuleVersions), 5, "all rule versions are exported")
 	require.Len(t, orig.Items[0].Options, 2)
 	require.True(t, orig.Items[0].Options[1].Archived)
@@ -174,9 +206,11 @@ func TestExportImportRoundTripPreservesHistory(t *testing.T) {
 	require.Equal(t, 200, w.Code, w.Body.String())
 	sum := decode[importSummary](t, w)
 	require.True(t, sum.DryRun)
+	require.Equal(t, 1, sum.Projects)
 	require.Equal(t, 3, sum.Items)
 	require.Equal(t, 3, sum.Checkins)
 	require.Zero(t, e.count(&dbmodels.Item{}, "u2"))
+	require.Zero(t, e.count(&dbmodels.Project{}, "u2"))
 
 	var verBefore int64
 	require.NoError(t, e.db.Read().Model(&dbmodels.UserSettings{}).Where("user_id = ?", "u2").Select("state_version").Scan(&verBefore).Error)
@@ -200,11 +234,13 @@ func TestExportImportRoundTripPreservesHistory(t *testing.T) {
 	require.Equal(t, "Asia/Shanghai", got.Settings.Timezone, "settings untouched without apply_settings")
 
 	// u1 is untouched, and ids are fresh (not reused from the file)
+	require.Equal(t, 1, e.count(&dbmodels.Project{}, "u1"))
 	require.Equal(t, 3, e.count(&dbmodels.Item{}, "u1"))
 
 	// additive: importing again into the same user doubles the data
 	w = e.doRaw("POST", "/api/import", "u2", raw.Body.String(), true)
 	require.Equal(t, 200, w.Code)
+	require.Equal(t, 2, e.count(&dbmodels.Project{}, "u2"))
 	require.Equal(t, 6, e.count(&dbmodels.Item{}, "u2"))
 	require.Equal(t, 6, e.count(&dbmodels.CheckinLog{}, "u2"))
 	// the current rule resolves identically for the imported copy
@@ -323,6 +359,11 @@ func TestImportRejectsInvalidPayloads(t *testing.T) {
 		"bad freeze":         mutate(func(d m) { d["freezes"] = []m{{"start_date": "2026-02-01", "end_date": "2026-01-01"}} }),
 		"unknown option tgt": mutate(func(d m) { rule(d)["option_targets"] = m{"42": 1} }),
 		"category long name": mutate(func(d m) { d["categories"].([]m)[0]["name"] = strings.Repeat("x", 300) }),
+		"unknown project":    mutate(func(d m) { item(d)["project_id"] = 99 }),
+		"dup project id":     mutate(func(d m) { d["projects"] = []m{{"id": 1, "name": "P"}, {"id": 1, "name": "P2"}} }),
+		"project bad cat":    mutate(func(d m) { d["projects"] = []m{{"id": 1, "name": "P", "category_id": 99}} }),
+		"project bad status": mutate(func(d m) { d["projects"] = []m{{"id": 1, "name": "P", "status": "unknown"}} }),
+		"project bad date":   mutate(func(d m) { d["projects"] = []m{{"id": 1, "name": "P", "target_date": "bad-date"}} }),
 	}
 	for name, body := range cases {
 		e := dataEnv(t)
@@ -330,6 +371,7 @@ func TestImportRejectsInvalidPayloads(t *testing.T) {
 		require.Equal(t, 400, w.Code, name+": "+w.Body.String())
 		require.NotContains(t, w.Body.String(), "SecretItem", name)
 		require.Zero(t, e.count(&dbmodels.Item{}, "u1"), name)
+		require.Zero(t, e.count(&dbmodels.Project{}, "u1"), name)
 		require.Zero(t, e.count(&dbmodels.Category{}, "u1"), name)
 		require.Zero(t, e.count(&dbmodels.CheckinLog{}, "u1"), name)
 	}
@@ -393,6 +435,8 @@ func (e *env) seedEveryTable(user string) uint {
 	w := e.db.Write()
 	cat := dbmodels.Category{UserID: user, Name: "c"}
 	require.NoError(e.t, w.Create(&cat).Error)
+	proj := dbmodels.Project{UserID: user, Name: "p"}
+	require.NoError(e.t, w.Create(&proj).Error)
 	id := e.item(user, nil)
 	require.NoError(e.t, w.Create(&dbmodels.ItemOption{ItemID: id, Name: "o"}).Error)
 	require.NoError(e.t, w.Create(&dbmodels.CheckinLog{UserID: user, ItemID: id, CheckinDate: "2026-01-01", CheckinTime: fixedNow}).Error)

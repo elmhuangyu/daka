@@ -30,6 +30,20 @@ type exportCategory struct {
 	SortOrder   int    `json:"sort_order"`
 }
 
+type exportProject struct {
+	ID          uint    `json:"id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Color       string  `json:"color"`
+	Status      string  `json:"status"`
+	TargetDate  *string `json:"target_date"`
+	IsSensitive bool    `json:"is_sensitive"`
+	SortOrder   int     `json:"sort_order"`
+	CategoryID  *uint   `json:"category_id"`
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
+}
+
 type exportOption struct {
 	ID        uint     `json:"id"`
 	Name      string   `json:"name"`
@@ -73,6 +87,7 @@ type exportRule struct {
 type exportItem struct {
 	ID          uint     `json:"id"`
 	CategoryID  *uint    `json:"category_id"`
+	ProjectID   *uint    `json:"project_id,omitempty"`
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
 	TrackerType string   `json:"tracker_type"`
@@ -128,6 +143,7 @@ type importDoc struct {
 	ExportedAt string           `json:"exported_at"`
 	Settings   *exportSettings  `json:"settings"`
 	Categories []exportCategory `json:"categories"`
+	Projects   []exportProject  `json:"projects,omitempty"`
 	Items      []exportItem     `json:"items"`
 	Checkins   []exportCheckin  `json:"checkins"`
 	Freezes    []exportFreeze   `json:"freezes"`

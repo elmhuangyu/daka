@@ -49,7 +49,10 @@ func TestSchemaMatchesDesign(t *testing.T) {
 			"week_start": tInt, "state_version": tInt, "external_calendar_urls": tStr, "streak_holiday_freeze": tBool}},
 		{&Category{}, "categories", map[string]string{"id": tInt, "user_id": tStr, "name": tStr, "color": tStr, "icon": tStr,
 			"is_sensitive": tBool, "sort_order": tInt}},
-		{&Item{}, "items", map[string]string{"id": tInt, "user_id": tStr, "category_id": tInt, "name": tStr, "description": tStr,
+		{&Project{}, "projects", map[string]string{"id": tInt, "user_id": tStr, "category_id": tInt, "name": tStr,
+			"description": tStr, "color": tStr, "status": tStr, "target_date": tStr, "is_sensitive": tBool,
+			"sort_order": tInt, "created_at": tTime, "updated_at": tTime}},
+		{&Item{}, "items", map[string]string{"id": tInt, "user_id": tStr, "category_id": tInt, "project_id": tInt, "name": tStr, "description": tStr,
 			"color": tStr, "tracker_type": tStr, "unit": tStr, "aggregate": tStr, "step": tFloat, "min_val": tFloat, "max_val": tFloat,
 			"warning_days": tInt, "kind": tStr, "polarity": tStr, "pinned": tBool, "is_sensitive": tBool, "remind_time": tStr,
 			"sort_order": tInt, "archived": tBool}},
@@ -178,6 +181,17 @@ func TestNewModelsRoundTrip(t *testing.T) {
 
 	k := IdempotencyKey{UserID: "u1", Key: "k", StatusCode: 201, ResponseBody: "{}"}
 	require.NoError(t, w.Create(&k).Error)
+
+	td := "2026-12-31"
+	p := Project{UserID: "u1", Name: "Project A", Description: "desc", Color: "blue", Status: ProjectStatusActive,
+		TargetDate: &td, IsSensitive: true, SortOrder: 1, CreatedAt: now, UpdatedAt: now}
+	require.NoError(t, w.Create(&p).Error)
+	var gp Project
+	require.NoError(t, r.First(&gp, p.ID).Error)
+	require.True(t, p.CreatedAt.Equal(gp.CreatedAt))
+	require.True(t, p.UpdatedAt.Equal(gp.UpdatedAt))
+	gp.CreatedAt, gp.UpdatedAt = p.CreatedAt, p.UpdatedAt
+	require.Equal(t, p, gp)
 }
 
 func TestApiTokenExpiresAtRequired(t *testing.T) {
