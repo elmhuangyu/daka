@@ -452,7 +452,7 @@ export const en = {
   'items.editor.schedule': 'Schedule',
   'items.editor.sched.fixed_rrule': 'Repeats on a pattern',
   'items.editor.sched.rolling': 'After completion',
-  'items.editor.sched.quota': 'Periodic target',
+  'items.editor.sched.quota': 'Periodic target / quota',
   'items.editor.sched.none': 'Unscheduled',
   'items.editor.period.once': 'One-time task',
   'items.editor.period.daily': 'Every day',
@@ -500,6 +500,8 @@ export const en = {
   'items.editor.advancedSection': 'More options',
   'items.editor.staleHint': '0 means never flag as stale',
   'items.editor.trackingMethod': 'Tracking method',
+  'items.editor.counterLimitHint':
+    'Counters only track positive habits. Use Metric to track limits with units.',
   'items.editor.frequency': 'Frequency',
   'items.editor.ruleWarningToday':
     'Changing the schedule or targets creates a new rule version effective today. Earlier days keep the old rule.',
@@ -532,6 +534,7 @@ export const en = {
   'items.preview.unitDays': '{count} day(s)',
   'items.preview.unitTimes': '{count} time(s)',
   'items.preview.unitSum': '{count} in total',
+  'items.preview.unitSumWithUnit': '{count} {unit} in total',
   'items.preview.windowCalendar': 'per calendar {period}',
   'items.preview.windowRolling': 'in any rolling {period}',
   'items.preview.invalidQuota': 'Enter a quota greater than 0.',

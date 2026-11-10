@@ -397,7 +397,177 @@ const showHoliday = computed(() => holidayAllowed(form))
         </div>
       </div>
 
-      <!-- Section 2: Schedule & Cadence -->
+      <!-- Section 2: Tracking & Goals -->
+      <div class="card card-border bg-base-100 border-base-300 p-5 shadow-xs space-y-4">
+        <h2
+          class="text-xs font-semibold uppercase tracking-wider text-base-content/70 flex items-center gap-2"
+        >
+          <Icon icon="lucide:check-circle-2" class="size-4 text-primary" aria-hidden="true" />
+          {{ t('items.editor.section.tracking') }}
+        </h2>
+
+        <fieldset class="flex flex-col gap-2.5" :disabled="isEdit">
+          <legend class="text-sm font-medium">{{ t('items.editor.trackingMethod') }}</legend>
+          <div class="join flex-wrap shadow-xs">
+            <button
+              v-for="tk in TRACKERS"
+              :key="tk"
+              type="button"
+              class="btn join-item btn-sm"
+              :class="{ 'btn-primary': form.trackerType === tk }"
+              :data-testid="`tracker-${tk}`"
+              @click="form.trackerType = tk"
+            >
+              {{ t(`items.editor.tracker.${tk}`) }}
+            </button>
+          </div>
+          <p v-if="form.trackerType === 'counter'" class="text-xs text-base-content/60 pt-1">
+            {{ t('items.editor.counterLimitHint') }}
+          </p>
+          <div
+            v-if="allowedPolarities(form.trackerType).length > 1"
+            class="flex items-center gap-4 pt-1"
+          >
+            <label class="flex items-center gap-1.5 cursor-pointer text-sm">
+              <input
+                v-model="form.polarity"
+                type="radio"
+                value="positive"
+                class="radio radio-sm radio-primary"
+              />
+              {{ t('items.editor.positive') }}
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer text-sm">
+              <input
+                v-model="form.polarity"
+                type="radio"
+                value="negative"
+                class="radio radio-sm radio-primary"
+                data-testid="polarity-negative"
+              />
+              {{ t('items.editor.negative') }}
+            </label>
+          </div>
+          <p v-if="isEdit" class="text-xs opacity-60">{{ t('items.editor.immutable') }}</p>
+        </fieldset>
+
+        <fieldset v-if="isNumeric(form.trackerType)" class="grid grid-cols-2 gap-3 pt-2">
+          <legend class="text-sm mb-1 font-medium">{{ t('items.editor.measurement') }}</legend>
+          <label class="flex flex-col gap-1">
+            <span class="text-xs text-base-content/70">{{ t('items.editor.unit') }}</span>
+            <input
+              v-model="form.unit"
+              class="input input-bordered input-sm"
+              maxlength="32"
+              data-testid="f-unit"
+            />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-xs text-base-content/70">{{ t('items.editor.step') }}</span>
+            <input v-model="form.step" inputmode="decimal" class="input input-bordered input-sm" />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-xs text-base-content/70">{{ t('items.editor.min') }}</span>
+            <input
+              v-model="form.minVal"
+              inputmode="decimal"
+              class="input input-bordered input-sm"
+            />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-xs text-base-content/70">{{ t('items.editor.max') }}</span>
+            <input
+              v-model="form.maxVal"
+              inputmode="decimal"
+              class="input input-bordered input-sm"
+            />
+          </label>
+          <label v-if="form.trackerType === 'metric'" class="col-span-2 flex flex-col gap-1">
+            <span class="text-xs text-base-content/70">{{ t('items.editor.aggregate') }}</span>
+            <select v-model="form.aggregate" class="select select-bordered select-sm">
+              <option value="">{{ t('items.editor.aggDefault') }}</option>
+              <option value="sum">{{ t('items.editor.aggSum') }}</option>
+              <option value="latest">{{ t('items.editor.aggLatest') }}</option>
+              <option value="avg">{{ t('items.editor.aggAvg') }}</option>
+            </select>
+          </label>
+          <label
+            v-if="form.scheduleType !== 'quota' && form.options.length === 0"
+            class="col-span-2 flex flex-col gap-1"
+          >
+            <span class="text-xs text-base-content/70">{{ t('items.editor.dailyTarget') }}</span>
+            <input
+              v-model="form.target"
+              inputmode="decimal"
+              class="input input-bordered input-sm"
+              data-testid="f-target"
+            />
+          </label>
+        </fieldset>
+
+        <fieldset v-if="isNumeric(form.trackerType)" class="flex flex-col gap-3 pt-2">
+          <legend class="text-sm font-medium">{{ t('items.editor.options') }}</legend>
+          <div
+            v-for="(o, i) in form.options"
+            :key="i"
+            class="flex flex-wrap items-end gap-2 rounded-lg border border-base-300 bg-base-200/40 p-2.5"
+          >
+            <label class="flex min-w-32 flex-1 flex-col gap-1">
+              <span class="text-xs text-base-content/70">{{ t('items.editor.name') }}</span>
+              <input
+                v-model="o.name"
+                class="input input-bordered input-sm"
+                maxlength="200"
+                :data-testid="`opt-name-${i}`"
+              />
+            </label>
+            <label class="flex w-20 flex-col gap-1">
+              <span class="text-xs text-base-content/70">{{ t('items.editor.unit') }}</span>
+              <input v-model="o.unit" class="input input-bordered input-sm" />
+            </label>
+            <label class="flex w-20 flex-col gap-1">
+              <span class="text-xs text-base-content/70">{{ t('items.editor.step') }}</span>
+              <input v-model="o.step" inputmode="decimal" class="input input-bordered input-sm" />
+            </label>
+            <label class="flex w-24 flex-col gap-1">
+              <span class="text-xs text-base-content/70">{{ t('items.editor.target') }}</span>
+              <input v-model="o.target" inputmode="decimal" class="input input-bordered input-sm" />
+            </label>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm btn-square"
+              :aria-label="t('items.editor.removeOption')"
+              @click="removeOption(i)"
+            >
+              <Icon icon="lucide:trash-2" aria-hidden="true" />
+            </button>
+          </div>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline self-start"
+            data-testid="add-option"
+            @click="addOption"
+          >
+            <Icon icon="lucide:plus" aria-hidden="true" /> {{ t('items.editor.addOption') }}
+          </button>
+          <div v-if="form.options.length > 0" class="flex flex-wrap items-center gap-2 pt-1">
+            <span class="text-sm">{{ t('items.editor.doneWhen') }}</span>
+            <select v-model="form.completionRule" class="select select-bordered select-sm">
+              <option value="">{{ t('items.editor.doneAny') }}</option>
+              <option value="all">{{ t('items.editor.doneAll') }}</option>
+              <option value="at_least_n">{{ t('items.editor.doneAtLeastN') }}</option>
+            </select>
+            <input
+              v-if="form.completionRule === 'at_least_n'"
+              v-model="form.completionN"
+              inputmode="numeric"
+              class="input input-bordered input-sm w-16"
+            />
+          </div>
+        </fieldset>
+      </div>
+
+      <!-- Section 3: Schedule & Cadence -->
       <div class="card card-border bg-base-100 border-base-300 p-5 shadow-xs space-y-4">
         <h2
           class="text-xs font-semibold uppercase tracking-wider text-base-content/70 flex items-center gap-2"
@@ -617,165 +787,6 @@ const showHoliday = computed(() => holidayAllowed(form))
                 data-testid="f-remind"
               />
             </label>
-          </div>
-        </fieldset>
-      </div>
-
-      <!-- Section 3: Tracking & Goals -->
-      <div class="card card-border bg-base-100 border-base-300 p-5 shadow-xs space-y-4">
-        <h2
-          class="text-xs font-semibold uppercase tracking-wider text-base-content/70 flex items-center gap-2"
-        >
-          <Icon icon="lucide:check-circle-2" class="size-4 text-primary" aria-hidden="true" />
-          {{ t('items.editor.section.tracking') }}
-        </h2>
-
-        <fieldset class="flex flex-col gap-2.5" :disabled="isEdit">
-          <legend class="text-sm font-medium">{{ t('items.editor.trackingMethod') }}</legend>
-          <div class="join flex-wrap shadow-xs">
-            <button
-              v-for="tk in TRACKERS"
-              :key="tk"
-              type="button"
-              class="btn join-item btn-sm"
-              :class="{ 'btn-primary': form.trackerType === tk }"
-              :data-testid="`tracker-${tk}`"
-              @click="form.trackerType = tk"
-            >
-              {{ t(`items.editor.tracker.${tk}`) }}
-            </button>
-          </div>
-          <div
-            v-if="allowedPolarities(form.trackerType).length > 1"
-            class="flex items-center gap-4 pt-1"
-          >
-            <label class="flex items-center gap-1.5 cursor-pointer text-sm">
-              <input
-                v-model="form.polarity"
-                type="radio"
-                value="positive"
-                class="radio radio-sm radio-primary"
-              />
-              {{ t('items.editor.positive') }}
-            </label>
-            <label class="flex items-center gap-1.5 cursor-pointer text-sm">
-              <input
-                v-model="form.polarity"
-                type="radio"
-                value="negative"
-                class="radio radio-sm radio-primary"
-                data-testid="polarity-negative"
-              />
-              {{ t('items.editor.negative') }}
-            </label>
-          </div>
-          <p v-if="isEdit" class="text-xs opacity-60">{{ t('items.editor.immutable') }}</p>
-        </fieldset>
-
-        <fieldset v-if="isNumeric(form.trackerType)" class="grid grid-cols-2 gap-3 pt-2">
-          <legend class="text-sm mb-1 font-medium">{{ t('items.editor.measurement') }}</legend>
-          <label class="flex flex-col gap-1">
-            <span class="text-xs text-base-content/70">{{ t('items.editor.unit') }}</span>
-            <input v-model="form.unit" class="input input-bordered input-sm" maxlength="32" />
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="text-xs text-base-content/70">{{ t('items.editor.step') }}</span>
-            <input v-model="form.step" inputmode="decimal" class="input input-bordered input-sm" />
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="text-xs text-base-content/70">{{ t('items.editor.min') }}</span>
-            <input
-              v-model="form.minVal"
-              inputmode="decimal"
-              class="input input-bordered input-sm"
-            />
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="text-xs text-base-content/70">{{ t('items.editor.max') }}</span>
-            <input
-              v-model="form.maxVal"
-              inputmode="decimal"
-              class="input input-bordered input-sm"
-            />
-          </label>
-          <label v-if="form.trackerType === 'metric'" class="col-span-2 flex flex-col gap-1">
-            <span class="text-xs text-base-content/70">{{ t('items.editor.aggregate') }}</span>
-            <select v-model="form.aggregate" class="select select-bordered select-sm">
-              <option value="">{{ t('items.editor.aggDefault') }}</option>
-              <option value="sum">{{ t('items.editor.aggSum') }}</option>
-              <option value="latest">{{ t('items.editor.aggLatest') }}</option>
-              <option value="avg">{{ t('items.editor.aggAvg') }}</option>
-            </select>
-          </label>
-          <label v-if="form.options.length === 0" class="col-span-2 flex flex-col gap-1">
-            <span class="text-xs text-base-content/70">{{ t('items.editor.dailyTarget') }}</span>
-            <input
-              v-model="form.target"
-              inputmode="decimal"
-              class="input input-bordered input-sm"
-              data-testid="f-target"
-            />
-          </label>
-        </fieldset>
-
-        <fieldset v-if="isNumeric(form.trackerType)" class="flex flex-col gap-3 pt-2">
-          <legend class="text-sm font-medium">{{ t('items.editor.options') }}</legend>
-          <div
-            v-for="(o, i) in form.options"
-            :key="i"
-            class="flex flex-wrap items-end gap-2 rounded-lg border border-base-300 bg-base-200/40 p-2.5"
-          >
-            <label class="flex min-w-32 flex-1 flex-col gap-1">
-              <span class="text-xs text-base-content/70">{{ t('items.editor.name') }}</span>
-              <input
-                v-model="o.name"
-                class="input input-bordered input-sm"
-                maxlength="200"
-                :data-testid="`opt-name-${i}`"
-              />
-            </label>
-            <label class="flex w-20 flex-col gap-1">
-              <span class="text-xs text-base-content/70">{{ t('items.editor.unit') }}</span>
-              <input v-model="o.unit" class="input input-bordered input-sm" />
-            </label>
-            <label class="flex w-20 flex-col gap-1">
-              <span class="text-xs text-base-content/70">{{ t('items.editor.step') }}</span>
-              <input v-model="o.step" inputmode="decimal" class="input input-bordered input-sm" />
-            </label>
-            <label class="flex w-24 flex-col gap-1">
-              <span class="text-xs text-base-content/70">{{ t('items.editor.target') }}</span>
-              <input v-model="o.target" inputmode="decimal" class="input input-bordered input-sm" />
-            </label>
-            <button
-              type="button"
-              class="btn btn-ghost btn-sm btn-square"
-              :aria-label="t('items.editor.removeOption')"
-              @click="removeOption(i)"
-            >
-              <Icon icon="lucide:trash-2" aria-hidden="true" />
-            </button>
-          </div>
-          <button
-            type="button"
-            class="btn btn-sm btn-outline self-start"
-            data-testid="add-option"
-            @click="addOption"
-          >
-            <Icon icon="lucide:plus" aria-hidden="true" /> {{ t('items.editor.addOption') }}
-          </button>
-          <div v-if="form.options.length > 0" class="flex flex-wrap items-center gap-2 pt-1">
-            <span class="text-sm">{{ t('items.editor.doneWhen') }}</span>
-            <select v-model="form.completionRule" class="select select-bordered select-sm">
-              <option value="">{{ t('items.editor.doneAny') }}</option>
-              <option value="all">{{ t('items.editor.doneAll') }}</option>
-              <option value="at_least_n">{{ t('items.editor.doneAtLeastN') }}</option>
-            </select>
-            <input
-              v-if="form.completionRule === 'at_least_n'"
-              v-model="form.completionN"
-              inputmode="numeric"
-              class="input input-bordered input-sm w-16"
-            />
           </div>
         </fieldset>
       </div>

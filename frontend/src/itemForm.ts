@@ -283,7 +283,7 @@ export function buildRule(f: ItemForm, patch: boolean): Json {
   } else if (patch || num(f.staleAfterDays) !== null) {
     rule.stale_after_days = num(f.staleAfterDays) ?? 0
   }
-  if (isNumeric(f.trackerType) && f.options.length === 0) {
+  if (f.scheduleType !== 'quota' && isNumeric(f.trackerType) && f.options.length === 0) {
     const t = num(f.target)
     if (t !== null) rule.target_value = t
     else if (patch) rule.target_value = null
@@ -554,14 +554,20 @@ export function previewRule(f: ItemForm, today: string, dtstart?: string): RuleP
       const cmp = t(
         f.quotaComparator === 'at_least' ? 'items.preview.atLeast' : 'items.preview.atMost',
       )
-      const unit = t(
+      const optUnit =
+        f.quotaOption !== null && f.options[f.quotaOption]
+          ? f.options[f.quotaOption].unit.trim()
+          : ''
+      const unitStr = optUnit || f.unit.trim()
+      const unitKey =
         f.quotaMeasure === 'sum'
-          ? 'items.preview.unitSum'
+          ? unitStr
+            ? 'items.preview.unitSumWithUnit'
+            : 'items.preview.unitSum'
           : f.quotaMeasure === 'days'
             ? 'items.preview.unitDays'
-            : 'items.preview.unitTimes',
-        { count: c },
-      )
+            : 'items.preview.unitTimes'
+      const unit = t(unitKey, { count: c, unit: unitStr })
       const period = t(PERIOD_KEY[f.quotaPeriod])
       const window = t(
         f.quotaWindow === 'calendar'

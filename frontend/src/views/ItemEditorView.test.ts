@@ -114,11 +114,23 @@ describe('ItemEditorView', () => {
     })
   })
 
-  it('hides the holiday policy for quota schedules', async () => {
+  it('hides the holiday policy and daily target for quota schedules', async () => {
     const { w } = await mountAt('/items/new')
     expect(w.find('[data-testid=holiday]').exists()).toBe(true)
+    await w.get('[data-testid=tracker-metric]').trigger('click')
+    expect(w.find('[data-testid=f-target]').exists()).toBe(true)
     await w.get('[data-testid=f-schedule]').setValue('quota')
     expect(w.find('[data-testid=holiday]').exists()).toBe(false)
+    expect(w.find('[data-testid=f-target]').exists()).toBe(false)
+    await w.get('[data-testid=f-schedule]').setValue('none')
+    expect(w.find('[data-testid=f-target]').exists()).toBe(true)
+  })
+
+  it('shows counter limit hint when counter tracker is selected', async () => {
+    const { w } = await mountAt('/items/new')
+    expect(w.text()).not.toContain('Counters only track positive habits')
+    await w.get('[data-testid=tracker-counter]').trigger('click')
+    expect(w.text()).toContain('Counters only track positive habits')
   })
 
   it('shows client validation and server reason codes in English', async () => {

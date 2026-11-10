@@ -78,6 +78,12 @@ describe('matrix', () => {
     expect(g.scheduleType).toBe('quota')
     expect(g.quotaComparator).toBe('at_most')
     expect(g.quotaMeasure).toBe('occurrences')
+    const h = emptyForm()
+    h.trackerType = 'counter'
+    h.target = '10'
+    h.trackerType = 'boolean'
+    normalizeForm(h)
+    expect(h.target).toBe('')
   })
 })
 
@@ -98,6 +104,8 @@ describe('buildCreateBody', () => {
   })
   it('quota carries no rrule or holiday fields', () => {
     const f = emptyForm()
+    f.trackerType = 'metric'
+    f.target = '10'
     f.scheduleType = 'quota'
     const rule = (buildCreateBody(f) as { rule: Record<string, unknown> }).rule
     expect(rule).toEqual({
@@ -108,6 +116,15 @@ describe('buildCreateBody', () => {
       quota_window: 'calendar',
       quota_measure: 'days',
     })
+    expect(rule.target_value).toBeUndefined()
+  })
+  it('unscheduled numeric includes target_value', () => {
+    const f = emptyForm()
+    f.trackerType = 'counter'
+    f.target = '50'
+    f.scheduleType = 'none'
+    const rule = (buildCreateBody(f) as { rule: Record<string, unknown> }).rule
+    expect(rule.target_value).toBe(50)
   })
   it('unscheduled and rolling', () => {
     const f = emptyForm()
@@ -252,6 +269,29 @@ describe('previewRule', () => {
     f.scheduleType = 'rolling'
     expect(previewRule(f, '2026-11-08').sentence).toBe(
       'Due again 30 days after the last completion.',
+    )
+    const q = emptyForm()
+    q.trackerType = 'metric'
+    q.polarity = 'negative'
+    q.scheduleType = 'quota'
+    q.quotaComparator = 'at_most'
+    q.quotaCount = '6'
+    q.quotaPeriod = 'year'
+    q.quotaMeasure = 'sum'
+    q.unit = 'cans'
+    expect(previewRule(q, '2026-11-08').sentence).toBe('At most 6 cans in total per calendar year.')
+    const qOpt = emptyForm()
+    qOpt.trackerType = 'metric'
+    qOpt.scheduleType = 'quota'
+    qOpt.quotaComparator = 'at_most'
+    qOpt.quotaCount = '6'
+    qOpt.quotaPeriod = 'year'
+    qOpt.quotaMeasure = 'sum'
+    qOpt.unit = 'items'
+    qOpt.options = [{ name: 'Cola', unit: 'cans', step: '1', target: '' }]
+    qOpt.quotaOption = 0
+    expect(previewRule(qOpt, '2026-11-08').sentence).toBe(
+      'At most 6 cans in total per calendar year.',
     )
   })
 })
