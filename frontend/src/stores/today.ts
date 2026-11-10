@@ -157,17 +157,11 @@ export const useTodayStore = defineStore('today', () => {
   const overdueCards = computed(() =>
     scoped(dueCards.value.filter((c) => c.today?.overdue && !c.today?.done)),
   )
-  const todoCards = computed(() =>
-    scoped(
-      dueCards.value.filter(
-        (c) =>
-          !c.today?.overdue &&
-          (!c.today?.done ||
-            c.detail.tracker_type === 'counter' ||
-            c.detail.tracker_type === 'metric'),
-      ),
-    ),
-  )
+  /** Due today. Completed items stay in place (a visible row of checks) but sink to the end. */
+  const todoCards = computed(() => {
+    const cards = scoped(dueCards.value.filter((c) => !(c.today?.overdue && !c.today?.done)))
+    return [...cards.filter((c) => !c.today?.done), ...cards.filter((c) => c.today?.done)]
+  })
   const unscheduledTodoCards = computed(() => {
     if (isFuture.value) return []
     return scoped(
@@ -203,12 +197,6 @@ export const useTodayStore = defineStore('today', () => {
   )
   const doneCards = computed(() => {
     const map = new Map<number, CardVM>()
-    for (const c of dueCards.value.filter(
-      (c) =>
-        c.today?.done && c.detail.tracker_type !== 'counter' && c.detail.tracker_type !== 'metric',
-    )) {
-      map.set(c.detail.id, c)
-    }
     for (const c of rollingDone.value) {
       map.set(c.detail.id, c)
     }
@@ -229,6 +217,12 @@ export const useTodayStore = defineStore('today', () => {
     if (!view.value) return { done: 0, total: 0 }
     if (filter.value === 'all') return view.value.progress ?? { done: 0, total: 0 }
     return ringStats(scoped(dueCards.value))
+  })
+
+  /** Dated to-dos (due today or overdue) for the second ring. */
+  const todoRing = computed(() => {
+    const cards = scoped(dueCards.value.filter((c) => c.detail.kind === 'event'))
+    return { done: cards.filter((c) => c.today?.done).length, total: cards.length }
   })
 
   /** Filter chips: counts cover every visible card of a category. */
@@ -341,6 +335,7 @@ export const useTodayStore = defineStore('today', () => {
     unscheduledItems,
     upcoming,
     ring,
+    todoRing,
     categoryCounts,
     refresh,
     clear,

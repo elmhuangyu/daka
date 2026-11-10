@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { Icon } from '@iconify/vue'
+import { RouterLink } from 'vue-router'
 import type { Category, CheckinInput, Project } from '../../api'
 import { formatCustomDate } from '../../i18n/format'
 import { useI18n } from '../../i18n'
@@ -19,6 +20,8 @@ const props = defineProps<{
   vm: CardVM
   category: Category | null
   project?: Project | null
+  /** Parent to-do (sub-tasks only). */
+  parent?: { id: number; name: string } | null
   variant: 'todo' | 'done' | 'maintenance' | 'quota'
   busy: boolean
   /** An offline check-in for this item is queued and not yet confirmed. */
@@ -80,6 +83,16 @@ function valueAria(r: ValueRow): string {
   return t('today.card.value')
 }
 
+const toggleLabel = computed(() =>
+  checked.value
+    ? t('today.card.undo')
+    : d.value.kind === 'event'
+      ? t('today.card.complete')
+      : d.value.tracker_type === 'maintenance'
+        ? t('today.card.markDone')
+        : t('today.card.check'),
+)
+
 function toggle() {
   emit('log', {
     item_id: itemId.value,
@@ -126,23 +139,46 @@ function record(r: ValueRow) {
     :data-testid="`card-${d.id}`"
     :aria-busy="busy"
   >
-    <div class="card-body gap-3 p-3.5 sm:p-4">
-      <header class="flex flex-wrap items-center justify-between gap-2">
-        <h3
-          class="name text-base font-semibold flex items-center gap-2 cursor-pointer hover:text-primary transition-colors"
-          :class="{ sensitive: d.effective_sensitive }"
-          @click="emit('openDetails')"
-        >
+    <div class="card-body gap-2 p-2.5 sm:px-3.5">
+      <header class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <div class="flex min-w-0 items-center gap-2">
+          <button
+            v-if="isToggle"
+            type="button"
+            class="btn btn-circle btn-sm shrink-0"
+            :class="checked ? 'btn-success' : 'btn-outline btn-primary'"
+            :disabled="busy"
+            data-testid="toggle"
+            :aria-pressed="checked"
+            :aria-label="toggleLabel"
+            :title="toggleLabel"
+            @click="toggle"
+          >
+            <Icon
+              :icon="checked ? 'lucide:check' : 'lucide:circle'"
+              class="size-4"
+              aria-hidden="true"
+            />
+          </button>
+          <h3
+            class="name text-base font-semibold flex items-center gap-2 cursor-pointer hover:text-primary transition-colors"
+            :class="{
+              sensitive: d.effective_sensitive,
+              'line-through text-base-content/60': variant === 'done',
+            }"
+            @click="emit('openDetails')"
+          >
+            <span
+              v-if="d.color"
+              class="size-2.5 rounded-full shrink-0"
+              :style="{ backgroundColor: d.color }"
+            />
+            {{ d.name }}
+          </h3>
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5">
           <span
-            v-if="d.color"
-            class="size-2.5 rounded-full shrink-0"
-            :style="{ backgroundColor: d.color }"
-          />
-          {{ d.name }}
-        </h3>
-        <div class="flex items-center gap-1.5">
-          <span
-            v-if="d.kind === 'event'"
+            v-if="d.kind === 'event' && d.current_rule.schedule_type !== 'none'"
             class="badge badge-sm"
             :class="
               d.current_rule.schedule_type === 'none'
@@ -165,15 +201,29 @@ function record(r: ValueRow) {
           <span v-if="pending" class="badge badge-warning badge-sm" data-testid="pending-badge">
             <Icon icon="lucide:cloud-off" aria-hidden="true" /> {{ t('today.card.pendingSync') }}
           </span>
-          <span
+          <RouterLink
+            v-if="parent && project"
+            :to="`/projects/${project.id}`"
+            class="badge badge-ghost gap-1 max-w-40 hover:badge-primary"
+            data-testid="parent-badge"
+            :title="t('today.card.openProject')"
+          >
+            <Icon icon="lucide:corner-down-right" class="size-3 shrink-0" aria-hidden="true" />
+            <span class="truncate" :class="{ sensitive: d.effective_sensitive }">{{
+              parent.name
+            }}</span>
+          </RouterLink>
+          <RouterLink
             v-if="project"
-            class="badge badge-outline gap-1"
+            :to="`/projects/${project.id}`"
+            class="badge badge-outline gap-1 hover:badge-primary"
+            :title="t('today.card.openProject')"
             :style="project.color ? { borderColor: project.color } : {}"
             data-testid="project-badge"
           >
             <Icon icon="lucide:folder" class="size-3" aria-hidden="true" />
             {{ project.name }}
-          </span>
+          </RouterLink>
           <span
             v-if="category"
             class="badge badge-outline"
@@ -229,30 +279,6 @@ function record(r: ValueRow) {
         </p>
       </div>
 
-      <!-- boolean / maintenance toggle -->
-      <div v-if="isToggle" class="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          class="btn"
-          :class="checked ? 'btn-ghost' : 'btn-primary'"
-          :disabled="busy"
-          data-testid="toggle"
-          :aria-pressed="checked"
-          @click="toggle"
-        >
-          <Icon :icon="checked ? 'lucide:undo-2' : 'lucide:check'" aria-hidden="true" />
-          {{
-            checked
-              ? t('today.card.undo')
-              : d.kind === 'event'
-                ? t('today.card.complete')
-                : d.tracker_type === 'maintenance'
-                  ? t('today.card.markDone')
-                  : t('today.card.check')
-          }}
-        </button>
-      </div>
-
       <!-- negative boolean: one log per occurrence -->
       <div v-if="isOccurrence" class="flex flex-wrap items-center gap-2">
         <button
@@ -280,8 +306,21 @@ function record(r: ValueRow) {
       </div>
 
       <!-- counter / metric rows -->
-      <div v-for="r in rows" :key="r.key" class="space-y-2" :data-testid="`row-${r.key}`">
-        <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <div
+        v-for="r in rows"
+        :key="r.key"
+        :class="
+          d.tracker_type === 'counter' ? 'flex flex-wrap items-center gap-x-3 gap-y-1' : 'space-y-2'
+        "
+        :data-testid="`row-${r.key}`"
+      >
+        <div
+          :class="
+            d.tracker_type === 'counter'
+              ? 'contents'
+              : 'flex flex-wrap items-baseline justify-between gap-2'
+          "
+        >
           <span
             v-if="r.label"
             class="name text-sm font-medium"
@@ -313,7 +352,7 @@ function record(r: ValueRow) {
         </div>
         <progress
           v-if="d.tracker_type === 'counter' && r.target"
-          class="progress w-full"
+          class="progress min-w-16 flex-1"
           :class="(r.current ?? 0) >= r.target ? 'progress-success' : 'progress-primary'"
           :value="Math.min(r.current ?? 0, r.target)"
           :max="r.target"
@@ -322,10 +361,10 @@ function record(r: ValueRow) {
           "
         ></progress>
 
-        <div v-if="d.tracker_type === 'counter'" class="flex flex-wrap items-center gap-2">
+        <div v-if="d.tracker_type === 'counter'" class="ml-auto flex items-center gap-1.5">
           <button
             type="button"
-            class="btn btn-square"
+            class="btn btn-sm"
             :disabled="busy || (r.current ?? 0) <= 0"
             data-testid="dec"
             :aria-label="
@@ -335,11 +374,11 @@ function record(r: ValueRow) {
             "
             @click="bump(r, -1)"
           >
-            <Icon icon="lucide:minus" aria-hidden="true" />
+            <Icon icon="lucide:minus" aria-hidden="true" /> {{ fmt(r.step) }} {{ r.unit }}
           </button>
           <button
             type="button"
-            class="btn"
+            class="btn btn-sm"
             :class="
               r.target !== null && (r.current ?? 0) >= r.target
                 ? 'btn-outline btn-success'

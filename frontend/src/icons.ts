@@ -31,6 +31,9 @@ const ICONS: Record<string, string> = {
   ),
   'lucide:log-out': wrap('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/>'),
   'lucide:minus': wrap('<path d="M5 12h14"/>'),
+  'lucide:circle': wrap('<circle cx="12" cy="12" r="10"/>'),
+  'lucide:corner-down-right': wrap('<path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>'),
+  'lucide:gauge': wrap('<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>'),
   'lucide:check': wrap('<path d="M20 6 9 17l-5-5"/>'),
   'lucide:x': wrap('<path d="M18 6 6 18M6 6l12 12"/>'),
   'lucide:undo-2': wrap(

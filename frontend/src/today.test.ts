@@ -241,7 +241,7 @@ describe('Today page', () => {
     await flushPromises()
     expect(lastBody()).toEqual({ item_id: 1, mode: 'set' })
     expect(writes()[0][1].headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/)
-    await w.get('[data-testid=done-list] [data-testid=toggle]').trigger('click')
+    await w.get('[data-testid=card-2] [data-testid=toggle]').trigger('click')
     await flushPromises()
     expect(lastBody()).toEqual({ item_id: 2, mode: 'unset' })
   })
@@ -671,7 +671,7 @@ describe('Today page', () => {
     // Appears in unscheduled todos section
     expect(w.find('[data-testid="section-unscheduled-todos"]').exists()).toBe(true)
     expect(w.find('[data-testid="card-99"]').exists()).toBe(true)
-    expect(w.get('[data-testid="card-99"] [data-testid="todo-date-badge"]').text()).toBe('Undated')
+    expect(w.find('[data-testid="card-99"] [data-testid="todo-date-badge"]').exists()).toBe(false)
 
     // Check off the todo
     await w.get('[data-testid="card-99"] button[data-testid="toggle"]').trigger('click')
