@@ -55,6 +55,7 @@ type calendarDayItem struct {
 	ItemID      uint   `json:"item_id"`
 	Name        string `json:"name"`
 	CategoryID  *uint  `json:"category_id"`
+	ProjectID   *uint  `json:"project_id"`
 	TrackerType string `json:"tracker_type"`
 	IsSensitive bool   `json:"is_sensitive"`
 	Due         bool   `json:"due"`
@@ -256,6 +257,7 @@ func (s *server) calendarView(db *gorm.DB, userID, start, end string, onlyItem u
 			e := entries[date]
 			if e == nil {
 				e = &calendarDayItem{ItemID: it.ID, Name: it.Name, CategoryID: it.CategoryID,
+					ProjectID:   it.ProjectID,
 					TrackerType: string(it.TrackerType), IsSensitive: sens(it)}
 				if redact && e.IsSensitive {
 					e.Name = privateItemName

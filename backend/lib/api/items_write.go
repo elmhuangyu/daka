@@ -80,6 +80,7 @@ type patchItemRequest struct {
 	Description *string          `json:"description"`
 	Color       *string          `json:"color"`
 	CategoryID  nullable[uint]   `json:"category_id"`
+	ProjectID   nullable[uint]   `json:"project_id"`
 	IsSensitive *bool            `json:"is_sensitive"`
 	Pinned      *bool            `json:"pinned"`
 	SortOrder   *int             `json:"sort_order"`
@@ -379,6 +380,47 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 			item.IsSensitive = item.IsSensitive || cat.IsSensitive
 		}
 	}
+	if req.ProjectID.Set {
+		// DESIGN 4.1 rule 3: leaving a sensitive project freezes the item as
+		// sensitive unless the caller confirms the exposure. Moving into another
+		// sensitive project is covered by the rules below.
+		leaving := false
+		if item.ProjectID != nil && (req.ProjectID.Null || req.ProjectID.Val != *item.ProjectID) {
+			oldProj, found, err := loadOwnedProject(tx, userID, *item.ProjectID)
+			if err != nil {
+				return result{}, err
+			}
+			if found {
+				projSens, err := projectSensitiveFn(tx, userID)
+				if err != nil {
+					return result{}, err
+				}
+				leaving = projSens(oldProj)
+			}
+		}
+		if leaving && !req.confirmExposure {
+			item.IsSensitive = true
+		}
+		if req.ProjectID.Null {
+			item.ProjectID = nil
+		} else {
+			proj, found, err := loadOwnedProject(tx, userID, req.ProjectID.Val)
+			if err != nil {
+				return result{}, err
+			}
+			if !found {
+				return errResult(http.StatusBadRequest, "invalid project"), nil
+			}
+			projSens, err := projectSensitiveFn(tx, userID)
+			if err != nil {
+				return result{}, err
+			}
+			pid := proj.ID
+			item.ProjectID = &pid
+			// DESIGN 4.1 rule 1: a sensitive project makes its items sensitive.
+			item.IsSensitive = item.IsSensitive || projSens(proj)
+		}
+	}
 
 	defChanged := req.Unit != nil || req.Step != nil || req.MinVal.Set || req.MaxVal.Set ||
 		req.Aggregate != nil || req.WarningDays != nil
@@ -449,7 +491,7 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 	}
 
 	if err := tx.Model(&dbmodels.Item{}).Where("id = ?", item.ID).Select(
-		"Name", "Description", "Color", "CategoryID", "IsSensitive", "Pinned", "SortOrder", "Archived", "RemindTime",
+		"Name", "Description", "Color", "CategoryID", "ProjectID", "IsSensitive", "Pinned", "SortOrder", "Archived", "RemindTime",
 		"Unit", "Step", "MinVal", "MaxVal", "Aggregate", "WarningDays").Updates(&item).Error; err != nil {
 		return result{}, err
 	}

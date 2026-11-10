@@ -63,6 +63,7 @@ type createItemRequest struct {
 	Polarity    string          `json:"polarity"`
 	Color       string          `json:"color,omitempty"`
 	CategoryID  *uint           `json:"category_id"`
+	ProjectID   *uint           `json:"project_id"`
 	IsSensitive bool            `json:"is_sensitive"`
 	Unit        string          `json:"unit"`
 	Step        float64         `json:"step"`
@@ -125,6 +126,7 @@ type itemResponse struct {
 	Polarity    string  `json:"polarity"`
 	Color       string  `json:"color,omitempty"`
 	CategoryID  *uint   `json:"category_id"`
+	ProjectID   *uint   `json:"project_id"`
 	IsSensitive bool    `json:"is_sensitive"`
 	// EffectiveSensitive is Item.is_sensitive OR the category's flag (DESIGN 4.1).
 	EffectiveSensitive bool             `json:"effective_sensitive"`
@@ -299,6 +301,22 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 			// DESIGN 4.1 rule 1: a sensitive category makes its items sensitive.
 			sensitive = sensitive || cat.IsSensitive
 		}
+		if req.ProjectID != nil {
+			proj, found, err := loadOwnedProject(tx, userID, *req.ProjectID)
+			if err != nil {
+				return err
+			}
+			if !found {
+				out = errResult(http.StatusBadRequest, "invalid project")
+				return nil
+			}
+			projSens, err := projectSensitiveFn(tx, userID)
+			if err != nil {
+				return err
+			}
+			// DESIGN 4.1 rule 1: a sensitive project makes its items sensitive.
+			sensitive = sensitive || projSens(proj)
+		}
 		if ver.QuotaMeasure == "" && st == dbmodels.ScheduleQuota {
 			ver.QuotaMeasure = schedule.EffectiveMeasure("", polarity)
 		}
@@ -306,7 +324,7 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 			ver.QuotaWindow = dbmodels.QuotaWindowCalendar
 		}
 		item := dbmodels.Item{
-			UserID: userID, CategoryID: req.CategoryID, Name: name, Color: req.Color,
+			UserID: userID, CategoryID: req.CategoryID, ProjectID: req.ProjectID, Name: name, Color: req.Color,
 			TrackerType: tracker, Kind: kind, Polarity: polarity, IsSensitive: sensitive,
 			Unit: req.Unit, Step: req.Step, MinVal: req.MinVal, MaxVal: req.MaxVal,
 			Aggregate: dbmodels.Aggregate(req.Aggregate), WarningDays: req.WarningDays,
@@ -348,7 +366,7 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 		resp := itemResponse{
 			ID: item.ID, Name: item.Name, TrackerType: string(item.TrackerType),
 			Kind: string(item.Kind), Polarity: string(item.Polarity),
-			CategoryID: item.CategoryID, IsSensitive: item.IsSensitive, EffectiveSensitive: item.IsSensitive,
+			CategoryID: item.CategoryID, ProjectID: item.ProjectID, IsSensitive: item.IsSensitive, EffectiveSensitive: item.IsSensitive,
 			Unit: item.Unit, Step: item.Step, MinVal: item.MinVal, MaxVal: item.MaxVal,
 			Aggregate: string(item.Aggregate), WarningDays: item.WarningDays,
 			Options:     make([]optionResponse, len(opts)),

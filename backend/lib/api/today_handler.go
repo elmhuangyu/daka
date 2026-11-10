@@ -26,6 +26,7 @@ type todayItem struct {
 	ID          uint   `json:"id"`
 	Name        string `json:"name"`
 	CategoryID  *uint  `json:"category_id"`
+	ProjectID   *uint  `json:"project_id"`
 	TrackerType string `json:"tracker_type"`
 	Kind        string `json:"kind"`
 	Color       string `json:"color,omitempty"`
@@ -41,6 +42,7 @@ type upcomingItem struct {
 	ID          uint   `json:"id"`
 	Name        string `json:"name"`
 	CategoryID  *uint  `json:"category_id"`
+	ProjectID   *uint  `json:"project_id"`
 	TrackerType string `json:"tracker_type"`
 	Kind        string `json:"kind"`
 	Color       string `json:"color,omitempty"`
@@ -220,7 +222,7 @@ func (s *server) today(db *gorm.DB, userID string, requestedDate string, redact,
 			itemLogs = []uint{eventCompletedLog.ID}
 		}
 		ti := todayItem{
-			ID: it.ID, Name: it.Name, CategoryID: it.CategoryID,
+			ID: it.ID, Name: it.Name, CategoryID: it.CategoryID, ProjectID: it.ProjectID,
 			TrackerType: string(it.TrackerType), Kind: string(it.Kind),
 			Color:       it.Color,
 			IsSensitive: sens(it),
@@ -272,6 +274,7 @@ func (s *server) today(db *gorm.DB, userID string, requestedDate string, redact,
 				ID:          it.ID,
 				Name:        name,
 				CategoryID:  it.CategoryID,
+				ProjectID:   it.ProjectID,
 				TrackerType: string(it.TrackerType),
 				Kind:        string(it.Kind),
 				Color:       it.Color,

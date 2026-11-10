@@ -190,6 +190,7 @@ func buildItemResponses(db *gorm.DB, items []dbmodels.Item, today string) ([]ite
 		resp := itemResponse{
 			ID: it.ID, Name: it.Name, Description: it.Description, TrackerType: string(it.TrackerType),
 			Kind: string(it.Kind), Polarity: string(it.Polarity), Color: it.Color, CategoryID: it.CategoryID,
+			ProjectID:   it.ProjectID,
 			IsSensitive: it.IsSensitive, EffectiveSensitive: sens(it), Pinned: it.Pinned, SortOrder: it.SortOrder, Archived: it.Archived,
 			RemindTime: it.RemindTime, Unit: it.Unit, Step: it.Step, MinVal: it.MinVal, MaxVal: it.MaxVal,
 			Aggregate: string(it.Aggregate), WarningDays: it.WarningDays,
@@ -255,7 +256,7 @@ func searchTerms(q string) ([]string, bool) {
 	return terms, true
 }
 
-// GET /api/items?q=&kind=&polarity=&category_id=&archived=&pinned=&include=stats&redact=1
+// GET /api/items?q=&kind=&polarity=&category_id=&project_id=&archived=&pinned=&include=stats&redact=1
 func (s *server) listItems(w http.ResponseWriter, r *http.Request) {
 	userID, ok := requestUser(w, r)
 	if !ok {
@@ -302,6 +303,14 @@ func (s *server) listItems(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		tx = tx.Where("category_id = ?", id)
+	}
+	if v := q.Get("project_id"); v != "" {
+		id, err := strconv.ParseUint(v, 10, 32)
+		if err != nil {
+			bad("invalid project_id")
+			return
+		}
+		tx = tx.Where("project_id = ?", id)
 	}
 	switch q.Get("archived") {
 	case "", "false", "0":

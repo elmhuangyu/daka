@@ -441,3 +441,37 @@ func TestTodayTodoRescheduleAndUndate(t *testing.T) {
 	require.False(t, td.Items[0].Overdue)
 	require.False(t, td.Items[0].Done)
 }
+
+func TestTodayItemProjectID(t *testing.T) {
+	e := newEnv(t)
+	p := e.createProject("u1", m{"name": "Home Renovation"})
+
+	// Item due today
+	code, itToday := e.createItem("u1", m{
+		"name": "Buy paint", "tracker_type": "boolean",
+		"project_id": p.ID,
+		"rule":       m{"schedule_type": "fixed_rrule", "rrule_string": "FREQ=DAILY;COUNT=1", "dtstart": "2026-11-07", "until": "2026-11-07"},
+	})
+	require.Equal(t, 201, code)
+	require.NotNil(t, itToday.ProjectID)
+	require.Equal(t, p.ID, *itToday.ProjectID)
+
+	// Item upcoming in the future
+	code, itUp := e.createItem("u1", m{
+		"name": "Install flooring", "tracker_type": "boolean",
+		"project_id": p.ID,
+		"rule":       m{"schedule_type": "fixed_rrule", "rrule_string": "FREQ=DAILY;COUNT=1", "dtstart": "2026-11-10", "until": "2026-11-10"},
+	})
+	require.Equal(t, 201, code)
+
+	td := e.today("u1", "")
+	require.Len(t, td.Items, 1)
+	require.Equal(t, itToday.ID, td.Items[0].ID)
+	require.NotNil(t, td.Items[0].ProjectID)
+	require.Equal(t, p.ID, *td.Items[0].ProjectID)
+
+	require.Len(t, td.Upcoming, 1)
+	require.Equal(t, itUp.ID, td.Upcoming[0].ID)
+	require.NotNil(t, td.Upcoming[0].ProjectID)
+	require.Equal(t, p.ID, *td.Upcoming[0].ProjectID)
+}

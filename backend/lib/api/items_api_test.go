@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -513,4 +514,138 @@ func TestTodayUsesArchivedOptionExclusion(t *testing.T) {
 	require.False(t, e.today("", "").Items[0].Done, "completion_rule all needs both options")
 	require.Equal(t, 200, e.do("DELETE", itemPath(it.ID)+"/options/"+idStr(push), "", "", nil).Code)
 	require.True(t, e.today("", "").Items[0].Done, "archived option no longer required")
+}
+
+func TestItemProjectID(t *testing.T) {
+	e := newEnv(t)
+	p1 := e.createProject("u1", m{"name": "Project One"})
+	p2 := e.createProject("u2", m{"name": "Project Two"})
+
+	// 1. Create item with project_id
+	w := e.do("POST", "/api/items", "u1", "", m{
+		"name": "Item in Project", "tracker_type": "boolean",
+		"project_id": p1.ID,
+		"rule":       m{"schedule_type": "none"},
+	})
+	require.Equal(t, 201, w.Code, w.Body.String())
+	it1 := decode[itemResponse](t, w)
+	require.NotNil(t, it1.ProjectID)
+	require.Equal(t, p1.ID, *it1.ProjectID)
+
+	// GET item verifies project_id
+	w = e.do("GET", itemPath(it1.ID), "u1", "", nil)
+	require.Equal(t, 200, w.Code)
+	got1 := decode[itemResponse](t, w)
+	require.NotNil(t, got1.ProjectID)
+	require.Equal(t, p1.ID, *got1.ProjectID)
+
+	// 2. Reject non-existent and cross-user project_id on creation
+	w = e.do("POST", "/api/items", "u1", "", m{
+		"name": "Invalid Proj", "tracker_type": "boolean",
+		"project_id": 99999,
+		"rule":       m{"schedule_type": "none"},
+	})
+	require.Equal(t, 400, w.Code)
+	require.Contains(t, w.Body.String(), "invalid project")
+
+	w = e.do("POST", "/api/items", "u1", "", m{
+		"name": "Cross User Proj", "tracker_type": "boolean",
+		"project_id": p2.ID,
+		"rule":       m{"schedule_type": "none"},
+	})
+	require.Equal(t, 400, w.Code)
+	require.Contains(t, w.Body.String(), "invalid project")
+
+	// 3. Filter items by project_id
+	itNoProj := e.mustCreate("u1", m{"name": "Item No Project", "tracker_type": "boolean", "rule": m{"schedule_type": "none"}})
+	require.Nil(t, itNoProj.ProjectID)
+
+	list := func(q string) []itemResponse {
+		w := e.do("GET", "/api/items"+q, "u1", "", nil)
+		require.Equal(t, 200, w.Code, w.Body.String())
+		return decode[struct {
+			Items []itemResponse `json:"items"`
+		}](t, w).Items
+	}
+	all := list("")
+	require.Len(t, all, 2)
+
+	filtered := list(fmt.Sprintf("?project_id=%d", p1.ID))
+	require.Len(t, filtered, 1)
+	require.Equal(t, it1.ID, filtered[0].ID)
+
+	wBadProj := e.do("GET", "/api/items?project_id=abc", "u1", "", nil)
+	require.Equal(t, 400, wBadProj.Code)
+
+	// 4. Patching item's project_id
+	p3 := e.createProject("u1", m{"name": "Project Three"})
+	w = e.do("PATCH", itemPath(it1.ID), "u1", "", m{"project_id": p3.ID})
+	require.Equal(t, 200, w.Code, w.Body.String())
+	itPatched := decode[itemResponse](t, w)
+	require.NotNil(t, itPatched.ProjectID)
+	require.Equal(t, p3.ID, *itPatched.ProjectID)
+
+	// Reject foreign and non-existent project on patch
+	require.Equal(t, 400, e.do("PATCH", itemPath(it1.ID), "u1", "", m{"project_id": p2.ID}).Code)
+	require.Equal(t, 400, e.do("PATCH", itemPath(it1.ID), "u1", "", m{"project_id": 99999}).Code)
+
+	// Unlink project (set to null)
+	w = e.do("PATCH", itemPath(it1.ID), "u1", "", m{"project_id": nil})
+	require.Equal(t, 200, w.Code, w.Body.String())
+	itUnlinked := decode[itemResponse](t, w)
+	require.Nil(t, itUnlinked.ProjectID)
+
+	// 5. Sensitivity inheritance and unlinking
+	// Case A: Create item in sensitive project
+	pSens := e.createProject("u1", m{"name": "Secret Project", "is_sensitive": true})
+	w = e.do("POST", "/api/items", "u1", "", m{
+		"name": "Classified Item", "tracker_type": "boolean",
+		"project_id": pSens.ID, "is_sensitive": false,
+		"rule": m{"schedule_type": "none"},
+	})
+	require.Equal(t, 201, w.Code)
+	itSens := decode[itemResponse](t, w)
+	require.True(t, itSens.IsSensitive, "inherits sensitivity from project")
+	require.True(t, itSens.EffectiveSensitive)
+
+	// Case B: Unlinking without confirm_exposure freezes sensitivity
+	w = e.do("PATCH", itemPath(itSens.ID), "u1", "", m{"project_id": nil, "is_sensitive": false})
+	require.Equal(t, 200, w.Code)
+	itFrozen := decode[itemResponse](t, w)
+	require.True(t, itFrozen.IsSensitive, "item freezes as sensitive without confirm_exposure")
+
+	// Case C: Unlinking with confirm_exposure=1 allows exposing
+	w = e.do("POST", "/api/items", "u1", "", m{
+		"name": "Secret Item 2", "tracker_type": "boolean",
+		"project_id": pSens.ID,
+		"rule":       m{"schedule_type": "none"},
+	})
+	require.Equal(t, 201, w.Code)
+	itSens2 := decode[itemResponse](t, w)
+	require.True(t, itSens2.IsSensitive)
+
+	w = e.do("PATCH", itemPath(itSens2.ID)+"?confirm_exposure=1", "u1", "", m{"project_id": nil, "is_sensitive": false})
+	require.Equal(t, 200, w.Code)
+	itExposed := decode[itemResponse](t, w)
+	require.False(t, itExposed.IsSensitive, "confirm_exposure allows item to become non-sensitive")
+
+	// Case D: Project inherits sensitivity from category
+	catSens := dbmodels.Category{UserID: "u1", Name: "SensCat", IsSensitive: true}
+	require.NoError(t, e.db.Write().Create(&catSens).Error)
+	pCatSens := e.createProject("u1", m{"name": "Project in Sens Cat", "category_id": catSens.ID, "is_sensitive": false})
+
+	itNormal := e.mustCreate("u1", m{"name": "Normal Item", "tracker_type": "boolean", "rule": m{"schedule_type": "none"}})
+	require.False(t, itNormal.IsSensitive)
+
+	// Moving item into pCatSens makes it sensitive
+	w = e.do("PATCH", itemPath(itNormal.ID), "u1", "", m{"project_id": pCatSens.ID})
+	require.Equal(t, 200, w.Code)
+	itNormalSens := decode[itemResponse](t, w)
+	require.True(t, itNormalSens.IsSensitive, "project in sensitive category makes item sensitive")
+
+	// Moving it out without confirm_exposure freezes it
+	w = e.do("PATCH", itemPath(itNormal.ID), "u1", "", m{"project_id": nil, "is_sensitive": false})
+	require.Equal(t, 200, w.Code)
+	itNormalFrozen := decode[itemResponse](t, w)
+	require.True(t, itNormalFrozen.IsSensitive, "leaving project whose category is sensitive freezes item")
 }

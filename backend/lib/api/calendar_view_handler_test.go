@@ -557,3 +557,24 @@ func TestCalendarViewTodoRescheduleAndUndate(t *testing.T) {
 	require.Equal(t, calDone, d3.item(t, ev2.ID).Status)
 	require.True(t, d3.item(t, ev2.ID).Done)
 }
+
+func TestCalendarViewItemProjectID(t *testing.T) {
+	e := newEnv(t)
+	p := e.createProject("u1", m{"name": "Launch Project"})
+
+	code, it := e.createItem("u1", m{
+		"name": "Beta release", "tracker_type": "boolean",
+		"project_id": p.ID,
+		"rule":       m{"schedule_type": "fixed_rrule", "rrule_string": "FREQ=DAILY", "dtstart": "2026-11-07"},
+	})
+	require.Equal(t, 201, code)
+	require.NotNil(t, it.ProjectID)
+	require.Equal(t, p.ID, *it.ProjectID)
+
+	r := e.calView("u1", "?start=2026-11-07&end=2026-11-07")
+	d := r.day(t, "2026-11-07")
+	require.True(t, d.has(it.ID))
+	dayIt := d.item(t, it.ID)
+	require.NotNil(t, dayIt.ProjectID)
+	require.Equal(t, p.ID, *dayIt.ProjectID)
+}
