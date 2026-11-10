@@ -725,7 +725,7 @@ function taskDueDate(task: ItemDetail): string | null {
                   <button
                     v-if="!entry.depth"
                     type="button"
-                    class="btn btn-xs btn-ghost btn-circle text-base-content/60 hover:text-primary sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
+                    class="btn btn-xs btn-ghost btn-circle text-base-content/60 hover:text-primary"
                     :title="t('projects.addSubtask')"
                     :data-testid="`btn-add-subtask-${entry.task.id}`"
                     @click="openSubtaskForm(entry.task)"
