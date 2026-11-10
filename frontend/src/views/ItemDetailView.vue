@@ -141,6 +141,7 @@ const streakText = computed(() => {
               {{ store.item.pinned ? t('items.unpin') : t('items.pin') }}
             </button>
             <RouterLink
+              v-if="store.item.kind !== 'event'"
               :to="`/items/${store.item.id}/edit`"
               class="btn btn-sm shadow-xs"
               data-testid="edit"

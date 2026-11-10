@@ -42,11 +42,6 @@ export interface TodayView {
   upcoming?: UpcomingItem[]
 }
 
-export interface NewItem {
-  name: string
-  rrule_string: string
-}
-
 export class ApiError extends Error {
   status: number
   /** Machine-readable error code from the server body (`{"error": code}`), when present. */
@@ -694,19 +689,6 @@ export function getExternalCalendar(
   )
 }
 
-export function createItem(item: NewItem): Promise<unknown> {
-  return request(
-    '/api/items',
-    jsonInit('POST', {
-      name: item.name,
-      tracker_type: 'boolean',
-      kind: 'habit',
-      polarity: 'positive',
-      rule: { schedule_type: 'fixed_rrule', rrule_string: item.rrule_string, holiday_mode: 'none' },
-    }),
-  )
-}
-
 export function createAdHocEvent(name: string): Promise<{ id: number }> {
   return request<{ id: number }>(
     '/api/items',
@@ -908,7 +890,7 @@ export function listItemsPanel(opts: {
   archived?: boolean
   redact: boolean
 }): Promise<{ items: ItemDetail[] }> {
-  const p = new URLSearchParams({ include: 'stats' })
+  const p = new URLSearchParams({ include: 'stats', kind: 'habit' })
   if (opts.q) p.set('q', opts.q)
   if (opts.archived) p.set('archived', 'true')
   if (opts.redact) p.set('redact', '1')

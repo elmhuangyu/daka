@@ -9,7 +9,6 @@ import { findCategory, type CardVM } from '../today/logic'
 import CompletionRing from '../components/today/CompletionRing.vue'
 import CategoryFilter from '../components/today/CategoryFilter.vue'
 import ItemCard from '../components/today/ItemCard.vue'
-import QuickAddForm from '../components/today/QuickAddForm.vue'
 import { createAdHocEvent, createScheduledEvent, describeError, type CheckinInput } from '../api'
 import { useI18n } from '../i18n'
 import { formatCustomDate, weekdayName } from '../i18n/format'
@@ -496,7 +495,5 @@ watch(
         </ul>
       </div>
     </template>
-
-    <QuickAddForm @created="store.refresh()" />
   </section>
 </template>

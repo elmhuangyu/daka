@@ -148,9 +148,19 @@ async function mountAt(path: string) {
 describe('items panel', () => {
   it('lists items, groups pinned first and shows the quota badge', async () => {
     const { w } = await mountAt('/items')
+    const itemCall = calls.find((c) => c.url.startsWith('/api/items?'))
+    expect(itemCall?.url).toContain('kind=habit')
     expect(w.get('[data-testid=group-pinned]').text()).toContain('Cola')
     expect(w.get('[data-testid=group-pinned] [data-testid=badge]').text()).toBe('1/4')
     expect(w.get('[data-testid=group-none]').text()).toContain('Run')
+    w.unmount()
+  })
+
+  it('excludes event items from the panel', async () => {
+    listed = [item(1, 'Habit 1', { kind: 'habit' }), item(2, 'One-off Event', { kind: 'event' })]
+    const { w } = await mountAt('/items')
+    expect(w.text()).toContain('Habit 1')
+    expect(w.text()).not.toContain('One-off Event')
     w.unmount()
   })
 
@@ -268,6 +278,43 @@ describe('item detail', () => {
     expect(calls.filter((c) => c.url.includes('redact=1')).length).toBeGreaterThanOrEqual(3)
     w.unmount()
   })
+
+  it('hides edit button for event items in detail view', async () => {
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      if (url === '/api/auth/status')
+        return jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
+      if (url.startsWith('/api/items?')) return jsonRes({ items: [] })
+      if (url === '/api/categories') return jsonRes({ categories: [] })
+      if (/^\/api\/items\/2\/stats/.test(url)) {
+        return jsonRes({
+          item_id: 2,
+          name: 'One-off',
+          today: '2026-11-07',
+          last_at: null,
+          last_date: null,
+          days_since_last: null,
+          summary: '',
+          counts: { last_30_days: 0, this_year: 0, total: 0 },
+          active_days: {},
+          options: [],
+          streak: { applicable: false },
+          completion_rate_90: null,
+          heatmap: [],
+          quota: null,
+          maintenance: null,
+        })
+      }
+      if (/^\/api\/items\/2(\?|$)/.test(url) && method === 'GET') {
+        return jsonRes(item(2, 'One-off', { kind: 'event' }))
+      }
+      return jsonRes({})
+    })
+    const { w } = await mountAt('/items/2')
+    expect(w.find('[data-testid=item-name]').exists()).toBe(true)
+    expect(w.find('[data-testid=edit]').exists()).toBe(false)
+    w.unmount()
+  })
 })
 
 describe('items logic', () => {
@@ -283,6 +330,7 @@ describe('items logic', () => {
     const cats = [{ id: 3, name: 'Home', color: '', icon: '', is_sensitive: true, sort_order: 0 }]
     expect(groupItems([d], cats, 'all')[0]).toMatchObject({ title: 'Home', sensitive: true })
     expect(groupItems([d], cats, 'none')).toEqual([])
+    expect(groupItems([{ ...d, kind: 'event' }], cats, 'all')).toEqual([])
     expect(heatmapColumns([{ date: '2026-11-04' }])[0].filter((c) => c === null)).toHaveLength(3)
     expect(monthRange('2024-02')).toEqual({ start: '2024-02-01', end: '2024-02-29' })
     expect(shiftMonth('2026-01', -1)).toBe('2025-12')

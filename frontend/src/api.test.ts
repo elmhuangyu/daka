@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createItem, getMe, resetCsrf, setCheckin } from './api'
+import { createAdHocEvent, getMe, resetCsrf, setCheckin } from './api'
 
 function jsonRes(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -29,7 +29,7 @@ const meCalls = () => fetchMock.mock.calls.filter((c) => c[0] === '/api/auth/me'
 describe('CSRF header', () => {
   it('is sent on writes with the token from /api/auth/me, fetched once', async () => {
     await setCheckin(1, true)
-    await createItem({ name: 'x', rrule_string: 'FREQ=DAILY' })
+    await createAdHocEvent('x')
     expect(writes()).toHaveLength(2)
     for (const [, init] of writes()) expect(init.headers['X-Daka-CSRF']).toBe('tok-1')
     expect(meCalls()).toHaveLength(1)

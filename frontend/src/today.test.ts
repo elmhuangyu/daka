@@ -475,18 +475,6 @@ describe('Today page', () => {
     expect(w.html()).not.toContain('STALE')
   })
 
-  it('quick add builds the rrule', async () => {
-    const w = await mountApp()
-    await w.get('input[aria-label=Name]').setValue('Run')
-    await w.get('input[aria-label="Interval in days"]').setValue(3)
-    await w.get('form').trigger('submit')
-    await flushPromises()
-    const call = fetchMock.mock.calls.find(
-      (c) => c[1]?.method === 'POST' && String(c[0]) === '/api/items',
-    )!
-    expect(JSON.parse(call[1].body).rule.rrule_string).toBe('FREQ=DAILY;INTERVAL=3')
-  })
-
   it('supports date picker and schedules future events without check-in', async () => {
     const w = await mountApp()
     expect(w.find('[data-testid=open-date-picker]').exists()).toBe(true)

@@ -30,6 +30,25 @@ beforeEach(() => {
         ? jsonRes({ error: 'invalid combination', reason: 'quota_option_required' }, 400)
         : jsonRes({ id: 5 }, 201)
     }
+    if (url === '/api/items/5' && method === 'GET') {
+      return jsonRes({
+        id: 5,
+        name: 'Dentist',
+        tracker_type: 'boolean',
+        kind: 'event',
+        polarity: 'positive',
+        category_id: null,
+        effective_sensitive: false,
+        pinned: false,
+        archived: false,
+        options: [],
+        current_rule: {
+          schedule_type: 'fixed_rrule',
+          rrule_string: 'FREQ=DAILY;COUNT=1',
+          effective_from: '2026-01-01',
+        },
+      })
+    }
     return jsonRes({})
   })
 })
@@ -128,31 +147,19 @@ describe('ItemEditorView', () => {
     }
   })
 
-  it('creates a one-time task via the separated tab', async () => {
+  it('renders strictly habit-only with no kind tabs and collapsed more settings', async () => {
     const { w } = await mountAt('/items/new')
-    // Click on the One-time Task tab
-    await w.get('[data-testid=kind-event]').trigger('click')
-    await w.get('[data-testid=f-name]').setValue('Dentist Appointment')
+    expect(w.find('[data-testid=kind-habit]').exists()).toBe(false)
+    expect(w.find('[data-testid=kind-event]').exists()).toBe(false)
+    const details = w.findAll('details')
+    expect(details.length).toBeGreaterThan(0)
+    for (const d of details) {
+      expect(d.attributes('open')).toBeUndefined()
+    }
+  })
 
-    const dueDate = w.get<HTMLInputElement>('[data-testid=f-due-date]')
-    await dueDate.setValue('2026-11-20')
-    await dueDate.trigger('blur')
-
-    expect(w.get('[data-testid=preview-sentence]').text()).toBe('Once on 2026-11-20.')
-
-    await w.get('form').trigger('submit')
-    await flushPromises()
-
-    const post = calls.find((c) => c.url === '/api/items' && c.method === 'POST')!
-    expect(post.body).toMatchObject({
-      name: 'Dentist Appointment',
-      kind: 'event',
-      rule: {
-        schedule_type: 'fixed_rrule',
-        rrule_string: 'FREQ=DAILY;COUNT=1',
-        dtstart: '2026-11-20',
-        until: '2026-11-20',
-      },
-    })
+  it('redirects to / when attempting to edit an event', async () => {
+    const { router } = await mountAt('/items/5/edit')
+    expect(router.currentRoute.value.path).toBe('/')
   })
 })

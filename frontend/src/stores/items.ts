@@ -47,7 +47,7 @@ export const useItemsStore = defineStore('items', () => {
         api.getCategories(),
       ])
       if (my !== seq) return
-      items.value = it.items ?? []
+      items.value = (it.items ?? []).filter((item) => item.kind !== 'event')
       categories.value = (cats.categories ?? []).map((c) =>
         redact && c.is_sensitive ? { ...c, name: t('common.privateCategory'), icon: '' } : c,
       )

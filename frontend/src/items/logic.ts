@@ -19,7 +19,8 @@ export function groupItems(
 ): PanelGroup[] {
   const shown = items.filter(
     (i) =>
-      filter === 'all' || (filter === 'none' ? i.category_id === null : i.category_id === filter),
+      i.kind !== 'event' &&
+      (filter === 'all' || (filter === 'none' ? i.category_id === null : i.category_id === filter)),
   )
   const groups: PanelGroup[] = []
   const pinned = shown.filter((i) => i.pinned)
