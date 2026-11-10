@@ -594,6 +594,13 @@ const showHoliday = computed(() => holidayAllowed(form))
                   {{ t(`items.editor.sched.${s}`) }}
                 </option>
               </select>
+              <p
+                v-if="form.scheduleType === 'none'"
+                class="text-xs text-base-content/60 pt-1"
+                data-testid="sched-none-hint"
+              >
+                {{ t('items.editor.schedNoneHint') }}
+              </p>
             </label>
 
             <label v-if="form.scheduleType === 'fixed_rrule'" class="flex flex-col gap-1.5">

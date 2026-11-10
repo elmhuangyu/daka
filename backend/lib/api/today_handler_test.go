@@ -312,6 +312,20 @@ func TestTodayOverdueEventAndUpcoming(t *testing.T) {
 	})
 	require.Equal(t, 201, code)
 
+	// Create a daily habit which must NOT appear in Upcoming.
+	code, dailyHabit := e.createItem("", m{
+		"name":         "Daily water",
+		"kind":         "habit",
+		"tracker_type": "counter",
+		"rule": m{
+			"schedule_type": "fixed_rrule",
+			"rrule_string":  "FREQ=DAILY",
+			"dtstart":       "2026-11-01",
+			"holiday_mode":  "none",
+		},
+	})
+	require.Equal(t, 201, code)
+
 	// Fetch today (2026-11-07).
 	resp := e.today("", "")
 	require.Equal(t, "2026-11-07", resp.Date)
@@ -340,6 +354,10 @@ func TestTodayOverdueEventAndUpcoming(t *testing.T) {
 	require.NotNil(t, foundUp, "future item should appear in upcoming")
 	require.Equal(t, "2026-11-09", foundUp.DueDate)
 	require.Equal(t, 2, foundUp.DaysUntil)
+
+	for _, item := range resp.Upcoming {
+		require.NotEqual(t, dailyHabit.ID, item.ID, "daily recurring habit must not appear in upcoming")
+	}
 
 	// After checking in the overdue event on 2026-11-07, it should be marked done.
 	e.checkin(ev.ID, "2026-11-07")

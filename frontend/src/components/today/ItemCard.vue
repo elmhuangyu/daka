@@ -288,10 +288,20 @@ function record(r: ValueRow) {
             :class="{ sensitive: d.effective_sensitive }"
             >{{ r.label }}</span
           >
-          <span class="text-sm" data-testid="row-value">
+          <span class="text-sm flex items-center gap-1.5" data-testid="row-value">
             <template v-if="d.tracker_type === 'counter'">
-              {{ fmt(r.current ?? 0)
-              }}<template v-if="r.target !== null"> / {{ fmt(r.target) }}</template> {{ r.unit }}
+              <span>
+                {{ fmt(r.current ?? 0)
+                }}<template v-if="r.target !== null"> / {{ fmt(r.target) }}</template> {{ r.unit }}
+              </span>
+              <span
+                v-if="r.target !== null && (r.current ?? 0) >= r.target"
+                class="badge badge-success badge-xs gap-1 font-normal"
+                data-testid="target-met-badge"
+              >
+                <Icon icon="lucide:check" class="size-3" />
+                {{ t('today.card.goalMet') }}
+              </span>
             </template>
             <template v-else>
               {{ r.current === null ? t('today.card.notRecorded') : `${fmt(r.current)} ${r.unit}`
@@ -303,7 +313,8 @@ function record(r: ValueRow) {
         </div>
         <progress
           v-if="d.tracker_type === 'counter' && r.target"
-          class="progress progress-primary w-full"
+          class="progress w-full"
+          :class="(r.current ?? 0) >= r.target ? 'progress-success' : 'progress-primary'"
           :value="Math.min(r.current ?? 0, r.target)"
           :max="r.target"
           :aria-label="
@@ -328,7 +339,12 @@ function record(r: ValueRow) {
           </button>
           <button
             type="button"
-            class="btn btn-primary"
+            class="btn"
+            :class="
+              r.target !== null && (r.current ?? 0) >= r.target
+                ? 'btn-outline btn-success'
+                : 'btn-primary'
+            "
             :disabled="busy"
             data-testid="inc"
             :aria-label="

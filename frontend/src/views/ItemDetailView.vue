@@ -178,7 +178,7 @@ const streakText = computed(() => {
               {{ t('items.detail.longest', { count: store.stats.streak.longest }) }}
             </div>
           </div>
-          <div class="stat">
+          <div v-if="store.stats.completion_rate_90 !== null" class="stat">
             <div class="stat-title text-xs font-medium">{{ t('items.detail.completion') }}</div>
             <div class="stat-value text-lg text-primary" data-testid="stat-completion">
               {{ pct(store.stats.completion_rate_90) }}

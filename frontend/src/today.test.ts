@@ -296,6 +296,28 @@ describe('Today page', () => {
     expect(lastBody()).toEqual({ item_id: 1, mode: 'delta', value: 700 })
   })
 
+  it('counter remains visible and incrementable in todoCards after meeting target', async () => {
+    world.today = [tItem(1, 'Water', { tracker_type: 'counter', done: true })]
+    world.items = [
+      detail({
+        id: 1,
+        name: 'Water',
+        tracker_type: 'counter',
+        unit: 'glasses',
+        step: 1,
+        current_rule: rule({ target_value: 8 }),
+      }),
+    ]
+    world.logs = [{ id: 1, item_id: 1, option_id: null, date: '', value: 8, note: '' }]
+    const w = await mountApp()
+    expect(w.find('[data-testid="card-1"]').exists()).toBe(true)
+    expect(w.get('[data-testid=target-met-badge]').text()).toBe('Goal met')
+    expect(w.get('[data-testid=row-value]').text()).toContain('8 / 8 glasses')
+    await w.get('[data-testid=inc]').trigger('click')
+    await flushPromises()
+    expect(lastBody()).toEqual({ item_id: 1, mode: 'delta', value: 1 })
+  })
+
   it('options: option pick sends option_id; ad-hoc sends adhoc with name in note', async () => {
     world.today = [tItem(1, 'Exercise', { tracker_type: 'counter' })]
     world.items = [
@@ -859,5 +881,37 @@ describe('Today page', () => {
     const badge = card.find('[data-testid="project-badge"]')
     expect(badge.exists()).toBe(true)
     expect(badge.text()).toContain('Work')
+  })
+
+  it('increments an existing unscheduled counter habit with delta mode from pinned quick log', async () => {
+    world.items = [
+      detail({
+        id: 50,
+        name: 'Coffee',
+        tracker_type: 'counter',
+        step: 1,
+        pinned: true,
+        current_rule: rule({ schedule_type: 'none' }),
+      }),
+    ]
+    const w = await mountApp()
+
+    const pinnedSection = w.find('[data-testid="pinned-quick-logs"]')
+    expect(pinnedSection.exists()).toBe(true)
+    const coffeeBtn = w.get('[data-testid="pinned-log-50"]')
+    expect(coffeeBtn.text()).toContain('Coffee')
+
+    await coffeeBtn.trigger('click')
+    await flushPromises()
+
+    const checkinPost = fetchMock.mock.calls.find((c) => {
+      if (c[1]?.method !== 'POST' || String(c[0]) !== '/api/checkins') return false
+      const b = JSON.parse(c[1].body)
+      return b.item_id === 50
+    })
+    expect(checkinPost).toBeTruthy()
+    const checkinBody = JSON.parse(checkinPost![1].body)
+    expect(checkinBody.mode).toBe('delta')
+    expect(checkinBody.value).toBe(1)
   })
 })

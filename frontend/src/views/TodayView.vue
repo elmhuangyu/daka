@@ -130,6 +130,19 @@ const matchingUnscheduled = computed(() => {
   return store.unscheduledItems.filter((it) => it.name.toLowerCase().includes(q))
 })
 
+const pinnedUnscheduledHabits = computed(() =>
+  store.unscheduledItems.filter((it) => it.kind !== 'event' && it.pinned),
+)
+
+function todayCount(it: { id: number; tracker_type?: string }): number | null {
+  const itemLogs = store.logs.filter((l) => l.item_id === it.id)
+  if (!itemLogs.length) return null
+  if (it.tracker_type === 'counter') {
+    return itemLogs.reduce((acc, l) => acc + (l.value ?? 0), 0)
+  }
+  return itemLogs.length
+}
+
 function onBlurQuickLog() {
   setTimeout(() => {
     quickLogOpen.value = false
@@ -175,16 +188,26 @@ async function submitQuickLog(target: { id?: number; name: string }) {
       await createScheduledEvent(name, targetDate)
     } else {
       let itemId = target.id
+      let existingItem = target.id ? store.items.find((it) => it.id === target.id) : undefined
       if (!itemId) {
         const exact = matchingUnscheduled.value.find(
           (it) => it.name.toLowerCase() === name.toLowerCase(),
         )
         if (exact) {
           itemId = exact.id
+          existingItem = exact
         }
       }
       if (itemId) {
-        await store.submit({ item_id: itemId, mode: 'set', value: 1 })
+        if (existingItem?.tracker_type === 'counter') {
+          const step = existingItem.step && existingItem.step > 0 ? existingItem.step : 1
+          await store.submit({ item_id: itemId, mode: 'delta', value: step })
+        } else if (existingItem?.tracker_type === 'metric') {
+          const step = existingItem.step && existingItem.step > 0 ? existingItem.step : 1
+          await store.submit({ item_id: itemId, mode: 'append', value: step })
+        } else {
+          await store.submit({ item_id: itemId, mode: 'set', value: 1 })
+        }
       } else {
         const created = await createAdHocEvent(name)
         await store.submit({ item_id: created.id, mode: 'set', value: 1 })
@@ -680,10 +703,56 @@ watch(
                 class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-base-200 flex items-center justify-between cursor-pointer"
                 @mousedown.prevent="submitQuickLog(u)"
               >
-                <span class="font-medium text-base-content/90">{{ u.name }}</span>
-                <span class="text-xs text-base-content/50">{{ t('today.card.check') }}</span>
+                <div class="flex items-center gap-2 min-w-0">
+                  <span
+                    class="font-medium text-base-content/90 truncate"
+                    :class="{ sensitive: u.effective_sensitive }"
+                    >{{ u.name }}</span
+                  >
+                  <span v-if="todayCount(u) !== null" class="badge badge-xs badge-neutral shrink-0">
+                    {{ todayCount(u) }}
+                  </span>
+                </div>
+                <span class="text-xs text-base-content/50 shrink-0">
+                  {{
+                    u.tracker_type === 'counter'
+                      ? `+${u.step && u.step > 0 ? u.step : 1}`
+                      : t('today.card.check')
+                  }}
+                </span>
               </button>
             </template>
+          </div>
+
+          <!-- Pinned unscheduled habits for one-tap logging -->
+          <div
+            v-if="pinnedUnscheduledHabits.length && !store.isFuture"
+            class="flex flex-wrap items-center gap-1.5 pt-1 border-t border-base-200/80"
+            data-testid="pinned-quick-logs"
+          >
+            <span class="text-xs text-base-content/60 font-medium flex items-center gap-1">
+              <Icon icon="lucide:pin" class="size-3 text-primary" />
+              {{ t('today.pinnedQuickLog') }}:
+            </span>
+            <button
+              v-for="u in pinnedUnscheduledHabits"
+              :key="u.id"
+              type="button"
+              class="btn btn-xs btn-outline gap-1.5 h-7 min-h-7"
+              :title="t('today.quickLogAsDone')"
+              :data-testid="`pinned-log-${u.id}`"
+              @click="submitQuickLog(u)"
+            >
+              <Icon icon="lucide:plus" class="size-3" />
+              <span :class="{ sensitive: u.effective_sensitive }">{{ u.name }}</span>
+              <span
+                v-if="todayCount(u) !== null"
+                class="badge badge-xs badge-neutral"
+                :data-testid="`pinned-count-${u.id}`"
+              >
+                {{ todayCount(u) }}
+              </span>
+            </button>
           </div>
         </div>
       </div>

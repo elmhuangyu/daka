@@ -189,6 +189,7 @@ export const en = {
   'today.unscheduledTitle': 'Ad-hoc log',
   'today.selectToLog': 'Select an unscheduled item...',
   'today.quickAddPlaceholder': 'Add a task (e.g. Call dentist, Pay bills)...',
+  'today.pinnedQuickLog': 'Pinned',
   'today.quickLogAsDone': 'Quick log as done',
   'today.dateOption.today': 'Today',
   'today.dateOption.noDate': 'No date (Inbox)',
@@ -219,6 +220,7 @@ export const en = {
   'today.card.pendingSync': 'Pending sync',
   'today.card.quotaUsed': 'Quota used',
   'today.card.exceeded': 'exceeded',
+  'today.card.goalMet': 'Goal met',
   'today.card.undo': 'Undo',
   'today.card.markDone': 'Complete cycle',
   'today.card.check': 'Check in',
@@ -427,7 +429,7 @@ export const en = {
   'items.editor.tracker.counter': 'Counter',
   'items.editor.tracker.metric': 'Metric',
   'items.editor.tracker.maintenance': 'Maintenance',
-  'items.editor.positive': 'Build',
+  'items.editor.positive': 'Build / Track',
   'items.editor.negative': 'Limit',
   'items.editor.immutable': 'Type and polarity cannot be changed after creation.',
   'items.editor.measurement': 'Measurement',
@@ -453,7 +455,7 @@ export const en = {
   'items.editor.sched.fixed_rrule': 'Repeats on a pattern',
   'items.editor.sched.rolling': 'After completion',
   'items.editor.sched.quota': 'Periodic target / quota',
-  'items.editor.sched.none': 'Unscheduled',
+  'items.editor.sched.none': 'Unscheduled (track anytime)',
   'items.editor.period.once': 'One-time task',
   'items.editor.period.daily': 'Every day',
   'items.editor.period.interval': 'Every N days',
@@ -502,6 +504,8 @@ export const en = {
   'items.editor.trackingMethod': 'Tracking method',
   'items.editor.counterLimitHint':
     'Counters only track positive habits. Use Metric to track limits with units.',
+  'items.editor.schedNoneHint':
+    'No fixed schedule: no check-in pressure, no broken streaks or overdue warnings. Pure occurrence tracking.',
   'items.editor.frequency': 'Frequency',
   'items.editor.ruleWarningToday':
     'Changing the schedule or targets creates a new rule version effective today. Earlier days keep the old rule.',

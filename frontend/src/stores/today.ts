@@ -158,7 +158,15 @@ export const useTodayStore = defineStore('today', () => {
     scoped(dueCards.value.filter((c) => c.today?.overdue && !c.today?.done)),
   )
   const todoCards = computed(() =>
-    scoped(dueCards.value.filter((c) => !c.today?.overdue && !c.today?.done)),
+    scoped(
+      dueCards.value.filter(
+        (c) =>
+          !c.today?.overdue &&
+          (!c.today?.done ||
+            c.detail.tracker_type === 'counter' ||
+            c.detail.tracker_type === 'metric'),
+      ),
+    ),
   )
   const unscheduledTodoCards = computed(() => {
     if (isFuture.value) return []
@@ -195,7 +203,10 @@ export const useTodayStore = defineStore('today', () => {
   )
   const doneCards = computed(() => {
     const map = new Map<number, CardVM>()
-    for (const c of dueCards.value.filter((c) => c.today?.done)) {
+    for (const c of dueCards.value.filter(
+      (c) =>
+        c.today?.done && c.detail.tracker_type !== 'counter' && c.detail.tracker_type !== 'metric',
+    )) {
       map.set(c.detail.id, c)
     }
     for (const c of rollingDone.value) {

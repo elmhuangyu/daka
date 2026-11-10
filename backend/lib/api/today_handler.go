@@ -2,8 +2,10 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -256,6 +258,9 @@ func (s *server) today(db *gorm.DB, userID string, requestedDate string, redact,
 		}
 		vs := effectiveVersionsFor(it, byItem[it.ID])
 		fvs := fixedOnly(vs)
+		if cur := schedule.CurrentVersion(fvs, tomorrow); isDailyFixedRule(cur) {
+			continue
+		}
 		futureDates, err := schedule.DueDatesWith(fvs, tomorrow, endRange, cal)
 		if err != nil {
 			continue
@@ -304,4 +309,33 @@ func countsInProgress(it dbmodels.Item, versions []dbmodels.ItemRuleVersion, dat
 	}
 	cur := schedule.CurrentVersion(versions, date)
 	return cur != nil && cur.ScheduleType == dbmodels.ScheduleFixedRRule
+}
+
+// isDailyFixedRule identifies rules that repeat every single day. Daily recurring
+// habits already belong on the daily Today dashboard and must not flood the
+// Upcoming schedule with duplicate entries for every day.
+func isDailyFixedRule(v *dbmodels.ItemRuleVersion) bool {
+	if v == nil || v.ScheduleType != dbmodels.ScheduleFixedRRule {
+		return false
+	}
+	s := strings.ToUpper(v.RRuleString)
+	if !strings.Contains(s, "FREQ=DAILY") {
+		return false
+	}
+	if strings.Contains(s, "COUNT=1") {
+		return false
+	}
+	if strings.Contains(s, "BYDAY") || strings.Contains(s, "BYMONTHDAY") || strings.Contains(s, "BYYEARDAY") {
+		return false
+	}
+	for _, part := range strings.Split(s, ";") {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, "INTERVAL=") {
+			var n int
+			if _, err := fmt.Sscanf(part, "INTERVAL=%d", &n); err == nil && n > 1 {
+				return false
+			}
+		}
+	}
+	return true
 }

@@ -207,6 +207,7 @@ describe('ItemEditorView', () => {
   it('redirects to / when attempting to edit an event', async () => {
     const { router } = await mountAt('/items/5/edit')
     await flushPromises()
+    await flushPromises()
     expect(router.currentRoute.value.path).toBe('/')
   })
 
@@ -257,5 +258,12 @@ describe('ItemEditorView', () => {
     expect(patch.body).toMatchObject({
       project_id: 99,
     })
+  })
+
+  it('shows sched-none-hint when scheduleType is none', async () => {
+    const { w } = await mountAt('/items/new')
+    expect(w.find('[data-testid=sched-none-hint]').exists()).toBe(false)
+    await w.get('[data-testid=f-schedule]').setValue('none')
+    expect(w.find('[data-testid=sched-none-hint]').exists()).toBe(true)
   })
 })
