@@ -657,7 +657,7 @@ function taskDueDate(task: ItemDetail): string | null {
               >
                 {{ t('projects.tomorrow') }}
               </button>
-              <div class="w-40">
+              <div class="w-40 sm:w-44">
                 <DateInput v-model="newTaskDate" clearable data-testid="input-quick-task-date" />
               </div>
             </div>
@@ -712,7 +712,7 @@ function taskDueDate(task: ItemDetail): string | null {
                 </div>
 
                 <div class="flex items-center gap-1.5 shrink-0 ml-auto">
-                  <div class="w-36" :data-testid="`task-date-${entry.task.id}`">
+                  <div class="w-40 sm:w-44 shrink-0" :data-testid="`task-date-${entry.task.id}`">
                     <DateInput
                       :model-value="taskDueDate(entry.task) ?? ''"
                       clearable
