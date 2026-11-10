@@ -390,6 +390,33 @@ describe('CalendarView', () => {
     w.unmount()
   })
 
+  it('quick add on today or past date in day panel creates uncompleted scheduled event', async () => {
+    const { w } = await mountView()
+    await w.get('[data-testid=day-2026-11-06]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid=day-panel]').exists()).toBe(true)
+    await w.get('[data-testid=panel-quick-input]').setValue('Dentist checkup')
+    await w.get('[data-testid=panel-quick-submit]').trigger('click')
+    await flushPromises()
+
+    const itemPost = calls.find(
+      (c) => c.method === 'POST' && c.url === '/api/items' && c.body?.name === 'Dentist checkup',
+    )
+    expect(itemPost).toBeTruthy()
+    const rule = itemPost!.body!.rule as Record<string, unknown>
+    expect(rule.dtstart).toBe('2026-11-06')
+
+    // No check-in call was made for this new item (so it is not marked as done!)
+    const checkinPost = calls.find(
+      (c) =>
+        c.method === 'POST' &&
+        c.url === '/api/checkins' &&
+        (c.body as any)?.item_id === (itemPost?.body as any)?.id,
+    )
+    expect(checkinPost).toBeFalsy()
+    w.unmount()
+  })
+
   it('opens details modal from DayPanel and updates check-in note via PATCH', async () => {
     checkinLogs = [
       {

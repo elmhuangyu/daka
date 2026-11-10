@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { useOfflineStore } from '../stores/offline'
@@ -37,22 +37,68 @@ const quickLogQuery = ref('')
 const quickTodoDate = ref('')
 const quickLogOpen = ref(false)
 const quickLogBusy = ref(false)
+const dateDropdownOpen = ref(false)
+const dateChipRef = ref<HTMLElement | null>(null)
+
+function resetQuickTodoDate() {
+  if (store.isToday || store.isFuture) {
+    quickTodoDate.value = store.view?.date ?? ''
+  } else {
+    quickTodoDate.value = ''
+  }
+}
 
 watch(
-  () => store.isFuture,
-  (future) => {
-    quickTodoDate.value = future ? (store.view?.date ?? '') : ''
+  [() => store.view?.date, () => store.isToday, () => store.isFuture],
+  () => {
+    resetQuickTodoDate()
   },
+  { immediate: true },
 )
 
-watch(
-  () => store.view?.date,
-  (d) => {
-    if (store.isFuture && d) {
-      quickTodoDate.value = d
-    }
-  },
-)
+function offsetDate(dateStr: string, days: number): string {
+  if (!dateStr) return ''
+  const d = new Date(dateStr + 'T00:00:00')
+  d.setDate(d.getDate() + days)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+const todayDate = computed(() => store.actualToday || store.view?.date || '')
+const tomorrowDate = computed(() => offsetDate(todayDate.value, 1))
+
+const dateChipLabel = computed(() => {
+  if (!quickTodoDate.value) return ''
+  if (todayDate.value && quickTodoDate.value === todayDate.value) {
+    return t('today.dateOption.today')
+  }
+  if (tomorrowDate.value && quickTodoDate.value === tomorrowDate.value) {
+    return t('today.tomorrow')
+  }
+  return formatCustomDate(quickTodoDate.value)
+})
+
+function setDateOption(val: string) {
+  quickTodoDate.value = val
+  dateDropdownOpen.value = false
+}
+
+function onDocClick(e: MouseEvent) {
+  if (
+    dateDropdownOpen.value &&
+    dateChipRef.value &&
+    !dateChipRef.value.contains(e.target as Node)
+  ) {
+    dateDropdownOpen.value = false
+  }
+}
+function onKey(e: KeyboardEvent) {
+  if (dateDropdownOpen.value && e.key === 'Escape') {
+    dateDropdownOpen.value = false
+  }
+}
 
 const matchingUnscheduled = computed(() => {
   const q = quickLogQuery.value.trim().toLowerCase()
@@ -66,18 +112,23 @@ function onBlurQuickLog() {
   }, 200)
 }
 
+function onEnterQuickAdd() {
+  submitQuickTodo({
+    name: quickLogQuery.value,
+    dueDate: quickTodoDate.value || (store.isFuture ? (store.view?.date ?? null) : null),
+  })
+}
+
 async function submitQuickTodo(target: { name: string; dueDate?: string | null }) {
   if (quickLogBusy.value) return
   const name = target.name.trim()
   if (!name) return
   quickLogBusy.value = true
   try {
-    const due = target.dueDate?.trim() || (store.isFuture ? (store.view?.date ?? null) : null)
+    const due = target.dueDate?.trim() || null
     await createTodoItem(name, due)
     quickLogQuery.value = ''
-    if (!store.isFuture) {
-      quickTodoDate.value = ''
-    }
+    resetQuickTodoDate()
     quickLogOpen.value = false
     await store.refresh(store.view?.date)
   } catch (e) {
@@ -115,9 +166,7 @@ async function submitQuickLog(target: { id?: number; name: string }) {
       }
     }
     quickLogQuery.value = ''
-    if (!store.isFuture) {
-      quickTodoDate.value = ''
-    }
+    resetQuickTodoDate()
     quickLogOpen.value = false
     await store.refresh(targetDate)
   } catch (e) {
@@ -170,7 +219,15 @@ const detailCard = computed(() =>
     : null,
 )
 
-onMounted(store.refresh)
+onMounted(() => {
+  store.refresh()
+  document.addEventListener('click', onDocClick)
+  document.addEventListener('keydown', onKey)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocClick)
+  document.removeEventListener('keydown', onKey)
+})
 // The store clears all plaintext synchronously when redact turns on; refetch afterwards.
 watch(
   () => privacy.redact,
@@ -278,6 +335,231 @@ watch(
         :total="store.categoryCounts.total"
         :counts="store.categoryCounts.counts"
       />
+
+      <!-- Quick Add (Todoist-style) -->
+      <div
+        class="card card-border bg-base-100 border-base-300 p-3 shadow-xs space-y-2"
+        data-testid="section-unscheduled"
+      >
+        <div class="relative w-full">
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <!-- Text input -->
+            <div class="relative flex-1">
+              <input
+                v-model="quickLogQuery"
+                type="text"
+                class="input input-sm input-bordered w-full pr-8 pl-3"
+                :placeholder="
+                  store.isFuture
+                    ? t('today.quickAddFuturePlaceholder')
+                    : t('today.quickAddPlaceholder')
+                "
+                autocomplete="off"
+                data-testid="quick-log-input"
+                @focus="quickLogOpen = true"
+                @blur="onBlurQuickLog"
+                @keydown.escape="quickLogOpen = false"
+                @keydown.enter.prevent="onEnterQuickAdd"
+              />
+              <button
+                v-if="quickLogQuery"
+                type="button"
+                class="absolute right-2 top-2 text-base-content/40 hover:text-base-content/80 cursor-pointer"
+                @click="quickLogQuery = ''"
+              >
+                <Icon icon="lucide:x" class="size-3.5" />
+              </button>
+            </div>
+
+            <!-- Toolbar actions: Date Chip, Add Todo button, Quick Log Done button -->
+            <div class="flex items-center gap-1.5 justify-end shrink-0">
+              <!-- Date Chip with Dropdown -->
+              <div ref="dateChipRef" class="relative">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline h-8 min-h-8 px-2.5 text-xs font-normal gap-1.5 cursor-pointer"
+                  :class="{
+                    'btn-primary bg-primary/10 text-primary border-primary/30': !!quickTodoDate,
+                  }"
+                  data-testid="quick-date-chip"
+                  :title="t('today.todoDueDateOptional')"
+                  @click.stop="dateDropdownOpen = !dateDropdownOpen"
+                >
+                  <Icon icon="lucide:calendar" class="size-3.5" />
+                  <span v-if="quickTodoDate" class="font-medium">
+                    {{ dateChipLabel }}
+                  </span>
+                  <span v-else class="text-base-content/60">
+                    {{ t('today.dateOption.noDate') }}
+                  </span>
+                  <button
+                    v-if="quickTodoDate"
+                    type="button"
+                    class="hover:text-error ml-0.5 p-0.5 rounded-full inline-flex items-center justify-center cursor-pointer"
+                    data-testid="quick-date-clear"
+                    :aria-label="t('common.clear')"
+                    @click.stop="quickTodoDate = ''"
+                  >
+                    <Icon icon="lucide:x" class="size-3" />
+                  </button>
+                </button>
+
+                <!-- Date options dropdown -->
+                <div
+                  v-show="dateDropdownOpen"
+                  class="absolute right-0 sm:left-0 z-30 mt-1 w-56 rounded-lg border border-base-300 bg-base-100 p-2 shadow-lg space-y-1 text-sm"
+                  data-testid="quick-date-dropdown"
+                >
+                  <button
+                    type="button"
+                    class="w-full text-left px-2.5 py-1.5 text-xs rounded-md hover:bg-base-200 flex items-center justify-between cursor-pointer"
+                    data-testid="quick-date-today"
+                    @click="setDateOption(todayDate)"
+                  >
+                    <span class="flex items-center gap-2">
+                      <Icon icon="lucide:calendar" class="size-3.5 text-primary" />
+                      <span>{{ t('today.dateOption.today') }}</span>
+                    </span>
+                    <span class="text-[10px] text-base-content/50 font-mono">{{
+                      formatCustomDate(todayDate)
+                    }}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="w-full text-left px-2.5 py-1.5 text-xs rounded-md hover:bg-base-200 flex items-center justify-between cursor-pointer"
+                    data-testid="quick-date-tomorrow"
+                    @click="setDateOption(tomorrowDate)"
+                  >
+                    <span class="flex items-center gap-2">
+                      <Icon icon="lucide:sun" class="size-3.5 text-warning" />
+                      <span>{{ t('today.tomorrow') }}</span>
+                    </span>
+                    <span class="text-[10px] text-base-content/50 font-mono">{{
+                      formatCustomDate(tomorrowDate)
+                    }}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="w-full text-left px-2.5 py-1.5 text-xs rounded-md hover:bg-base-200 flex items-center gap-2 cursor-pointer"
+                    data-testid="quick-date-nodate"
+                    @click="setDateOption('')"
+                  >
+                    <Icon icon="lucide:inbox" class="size-3.5 text-base-content/60" />
+                    <span>{{ t('today.dateOption.noDate') }}</span>
+                  </button>
+                  <div class="divider my-1"></div>
+                  <div class="px-1 pt-0.5" data-testid="quick-date-custom">
+                    <label class="block text-[11px] font-medium text-base-content/70 mb-1">
+                      {{ t('today.dateOption.custom') }}
+                    </label>
+                    <input
+                      v-model="quickTodoDate"
+                      type="date"
+                      class="input input-xs input-bordered w-full font-mono text-xs"
+                      data-testid="quick-todo-date"
+                      @change="dateDropdownOpen = false"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Add Todo button -->
+              <button
+                type="button"
+                class="btn btn-sm btn-primary shadow-xs h-8 min-h-8 px-3 gap-1.5"
+                :disabled="!quickLogQuery.trim() || quickLogBusy"
+                data-testid="quick-todo-submit"
+                @click="
+                  submitQuickTodo({
+                    name: quickLogQuery,
+                    dueDate: quickTodoDate || null,
+                  })
+                "
+              >
+                <span v-if="quickLogBusy" class="loading loading-spinner loading-xs" />
+                <Icon v-else icon="lucide:plus" class="size-4" />
+                <span>{{ store.isFuture ? t('today.addFutureEvent') : t('today.addTodo') }}</span>
+              </button>
+
+              <!-- Quick Log as Done button -->
+              <button
+                type="button"
+                class="btn btn-sm btn-outline shadow-xs h-8 min-h-8 px-2.5 gap-1"
+                :disabled="!quickLogQuery.trim() || quickLogBusy"
+                :title="t('today.quickLogAsDone')"
+                data-testid="quick-log-submit"
+                @click="submitQuickLog({ name: quickLogQuery })"
+              >
+                <Icon icon="lucide:check" class="size-4 text-success" />
+                <span class="hidden sm:inline">{{
+                  store.isFuture ? t('today.addFutureEvent') : t('today.logNow')
+                }}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Dropdown suggestions for text input -->
+          <div
+            v-if="
+              quickLogOpen &&
+              ((!store.isFuture && matchingUnscheduled.length > 0) || quickLogQuery.trim())
+            "
+            class="absolute left-0 right-0 z-30 mt-1 max-h-60 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-lg"
+          >
+            <!-- Create new Todo option -->
+            <button
+              v-if="quickLogQuery.trim()"
+              type="button"
+              class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-primary/10 text-primary font-medium flex items-center gap-2 cursor-pointer"
+              data-testid="quick-create-todo"
+              @mousedown.prevent="
+                submitQuickTodo({
+                  name: quickLogQuery,
+                  dueDate: quickTodoDate || (store.isFuture ? (store.view?.date ?? null) : null),
+                })
+              "
+            >
+              <Icon icon="lucide:check-square" class="size-4 shrink-0" />
+              <span>{{ t('today.createTodo', { name: quickLogQuery.trim() }) }}</span>
+            </button>
+
+            <!-- Create new option (Log Done immediately) -->
+            <button
+              v-if="
+                quickLogQuery.trim() &&
+                (store.isFuture ||
+                  !matchingUnscheduled.some(
+                    (it) => it.name.toLowerCase() === quickLogQuery.trim().toLowerCase(),
+                  ))
+              "
+              type="button"
+              class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-base-200 text-base-content/80 font-medium flex items-center gap-2 cursor-pointer"
+              @mousedown.prevent="submitQuickLog({ name: quickLogQuery })"
+            >
+              <Icon icon="lucide:sparkles" class="size-4 shrink-0" />
+              <span>{{
+                store.isFuture
+                  ? t('today.createFutureEvent', { name: quickLogQuery.trim() })
+                  : t('today.createAndLog', { name: quickLogQuery.trim() })
+              }}</span>
+            </button>
+
+            <!-- Matching existing unscheduled items (today or past dates) -->
+            <template v-if="!store.isFuture">
+              <button
+                v-for="u in matchingUnscheduled"
+                :key="u.id"
+                type="button"
+                class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-base-200 flex items-center justify-between cursor-pointer"
+                @mousedown.prevent="submitQuickLog(u)"
+              >
+                <span class="font-medium text-base-content/90">{{ u.name }}</span>
+                <span class="text-xs text-base-content/50">{{ t('today.card.check') }}</span>
+              </button>
+            </template>
+          </div>
+        </div>
+      </div>
 
       <div
         v-if="store.categoryCounts.total === 0"
@@ -392,149 +674,6 @@ watch(
           </li>
         </ul>
       </section>
-
-      <!-- Quick Log for Unscheduled items / 随手记 -->
-      <div
-        class="card card-border bg-base-100 border-base-300 p-4 shadow-xs space-y-3"
-        data-testid="section-unscheduled"
-      >
-        <div class="flex items-center justify-between">
-          <h3 class="text-sm font-semibold text-base-content/80 flex items-center gap-2">
-            <Icon icon="lucide:pencil" class="size-4 text-primary" />
-            {{ t('today.unscheduledTitle') }}
-          </h3>
-        </div>
-        <div class="relative w-full">
-          <div class="join w-full flex-wrap sm:flex-nowrap">
-            <input
-              v-model="quickTodoDate"
-              type="date"
-              class="input input-sm input-bordered join-item w-full sm:w-36 text-xs font-mono"
-              :title="t('today.todoDueDateOptional')"
-              data-testid="quick-todo-date"
-            />
-            <div class="relative flex-1 min-w-[160px]">
-              <input
-                v-model="quickLogQuery"
-                type="text"
-                class="input input-sm input-bordered w-full join-item pr-8"
-                :placeholder="
-                  store.isFuture
-                    ? t('today.quickAddFuturePlaceholder')
-                    : t('today.quickLogPlaceholder')
-                "
-                autocomplete="off"
-                data-testid="quick-log-input"
-                @focus="quickLogOpen = true"
-                @blur="onBlurQuickLog"
-                @keydown.escape="quickLogOpen = false"
-                @keydown.enter.prevent="
-                  store.isFuture
-                    ? submitQuickLog({ name: quickLogQuery })
-                    : submitQuickTodo({ name: quickLogQuery, dueDate: quickTodoDate })
-                "
-              />
-              <button
-                v-if="quickLogQuery"
-                type="button"
-                class="absolute right-2 top-1.5 text-base-content/40 hover:text-base-content/80"
-                @click="quickLogQuery = ''"
-              >
-                <Icon icon="lucide:x" class="size-4" />
-              </button>
-            </div>
-            <!-- Add Todo button -->
-            <button
-              type="button"
-              class="btn btn-sm btn-primary join-item shadow-xs"
-              :disabled="!quickLogQuery.trim() || quickLogBusy"
-              data-testid="quick-todo-submit"
-              @click="
-                submitQuickTodo({
-                  name: quickLogQuery,
-                  dueDate: quickTodoDate || (store.isFuture ? store.view?.date : null),
-                })
-              "
-            >
-              <span v-if="quickLogBusy" class="loading loading-spinner loading-xs" />
-              <Icon v-else icon="lucide:plus" class="size-4" />
-              {{ store.isFuture ? t('today.addFutureEvent') : t('today.addTodo') }}
-            </button>
-            <!-- Log Done button -->
-            <button
-              type="button"
-              class="btn btn-sm btn-outline join-item shadow-xs"
-              :disabled="!quickLogQuery.trim() || quickLogBusy"
-              data-testid="quick-log-submit"
-              @click="submitQuickLog({ name: quickLogQuery })"
-            >
-              <Icon icon="lucide:check" class="size-4" />
-              {{ store.isFuture ? t('today.addFutureEvent') : t('today.logNow') }}
-            </button>
-          </div>
-
-          <!-- Dropdown suggestions -->
-          <div
-            v-if="
-              quickLogOpen &&
-              ((!store.isFuture && matchingUnscheduled.length > 0) || quickLogQuery.trim())
-            "
-            class="absolute left-0 right-0 z-30 mt-1 max-h-60 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-lg"
-          >
-            <!-- Create new Todo option -->
-            <button
-              v-if="quickLogQuery.trim()"
-              type="button"
-              class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-primary/10 text-primary font-medium flex items-center gap-2 cursor-pointer"
-              data-testid="quick-create-todo"
-              @mousedown.prevent="
-                submitQuickTodo({
-                  name: quickLogQuery,
-                  dueDate: quickTodoDate || (store.isFuture ? (store.view?.date ?? null) : null),
-                })
-              "
-            >
-              <Icon icon="lucide:check-square" class="size-4 shrink-0" />
-              <span>{{ t('today.createTodo', { name: quickLogQuery.trim() }) }}</span>
-            </button>
-
-            <!-- Create new option (Log Done immediately) -->
-            <button
-              v-if="
-                quickLogQuery.trim() &&
-                (store.isFuture ||
-                  !matchingUnscheduled.some(
-                    (it) => it.name.toLowerCase() === quickLogQuery.trim().toLowerCase(),
-                  ))
-              "
-              type="button"
-              class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-base-200 text-base-content/80 font-medium flex items-center gap-2 cursor-pointer"
-              @mousedown.prevent="submitQuickLog({ name: quickLogQuery })"
-            >
-              <Icon icon="lucide:sparkles" class="size-4 shrink-0" />
-              <span>{{
-                store.isFuture
-                  ? t('today.createFutureEvent', { name: quickLogQuery.trim() })
-                  : t('today.createAndLog', { name: quickLogQuery.trim() })
-              }}</span>
-            </button>
-
-            <!-- Matching existing unscheduled items (today or past dates) -->
-            <template v-if="!store.isFuture">
-              <button
-                v-for="u in matchingUnscheduled"
-                :key="u.id"
-                type="button"
-                class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-base-200 flex items-center justify-between cursor-pointer"
-                @mousedown.prevent="submitQuickLog(u)"
-              >
-                <span class="font-medium text-base-content/90">{{ u.name }}</span>
-                <span class="text-xs text-base-content/50">{{ t('today.card.check') }}</span>
-              </button>
-            </template>
-          </div>
-        </div>
-      </div>
 
       <details
         v-if="store.doneCards.length"

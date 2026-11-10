@@ -621,6 +621,8 @@ describe('Today page', () => {
     const w = await mountApp()
     expect(w.find('[data-testid="section-unscheduled-todos"]').exists()).toBe(false)
 
+    // Clear date chip to create an undated Todo (Inbox)
+    await w.get('[data-testid="quick-date-clear"]').trigger('click')
     await w.get('[data-testid="quick-log-input"]').setValue('Buy groceries')
     await w.get('[data-testid="quick-todo-submit"]').trigger('click')
     await flushPromises()
@@ -672,6 +674,82 @@ describe('Today page', () => {
     expect(itemBody.rule.schedule_type).toBe('fixed_rrule')
     expect(itemBody.rule.dtstart).toBe('2026-11-15')
     expect(itemBody.rule.until).toBe('2026-11-15')
+  })
+
+  it('creates a Todo for Today by default via quick-todo-submit', async () => {
+    const w = await mountApp()
+
+    expect(w.find('[data-testid="quick-date-chip"]').text()).toContain('Today')
+    await w.get('[data-testid="quick-log-input"]').setValue('Call dentist')
+    await w.get('[data-testid="quick-todo-submit"]').trigger('click')
+    await flushPromises()
+
+    const itemPost = fetchMock.mock.calls.find((c) => {
+      if (c[1]?.method !== 'POST' || String(c[0]) !== '/api/items') return false
+      const b = JSON.parse(c[1].body)
+      return b.name === 'Call dentist'
+    })
+    expect(itemPost).toBeTruthy()
+    const itemBody = JSON.parse(itemPost![1].body)
+    expect(itemBody.kind).toBe('event')
+    expect(itemBody.rule.schedule_type).toBe('fixed_rrule')
+    expect(itemBody.rule.dtstart).toBe('2026-11-07')
+    expect(itemBody.rule.until).toBe('2026-11-07')
+  })
+
+  it('selects tomorrow and custom date via quick date dropdown', async () => {
+    const w = await mountApp()
+
+    // Open dropdown
+    await w.get('[data-testid="quick-date-chip"]').trigger('click')
+    expect(w.find('[data-testid="quick-date-dropdown"]').isVisible()).toBe(true)
+
+    // Select Tomorrow
+    await w.get('[data-testid="quick-date-tomorrow"]').trigger('click')
+    expect(w.find('[data-testid="quick-date-chip"]').text()).toContain('Tomorrow')
+
+    // Open dropdown again and select No date
+    await w.get('[data-testid="quick-date-chip"]').trigger('click')
+    await w.get('[data-testid="quick-date-nodate"]').trigger('click')
+    expect(w.find('[data-testid="quick-date-chip"]').text()).toContain('No date (Inbox)')
+    expect(w.find('[data-testid="quick-date-clear"]').exists()).toBe(false)
+  })
+
+  it('never duplicates items in doneCards', async () => {
+    const { useTodayStore } = await import('./stores/today')
+    const store = useTodayStore()
+
+    const item = {
+      id: 42,
+      name: 'Duplicate check',
+      tracker_type: 'boolean',
+      kind: 'event',
+      polarity: 'positive',
+      current_rule: { schedule_type: 'none', holiday_mode: 'none' },
+      stats: { counts: { last_30_days: 1, this_year: 1, total: 1 } },
+    } as any
+
+    store.items = [item]
+    store.view = {
+      date: '2026-11-07',
+      weekday: 6,
+      timezone: 'UTC',
+      items: [
+        {
+          id: 42,
+          name: 'Duplicate check',
+          tracker_type: 'boolean',
+          kind: 'event',
+          due: true,
+          done: true,
+        } as any,
+      ],
+    } as any
+    store.logs = [{ id: 1, item_id: 42, option_id: null, date: '2026-11-07', value: 1, note: '' }]
+
+    const done = store.doneCards
+    const ids = done.map((c) => c.detail.id)
+    expect(ids.filter((id) => id === 42).length).toBe(1)
   })
 
   it('assigns or clears a Todo due date inside OccurrenceDetailModal', async () => {

@@ -193,13 +193,19 @@ export const useTodayStore = defineStore('today', () => {
       .map(vm)
       .filter((c) => c.logs.length > 0),
   )
-  const doneCards = computed(() =>
-    scoped([
-      ...dueCards.value.filter((c) => c.today?.done),
-      ...rollingDone.value,
-      ...unscheduledDone.value,
-    ]),
-  )
+  const doneCards = computed(() => {
+    const map = new Map<number, CardVM>()
+    for (const c of dueCards.value.filter((c) => c.today?.done)) {
+      map.set(c.detail.id, c)
+    }
+    for (const c of rollingDone.value) {
+      map.set(c.detail.id, c)
+    }
+    for (const c of unscheduledDone.value) {
+      map.set(c.detail.id, c)
+    }
+    return scoped(Array.from(map.values()))
+  })
   const maintenanceCards = computed(() => scoped(items.value.filter(needsAttention).map(vm)))
   const quotaCards = computed(() =>
     scoped(items.value.filter((d) => d.current_rule.schedule_type === 'quota').map(vm)),

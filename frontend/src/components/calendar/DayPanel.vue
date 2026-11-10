@@ -65,25 +65,11 @@ async function submitQuick(target: { id?: number; name: string }) {
   if (!name && !target.id) return
   quickBusy.value = true
   try {
-    if (isFuture.value) {
+    if (target.id) {
+      await makeUp({ item_id: target.id, mode: 'set', value: 1 })
+    } else {
       await api.createScheduledEvent(name, targetDate)
       await Promise.all([store.refresh(false), store.loadPanel()])
-    } else {
-      let itemId = target.id
-      if (!itemId) {
-        const exact = matchingAddable.value.find(
-          (it) => it.name.toLowerCase() === name.toLowerCase(),
-        )
-        if (exact) {
-          itemId = exact.id
-        }
-      }
-      if (itemId) {
-        await makeUp({ item_id: itemId, mode: 'set', value: 1 })
-      } else {
-        const created = await api.createAdHocEvent(name)
-        await makeUp({ item_id: created.id, mode: 'set', value: 1 })
-      }
     }
     quickQuery.value = ''
     quickOpen.value = false
@@ -333,7 +319,7 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
             >
               <span v-if="quickBusy" class="loading loading-spinner loading-xs" />
               <Icon v-else icon="lucide:plus" class="size-4" />
-              {{ isFuture ? t('today.addFutureEvent') : t('today.logNow') }}
+              {{ t('today.addFutureEvent') }}
             </button>
           </div>
 
@@ -344,23 +330,13 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
           >
             <!-- Create new option -->
             <button
-              v-if="
-                quickQuery.trim() &&
-                (isFuture ||
-                  !matchingAddable.some(
-                    (it) => it.name.toLowerCase() === quickQuery.trim().toLowerCase(),
-                  ))
-              "
+              v-if="quickQuery.trim()"
               type="button"
               class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-primary/10 text-primary font-medium flex items-center gap-2 cursor-pointer"
               @mousedown.prevent="submitQuick({ name: quickQuery })"
             >
               <Icon icon="lucide:sparkles" class="size-4 shrink-0" />
-              <span>{{
-                isFuture
-                  ? t('today.createFutureEvent', { name: quickQuery.trim() })
-                  : t('today.createAndLog', { name: quickQuery.trim() })
-              }}</span>
+              <span>{{ t('today.createFutureEvent', { name: quickQuery.trim() }) }}</span>
             </button>
 
             <!-- Matching items (for today/past dates) -->
