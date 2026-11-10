@@ -15,16 +15,19 @@ function jsonRes(body: unknown, status = 200) {
 }
 
 let calls: { url: string; method: string; body?: unknown }[]
+let mockProjects: object[] = []
 
 beforeEach(() => {
   localStorage.clear()
   calls = []
+  mockProjects = []
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
     calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined })
     if (url === '/api/auth/status')
       return jsonRes({ oidc_enabled: false, login_required: false, authenticated: true })
     if (url === '/api/categories' && method === 'GET') return jsonRes({ categories: [] })
+    if (url.startsWith('/api/projects') && method === 'GET') return jsonRes(mockProjects)
     if (url.startsWith('/api/view/today'))
       return jsonRes({
         date: '2026-11-07',
@@ -37,6 +40,29 @@ beforeEach(() => {
       return (calls.at(-1)!.body as { name: string }).name === 'bad'
         ? jsonRes({ error: 'invalid combination', reason: 'quota_option_required' }, 400)
         : jsonRes({ id: 5 }, 201)
+    }
+    if (url === '/api/items/6' && method === 'PATCH') {
+      return jsonRes({ id: 6, ...(calls.at(-1)!.body as object) })
+    }
+    if (url === '/api/items/6' && method === 'GET') {
+      return jsonRes({
+        id: 6,
+        name: 'Gym',
+        tracker_type: 'boolean',
+        kind: 'habit',
+        polarity: 'positive',
+        category_id: null,
+        project_id: 42,
+        effective_sensitive: false,
+        pinned: false,
+        archived: false,
+        options: [],
+        current_rule: {
+          schedule_type: 'fixed_rrule',
+          rrule_string: 'FREQ=DAILY',
+          effective_from: '2026-01-01',
+        },
+      })
     }
     if (url === '/api/items/5' && method === 'GET') {
       return jsonRes({
@@ -170,5 +196,54 @@ describe('ItemEditorView', () => {
     const { router } = await mountAt('/items/5/edit')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/')
+  })
+
+  it('renders project selector, updates form when project is selected, and includes project_id on submit', async () => {
+    mockProjects = [
+      { id: 42, name: 'Q4 Goals', status: 'active', color: '#3b82f6' },
+      { id: 99, name: 'Personal', status: 'active', color: '#10b981' },
+    ]
+    const { w } = await mountAt('/items/new')
+    expect(w.find('[data-testid=f-project]').exists()).toBe(true)
+    const select = w.get<HTMLSelectElement>('[data-testid=f-project]')
+
+    const options = select.findAll('option')
+    expect(options.length).toBe(3) // null + 2 projects
+    expect(options[0].text()).toBe('No Project')
+    expect(options[1].text()).toBe('Q4 Goals')
+    expect(options[2].text()).toBe('Personal')
+
+    await w.get('[data-testid=f-name]').setValue('Read Strategy Doc')
+    await select.setValue('42')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+
+    const post = calls.find((c) => c.url === '/api/items' && c.method === 'POST')!
+    expect(post).toBeTruthy()
+    expect(post.body).toMatchObject({
+      name: 'Read Strategy Doc',
+      project_id: 42,
+    })
+  })
+
+  it('populates project_id when editing existing item and patches project_id on submit', async () => {
+    mockProjects = [
+      { id: 42, name: 'Q4 Goals', status: 'active', color: '#3b82f6' },
+      { id: 99, name: 'Personal', status: 'active', color: '#10b981' },
+    ]
+    const { w } = await mountAt('/items/6/edit')
+    const select = w.get<HTMLSelectElement>('[data-testid=f-project]')
+    expect(select.element.value).toBe('42')
+
+    // Change to project 99
+    await select.setValue('99')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+
+    const patch = calls.find((c) => c.url === '/api/items/6' && c.method === 'PATCH')!
+    expect(patch).toBeTruthy()
+    expect(patch.body).toMatchObject({
+      project_id: 99,
+    })
   })
 })

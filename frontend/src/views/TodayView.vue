@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { useOfflineStore } from '../stores/offline'
 import { usePrivacyStore } from '../stores/privacy'
+import { useProjectsStore } from '../stores/projects'
 import { useTodayStore } from '../stores/today'
 import { findCategory, type CardVM } from '../today/logic'
 import CompletionRing from '../components/today/CompletionRing.vue'
@@ -25,6 +26,7 @@ const { t } = useI18n()
 const privacy = usePrivacyStore()
 const store = useTodayStore()
 const offline = useOfflineStore()
+const projectsStore = useProjectsStore()
 
 const datePickerInput = ref<HTMLInputElement | null>(null)
 const upcomingDays = ref<3 | 7 | 14>(7)
@@ -35,10 +37,24 @@ const filteredUpcoming = computed(() =>
 
 const quickLogQuery = ref('')
 const quickTodoDate = ref('')
+const quickTodoProjectId = ref<number | null>(null)
 const quickLogOpen = ref(false)
 const quickLogBusy = ref(false)
 const dateDropdownOpen = ref(false)
 const dateChipRef = ref<HTMLElement | null>(null)
+const projectDropdownOpen = ref(false)
+const projectChipRef = ref<HTMLElement | null>(null)
+
+const selectedProject = computed(() =>
+  quickTodoProjectId.value !== null
+    ? (projectsStore.projectById.get(quickTodoProjectId.value) ?? null)
+    : null,
+)
+
+function setProjectOption(id: number | null) {
+  quickTodoProjectId.value = id
+  projectDropdownOpen.value = false
+}
 
 function resetQuickTodoDate() {
   if (store.isToday || store.isFuture) {
@@ -93,10 +109,18 @@ function onDocClick(e: MouseEvent) {
   ) {
     dateDropdownOpen.value = false
   }
+  if (
+    projectDropdownOpen.value &&
+    projectChipRef.value &&
+    !projectChipRef.value.contains(e.target as Node)
+  ) {
+    projectDropdownOpen.value = false
+  }
 }
 function onKey(e: KeyboardEvent) {
-  if (dateDropdownOpen.value && e.key === 'Escape') {
-    dateDropdownOpen.value = false
+  if (e.key === 'Escape') {
+    if (dateDropdownOpen.value) dateDropdownOpen.value = false
+    if (projectDropdownOpen.value) projectDropdownOpen.value = false
   }
 }
 
@@ -126,9 +150,10 @@ async function submitQuickTodo(target: { name: string; dueDate?: string | null }
   quickLogBusy.value = true
   try {
     const due = target.dueDate?.trim() || null
-    await createTodoItem(name, due)
+    await createTodoItem(name, due, quickTodoProjectId.value)
     quickLogQuery.value = ''
     resetQuickTodoDate()
+    quickTodoProjectId.value = null
     quickLogOpen.value = false
     await store.refresh(store.view?.date)
   } catch (e) {
@@ -202,6 +227,11 @@ const visibleCount = computed(
 function cat(c: CardVM) {
   return findCategory(store.categories, c.detail.category_id)
 }
+function projectFor(c: CardVM) {
+  const pid = c.detail.project_id
+  if (!pid) return null
+  return projectsStore.projectById.get(pid) ?? null
+}
 const log = (input: CheckinInput) => store.submit(input)
 
 const detailItemId = ref<number | null>(null)
@@ -221,6 +251,7 @@ const detailCard = computed(() =>
 
 onMounted(() => {
   store.refresh()
+  projectsStore.fetchProjects()
   document.addEventListener('click', onDocClick)
   document.addEventListener('keydown', onKey)
 })
@@ -231,7 +262,16 @@ onBeforeUnmount(() => {
 // The store clears all plaintext synchronously when redact turns on; refetch afterwards.
 watch(
   () => privacy.redact,
-  () => store.refresh(),
+  (on) => {
+    if (on) {
+      projectDropdownOpen.value = false
+      dateDropdownOpen.value = false
+      quickTodoProjectId.value = null
+    }
+    void store.refresh()
+    void projectsStore.fetchProjects()
+  },
+  { flush: 'sync' },
 )
 // Queued offline actions were confirmed: reload the server state.
 watch(
@@ -463,6 +503,93 @@ watch(
                 </div>
               </div>
 
+              <!-- Project Chip with Dropdown -->
+              <div ref="projectChipRef" class="relative">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline h-8 min-h-8 px-2.5 text-xs font-normal gap-1.5 cursor-pointer"
+                  :class="{
+                    'btn-primary bg-primary/10 text-primary border-primary/30':
+                      quickTodoProjectId !== null,
+                  }"
+                  data-testid="quick-project-chip"
+                  :title="t('projects.project')"
+                  @click.stop="projectDropdownOpen = !projectDropdownOpen"
+                >
+                  <Icon icon="lucide:folder" class="size-3.5" />
+                  <template v-if="selectedProject">
+                    <span
+                      v-if="selectedProject.color"
+                      class="size-2 rounded-full shrink-0"
+                      :style="{ backgroundColor: selectedProject.color }"
+                    />
+                    <span class="font-medium max-w-24 truncate">
+                      {{ selectedProject.name }}
+                    </span>
+                    <button
+                      type="button"
+                      class="hover:text-error ml-0.5 p-0.5 rounded-full inline-flex items-center justify-center cursor-pointer"
+                      data-testid="quick-project-clear"
+                      :aria-label="t('common.clear')"
+                      @click.stop="quickTodoProjectId = null"
+                    >
+                      <Icon icon="lucide:x" class="size-3" />
+                    </button>
+                  </template>
+                  <span v-else class="text-base-content/60">
+                    {{ t('projects.noProject') }}
+                  </span>
+                </button>
+
+                <!-- Project options dropdown -->
+                <div
+                  v-show="projectDropdownOpen"
+                  class="absolute right-0 sm:left-0 z-30 mt-1 w-56 max-h-60 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-2 shadow-lg space-y-1 text-sm"
+                  data-testid="quick-project-dropdown"
+                >
+                  <button
+                    type="button"
+                    class="w-full text-left px-2.5 py-1.5 text-xs rounded-md hover:bg-base-200 flex items-center justify-between cursor-pointer"
+                    data-testid="quick-project-noproject"
+                    @click="setProjectOption(null)"
+                  >
+                    <span class="flex items-center gap-2">
+                      <Icon icon="lucide:folder" class="size-3.5 text-base-content/60" />
+                      <span>{{ t('projects.noProject') }}</span>
+                    </span>
+                    <Icon
+                      v-if="quickTodoProjectId === null"
+                      icon="lucide:check"
+                      class="size-3 text-primary shrink-0"
+                    />
+                  </button>
+                  <div v-if="projectsStore.activeProjects.length > 0" class="divider my-1"></div>
+                  <button
+                    v-for="p in projectsStore.activeProjects"
+                    :key="p.id"
+                    type="button"
+                    class="w-full text-left px-2.5 py-1.5 text-xs rounded-md hover:bg-base-200 flex items-center justify-between cursor-pointer"
+                    :data-testid="`quick-project-option-${p.id}`"
+                    @click="setProjectOption(p.id)"
+                  >
+                    <span class="flex items-center gap-2 truncate">
+                      <span
+                        v-if="p.color"
+                        class="size-2 rounded-full shrink-0"
+                        :style="{ backgroundColor: p.color }"
+                      />
+                      <Icon v-else icon="lucide:folder" class="size-3.5 text-primary shrink-0" />
+                      <span class="truncate">{{ p.name }}</span>
+                    </span>
+                    <Icon
+                      v-if="quickTodoProjectId === p.id"
+                      icon="lucide:check"
+                      class="size-3 text-primary shrink-0"
+                    />
+                  </button>
+                </div>
+              </div>
+
               <!-- Add Todo button -->
               <button
                 type="button"
@@ -609,6 +736,7 @@ watch(
             <ItemCard
               :vm="c"
               :category="cat(c)"
+              :project="projectFor(c)"
               variant="todo"
               :busy="store.busy.includes(c.detail.id)"
               :pending="offline.pendingItems.includes(c.detail.id)"
@@ -634,6 +762,7 @@ watch(
               <ItemCard
                 :vm="c"
                 :category="cat(c)"
+                :project="projectFor(c)"
                 :variant="s.variant"
                 :busy="store.busy.includes(c.detail.id)"
                 :pending="offline.pendingItems.includes(c.detail.id)"
@@ -664,6 +793,7 @@ watch(
             <ItemCard
               :vm="c"
               :category="cat(c)"
+              :project="projectFor(c)"
               variant="todo"
               :busy="store.busy.includes(c.detail.id)"
               :pending="offline.pendingItems.includes(c.detail.id)"
@@ -704,6 +834,7 @@ watch(
               <ItemCard
                 :vm="c"
                 :category="cat(c)"
+                :project="projectFor(c)"
                 variant="done"
                 :busy="store.busy.includes(c.detail.id)"
                 :pending="offline.pendingItems.includes(c.detail.id)"

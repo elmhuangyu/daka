@@ -34,6 +34,7 @@ export interface ItemForm {
   trackerType: TrackerType
   polarity: Polarity
   categoryId: number | null
+  projectId: number | null
   isSensitive: boolean
   remindTime: string
   unit: string
@@ -77,6 +78,7 @@ export function emptyForm(): ItemForm {
     trackerType: 'boolean',
     polarity: 'positive',
     categoryId: null,
+    projectId: null,
     isSensitive: false,
     remindTime: '',
     unit: '',
@@ -328,6 +330,7 @@ export function buildCreateBody(f: ItemForm): Json {
     kind: f.kind,
     polarity: f.polarity,
     category_id: f.categoryId,
+    project_id: f.projectId,
     is_sensitive: f.isSensitive,
     options: f.options.map(optionBody),
     rule,
@@ -355,6 +358,7 @@ export function formFromItem(it: ItemDto): ItemForm {
   f.trackerType = it.tracker_type as TrackerType
   f.polarity = it.polarity as Polarity
   f.categoryId = it.category_id
+  f.projectId = it.project_id ?? null
   f.isSensitive = it.is_sensitive
   f.remindTime = it.remind_time ?? ''
   f.unit = it.unit ?? ''
@@ -451,6 +455,7 @@ export function buildEditPlan(
   if (f.kind !== o.kind) patch.kind = f.kind
   if (f.color !== o.color) patch.color = f.color
   if (f.categoryId !== o.categoryId) patch.category_id = f.categoryId
+  if (f.projectId !== o.projectId) patch.project_id = f.projectId
   if (f.isSensitive !== o.isSensitive) patch.is_sensitive = f.isSensitive
   if (f.remindTime !== o.remindTime) patch.remind_time = f.remindTime === '' ? null : f.remindTime
   if (isNumeric(f.trackerType)) {

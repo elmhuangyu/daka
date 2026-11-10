@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { Icon } from '@iconify/vue'
-import type { Category, CheckinInput } from '../../api'
+import type { Category, CheckinInput, Project } from '../../api'
 import { formatCustomDate } from '../../i18n/format'
 import { useI18n } from '../../i18n'
 import {
@@ -18,6 +18,7 @@ const { t } = useI18n()
 const props = defineProps<{
   vm: CardVM
   category: Category | null
+  project?: Project | null
   variant: 'todo' | 'done' | 'maintenance' | 'quota'
   busy: boolean
   /** An offline check-in for this item is queued and not yet confirmed. */
@@ -163,6 +164,15 @@ function record(r: ValueRow) {
           </span>
           <span v-if="pending" class="badge badge-warning badge-sm" data-testid="pending-badge">
             <Icon icon="lucide:cloud-off" aria-hidden="true" /> {{ t('today.card.pendingSync') }}
+          </span>
+          <span
+            v-if="project"
+            class="badge badge-outline gap-1"
+            :style="project.color ? { borderColor: project.color } : {}"
+            data-testid="project-badge"
+          >
+            <Icon icon="lucide:folder" class="size-3" aria-hidden="true" />
+            {{ project.name }}
           </span>
           <span
             v-if="category"

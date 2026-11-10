@@ -43,6 +43,7 @@ interface World {
   today: object[]
   items: ItemDetail[]
   cats: object[]
+  projects: object[]
   logs: object[]
   progress: { done: number; total: number }
 }
@@ -51,7 +52,14 @@ let fetchMock: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   localStorage.clear()
-  world = { today: [], items: [], cats: [], logs: [], progress: { done: 0, total: 0 } }
+  world = {
+    today: [],
+    items: [],
+    cats: [],
+    projects: [],
+    logs: [],
+    progress: { done: 0, total: 0 },
+  }
   fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(
     async (url: string, init?: RequestInit) => {
       url = String(url)
@@ -101,6 +109,7 @@ beforeEach(() => {
       }
       if (url.startsWith('/api/items')) return jsonRes({ items: world.items })
       if (url.startsWith('/api/categories')) return jsonRes({ categories: world.cats })
+      if (url.startsWith('/api/projects')) return jsonRes(world.projects)
       if (url.startsWith('/api/checkins/') && init?.method === 'PATCH') {
         const id = Number(url.split('/').pop())
         const body = JSON.parse(init.body as string)
@@ -795,5 +804,60 @@ describe('Today page', () => {
     expect(clearCall).toBeTruthy()
     const clearBody = JSON.parse(clearCall![1].body)
     expect(clearBody.rule.schedule_type).toBe('none')
+  })
+
+  it('selects a project in quick add and passes project_id to createTodoItem', async () => {
+    world.projects = [
+      { id: 12, name: 'Work', color: '#3b82f6', status: 'active', sort_order: 1 },
+      { id: 15, name: 'Home', color: '#10b981', status: 'active', sort_order: 2 },
+    ]
+    const w = await mountApp()
+
+    // Project chip is present with "No Project"
+    const chip = w.get('[data-testid="quick-project-chip"]')
+    expect(chip.text()).toContain('No Project')
+
+    // Open project dropdown
+    await chip.trigger('click')
+    expect(w.find('[data-testid="quick-project-dropdown"]').isVisible()).toBe(true)
+
+    // Select project 12 (Work)
+    await w.get('[data-testid="quick-project-option-12"]').trigger('click')
+    expect(w.get('[data-testid="quick-project-chip"]').text()).toContain('Work')
+
+    // Fill query and submit
+    await w.get('[data-testid="quick-log-input"]').setValue('Draft report')
+    await w.get('[data-testid="quick-todo-submit"]').trigger('click')
+    await flushPromises()
+
+    const itemPosts = fetchMock.mock.calls.filter(
+      (c) => c[1]?.method === 'POST' && String(c[0]) === '/api/items',
+    )
+    expect(itemPosts.length).toBeGreaterThan(0)
+    const body = JSON.parse(itemPosts.at(-1)![1].body)
+    expect(body.name).toBe('Draft report')
+    expect(body.project_id).toBe(12)
+
+    // After submit, project is reset to null
+    expect(w.get('[data-testid="quick-project-chip"]').text()).toContain('No Project')
+  })
+
+  it('renders project badge on item card when item has project_id', async () => {
+    world.projects = [{ id: 12, name: 'Work', color: '#3b82f6', status: 'active', sort_order: 1 }]
+    world.today = [tItem(1, 'Project Task', { project_id: 12 })]
+    world.items = [
+      detail({
+        id: 1,
+        name: 'Project Task',
+        project_id: 12,
+        current_rule: rule({ schedule_type: 'fixed_rrule' }),
+      }),
+    ]
+    const w = await mountApp()
+
+    const card = w.get('[data-testid="card-1"]')
+    const badge = card.find('[data-testid="project-badge"]')
+    expect(badge.exists()).toBe(true)
+    expect(badge.text()).toContain('Work')
   })
 })

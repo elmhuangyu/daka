@@ -7,12 +7,14 @@ import {
   deleteOption,
   getItem,
   listCategories,
+  listProjects,
   patchItem,
   postItem,
   postOption,
   putOption,
   type CategoryDto,
   type ItemDto,
+  type Project,
 } from '../api'
 import {
   allowedMeasures,
@@ -50,6 +52,7 @@ const isEdit = computed(() => editId.value !== null)
 const form = reactive<ItemForm>(emptyForm())
 const original = ref<ItemDto | null>(null)
 const categories = ref<CategoryDto[]>([])
+const projects = ref<Project[]>([])
 const loading = ref(false)
 const busy = ref(false)
 const loadError = ref('')
@@ -89,11 +92,13 @@ async function load() {
   if (blocked.value) return
   loading.value = true
   try {
-    const [cats, item] = await Promise.all([
+    const [cats, projs, item] = await Promise.all([
       privacy.redact ? Promise.resolve([]) : listCategories(),
+      listProjects({ status: 'active', redact: privacy.redact }),
       isEdit.value ? getItem(editId.value!) : Promise.resolve(null),
     ])
     categories.value = cats
+    projects.value = projs
     if (item) {
       if (item.kind === 'event') {
         await router.replace('/')
@@ -101,6 +106,7 @@ async function load() {
       }
       original.value = item
       Object.assign(form, formFromItem(item))
+      form.projectId = item.project_id ?? null
     } else if (!form.dtstart) {
       form.dtstart = today
     }
@@ -117,6 +123,7 @@ watch(
     if (on) {
       // Drop plaintext held by the editor as soon as the guard turns on.
       categories.value = []
+      projects.value = []
       original.value = null
       Object.assign(form, emptyForm())
     } else {
@@ -198,7 +205,9 @@ async function submit() {
 }
 
 async function saveCreate() {
-  const item = await postItem(buildCreateBody(form))
+  const body = buildCreateBody(form)
+  body.project_id = form.projectId
+  const item = await postItem(body)
   if (form.remindTime !== '') {
     try {
       await patchItem(item.id, { remind_time: form.remindTime })
@@ -229,6 +238,10 @@ async function saveEdit() {
   const rule = plan.patch.rule as Record<string, unknown> | undefined
   if (rule && form.quotaOption !== null && quotaNeedsOption(form))
     rule.quota_option_id = optionIds.get(form.quotaOption)
+  if (form.projectId !== (orig.project_id ?? null)) {
+    plan.patch.project_id = form.projectId
+    plan.hasPatch = true
+  }
   if (plan.hasPatch) await patchItem(orig.id, plan.patch)
   for (const id of plan.removeOptionIds) await deleteOption(orig.id, id)
   await router.push('/')
@@ -317,6 +330,15 @@ const showHoliday = computed(() => holidayAllowed(form))
               {{ t('common.add') }}
             </button>
           </div>
+        </fieldset>
+
+        <!-- Project -->
+        <fieldset v-if="!privacy.redact" class="flex flex-col gap-2">
+          <legend class="text-sm font-medium">{{ t('projects.project') }}</legend>
+          <select v-model="form.projectId" class="select select-bordered" data-testid="f-project">
+            <option :value="null">{{ t('projects.noProject') }}</option>
+            <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </select>
         </fieldset>
 
         <!-- Color and Privacy Toggle -->

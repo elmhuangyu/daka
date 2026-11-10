@@ -71,7 +71,7 @@ export const useProjectsStore = defineStore('projects', () => {
         redact: privacy.redact,
       })
       if (my !== seq) return
-      projects.value = data
+      projects.value = Array.isArray(data) ? data : []
       error.value = null
       return data
     } catch (e) {
