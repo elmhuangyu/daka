@@ -713,7 +713,9 @@ export function getExternalCalendar(
   )
 }
 
-export function createAdHocEvent(name: string): Promise<{ id: number }> {
+export const updateItem = patchItem
+
+export function createAdHocEvent(name: string, projectId?: number | null): Promise<{ id: number }> {
   return request<{ id: number }>(
     '/api/items',
     jsonInit('POST', {
@@ -721,12 +723,17 @@ export function createAdHocEvent(name: string): Promise<{ id: number }> {
       tracker_type: 'boolean',
       kind: 'event',
       polarity: 'positive',
+      ...(projectId !== undefined && projectId !== null ? { project_id: projectId } : {}),
       rule: { schedule_type: 'none', holiday_mode: 'none' },
     }),
   )
 }
 
-export function createScheduledEvent(name: string, date: string): Promise<{ id: number }> {
+export function createScheduledEvent(
+  name: string,
+  date: string,
+  projectId?: number | null,
+): Promise<{ id: number }> {
   return request<{ id: number }>(
     '/api/items',
     jsonInit('POST', {
@@ -734,6 +741,7 @@ export function createScheduledEvent(name: string, date: string): Promise<{ id: 
       tracker_type: 'boolean',
       kind: 'event',
       polarity: 'positive',
+      ...(projectId !== undefined && projectId !== null ? { project_id: projectId } : {}),
       rule: {
         schedule_type: 'fixed_rrule',
         rrule_string: 'FREQ=DAILY;COUNT=1',
@@ -745,11 +753,15 @@ export function createScheduledEvent(name: string, date: string): Promise<{ id: 
   )
 }
 
-export function createTodoItem(name: string, dueDate?: string | null): Promise<{ id: number }> {
+export function createTodoItem(
+  name: string,
+  dueDate?: string | null,
+  projectId?: number | null,
+): Promise<{ id: number }> {
   if (dueDate && dueDate.trim()) {
-    return createScheduledEvent(name, dueDate.trim())
+    return createScheduledEvent(name, dueDate.trim(), projectId)
   }
-  return createAdHocEvent(name)
+  return createAdHocEvent(name, projectId)
 }
 
 export function setTodoDueDate(itemId: number, dueDate: string | null): Promise<ItemDto> {
@@ -1019,6 +1031,22 @@ export function deleteProject(
   return request<{ deleted: boolean }>(`/api/projects/${id}${qs ? `?${qs}` : ''}`, {
     method: 'DELETE',
   })
+}
+
+export function listProjectItems(
+  projectId: number,
+  opts?: { archived?: boolean | 'all'; redact?: boolean },
+): Promise<{ items: ItemDetail[] }> {
+  const p = new URLSearchParams({
+    include: 'stats',
+    project_id: String(projectId),
+    archived: 'all',
+  })
+  if (opts?.archived !== undefined && opts.archived !== 'all') {
+    p.set('archived', String(opts.archived))
+  }
+  if (opts?.redact) p.set('redact', '1')
+  return request(`/api/items?${p.toString()}`)
 }
 
 // ---- Items panel and detail page ----

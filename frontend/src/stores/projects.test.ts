@@ -123,4 +123,71 @@ describe('projects store', () => {
     privacy.set(true)
     expect(store.projects).toHaveLength(0)
   })
+
+  it('when privacy.redact is true, createProject fetches redacted projects and does not pollute projects.value', async () => {
+    const store = useProjectsStore()
+    const privacy = usePrivacyStore()
+    privacy.set(true)
+
+    const unredactedNew = sampleProject({
+      id: 60,
+      name: 'Unredacted Secret Name',
+      description: 'Secret Details',
+      is_sensitive: true,
+    })
+    const redactedList = [
+      sampleProject({
+        id: 60,
+        name: 'Private project',
+        description: '',
+        is_sensitive: true,
+      }),
+    ]
+
+    const createSpy = vi.spyOn(api, 'createProject').mockResolvedValueOnce(unredactedNew)
+    const listSpy = vi.spyOn(api, 'listProjects').mockResolvedValueOnce(redactedList)
+
+    const created = await store.createProject({
+      name: 'Unredacted Secret Name',
+      is_sensitive: true,
+    })
+
+    expect(createSpy).toHaveBeenCalledWith({ name: 'Unredacted Secret Name', is_sensitive: true })
+    expect(created).toEqual(unredactedNew)
+    expect(listSpy).toHaveBeenCalledWith({ redact: true })
+    expect(store.projects).toEqual(redactedList)
+    expect(store.projects.some((p) => p.name === 'Unredacted Secret Name')).toBe(false)
+  })
+
+  it('when privacy.redact is true, updateProject fetches redacted projects and does not pollute projects.value', async () => {
+    const store = useProjectsStore()
+    const privacy = usePrivacyStore()
+    privacy.set(true)
+
+    const unredactedUpdated = sampleProject({
+      id: 70,
+      name: 'Unredacted Updated Name',
+      description: 'Updated Secret',
+      is_sensitive: true,
+    })
+    const redactedList = [
+      sampleProject({
+        id: 70,
+        name: 'Private project',
+        description: '',
+        is_sensitive: true,
+      }),
+    ]
+
+    const updateSpy = vi.spyOn(api, 'updateProject').mockResolvedValueOnce(unredactedUpdated)
+    const listSpy = vi.spyOn(api, 'listProjects').mockResolvedValueOnce(redactedList)
+
+    const updated = await store.updateProject(70, { name: 'Unredacted Updated Name' })
+
+    expect(updateSpy).toHaveBeenCalledWith(70, { name: 'Unredacted Updated Name' }, undefined)
+    expect(updated).toEqual(unredactedUpdated)
+    expect(listSpy).toHaveBeenCalledWith({ redact: true })
+    expect(store.projects).toEqual(redactedList)
+    expect(store.projects.some((p) => p.name === 'Unredacted Updated Name')).toBe(false)
+  })
 })

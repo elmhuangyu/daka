@@ -87,6 +87,10 @@ export const useProjectsStore = defineStore('projects', () => {
     error.value = null
     try {
       const created = await api.createProject(req)
+      if (privacy.redact) {
+        await fetchProjects()
+        return created
+      }
       projects.value.push(created)
       return created
     } catch (e) {
@@ -102,8 +106,12 @@ export const useProjectsStore = defineStore('projects', () => {
     error.value = null
     try {
       const updated = await api.updateProject(id, req, confirmExposure)
+      if (privacy.redact) {
+        await fetchProjects()
+        return updated
+      }
       const idx = projects.value.findIndex((p) => p.id === id)
-      if (idx !== -1) {
+      if (idx >= 0) {
         projects.value[idx] = updated
       } else {
         projects.value.push(updated)

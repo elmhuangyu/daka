@@ -113,6 +113,9 @@ const ICONS: Record<string, string> = {
   'lucide:folder-open': wrap(
     '<path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2"/>',
   ),
+  'lucide:unlink': wrap(
+    '<path d="m18.84 12.25 1.72-1.71a4.5 4.5 0 0 0-6.36-6.36l-1.72 1.71"/><path d="m5.16 11.75-1.72 1.71a4.5 4.5 0 0 0 6.36 6.36l1.72-1.71"/><line x1="2" x2="22" y1="2" y2="22"/>',
+  ),
 }
 
 for (const [name, body] of Object.entries(ICONS)) addIcon(name, { body, width: 24, height: 24 })

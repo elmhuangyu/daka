@@ -34,6 +34,18 @@ export function makeRouter(history: RouterHistory = createWebHistory()) {
         meta: { title: 'Calendar' },
       },
       {
+        path: '/projects',
+        name: 'projects',
+        component: () => import('./views/ProjectsView.vue'),
+        meta: { title: 'Projects' },
+      },
+      {
+        path: '/projects/:id(\\d+)',
+        name: 'project-detail',
+        component: () => import('./views/ProjectDetailView.vue'),
+        meta: { title: 'Project' },
+      },
+      {
         path: '/items',
         component: () => import('./views/ItemsView.vue'),
         meta: { title: 'Items' },
