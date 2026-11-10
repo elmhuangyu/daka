@@ -264,8 +264,11 @@ func TestRedaction(t *testing.T) {
 	e := newEnv(t, "UTC", mustTime(t, "2026-11-08T08:00:00Z"))
 	cat := dbmodels.Category{UserID: "u1", Name: "Health", IsSensitive: true}
 	require.NoError(t, e.g.Create(&cat).Error)
+	proj := dbmodels.Project{UserID: "u1", Name: "Secret Project", IsSensitive: true}
+	require.NoError(t, e.g.Create(&proj).Error)
 	e.item("Therapy Appointment", func(i *dbmodels.Item) { i.IsSensitive = true; i.RemindTime = ptr("08:00") }, dbmodels.ItemRuleVersion{})
 	e.item("Pills", func(i *dbmodels.Item) { i.CategoryID = &cat.ID; i.Description = "private note" }, dbmodels.ItemRuleVersion{})
+	e.item("Classified Task", func(i *dbmodels.Item) { i.ProjectID = &proj.ID }, dbmodels.ItemRuleVersion{})
 	e.item("Public", nil, dbmodels.ItemRuleVersion{})
 	e.tick()
 	msgs := e.tg.messages()
@@ -273,6 +276,7 @@ func TestRedaction(t *testing.T) {
 	for _, m := range msgs {
 		require.NotContains(t, m.Text, "Therapy")
 		require.NotContains(t, m.Text, "Pills")
+		require.NotContains(t, m.Text, "Classified")
 		require.NotContains(t, m.Text, "private note")
 	}
 	require.Contains(t, msgs[0].Text, "- "+PrivateItemText)

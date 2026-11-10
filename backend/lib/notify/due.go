@@ -30,18 +30,28 @@ func frozenOn(g *gorm.DB, userID, date string) (bool, error) {
 	return n > 0, err
 }
 
-// sensitiveFn returns the user's sensitive category ids.
+// sensitiveFn returns whether an item is sensitive.
 func sensitiveFn(g *gorm.DB, userID string) (func(dbmodels.Item) bool, error) {
 	var cats []dbmodels.Category
 	if err := g.Where("user_id = ? AND is_sensitive = ?", userID, true).Find(&cats).Error; err != nil {
 		return nil, err
 	}
-	set := map[uint]bool{}
+	catSet := map[uint]bool{}
 	for _, c := range cats {
-		set[c.ID] = true
+		catSet[c.ID] = true
+	}
+	var projs []dbmodels.Project
+	if err := g.Where("user_id = ?", userID).Find(&projs).Error; err != nil {
+		return nil, err
+	}
+	projSet := map[uint]bool{}
+	for _, p := range projs {
+		if p.IsSensitive || (p.CategoryID != nil && catSet[*p.CategoryID]) {
+			projSet[p.ID] = true
+		}
 	}
 	return func(it dbmodels.Item) bool {
-		return it.IsSensitive || (it.CategoryID != nil && set[*it.CategoryID])
+		return it.IsSensitive || (it.CategoryID != nil && catSet[*it.CategoryID]) || (it.ProjectID != nil && projSet[*it.ProjectID])
 	}, nil
 }
 

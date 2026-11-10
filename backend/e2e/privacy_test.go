@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/elmhuangyu/daka/backend/lib/config"
+	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
 )
 
 // Strings that must never leave the server for a sensitive item.
@@ -17,16 +18,23 @@ const (
 	secName = "SECRETNAME-9f3a"
 	secDesc = "SECRETDESC-4b21"
 	secCat  = "SECRETCAT-77c0"
+	secProj = "SECRETPROJ-8c12"
 	secNote = "SECRETNOTE-e5d8"
 	secOpt  = "SECRETOPTION-31aa"
 	pubName = "PUBLICNAME-0001"
 )
 
-var secrets = []string{secName, secDesc, secCat, secNote, secOpt}
+var secrets = []string{secName, secDesc, secCat, secProj, secNote, secOpt}
 
 func (c *client) category(name string, sensitive bool) uint {
 	c.t.Helper()
 	r := c.ok(http.StatusCreated, "POST", "/api/categories", obj{"name": name, "is_sensitive": sensitive})
+	return uint(jsonOf[obj](c.t, r)["id"].(float64))
+}
+
+func (c *client) project(name string, sensitive bool) uint {
+	c.t.Helper()
+	r := c.ok(http.StatusCreated, "POST", "/api/projects", obj{"name": name, "is_sensitive": sensitive})
 	return uint(jsonOf[obj](c.t, r)["id"].(float64))
 }
 
@@ -98,7 +106,7 @@ func assertProtected(t *testing.T, s *stack, c *client, id uint) {
 	r := rc.doHdr("GET", "/api/items", nil, bearer(rt))
 	require.Equal(t, 200, r.Status)
 	require.Contains(t, r.Body, pubName, "the control item stays visible")
-	for _, p := range []string{"/api/categories", "/api/export", "/api/tokens", "/api/settings/calendar"} {
+	for _, p := range []string{"/api/categories", "/api/projects", "/api/export", "/api/tokens", "/api/settings/calendar"} {
 		r := rc.doHdr("GET", p, nil, bearer(rt))
 		require.Equal(t, 401, r.Status, "read token must not reach %s", p)
 		noLeak(t, "read token "+p, r.Body)
@@ -129,6 +137,7 @@ func assertProtected(t *testing.T, s *stack, c *client, id uint) {
 	b = feed(all)
 	require.Contains(t, b, secName, "privacy=all exposes the name by design")
 	require.NotContains(t, b, secCat, "the category name is never part of the feed")
+	require.NotContains(t, b, secProj, "the project name is never part of the feed")
 	require.NotContains(t, b, secNote, "check-in notes are never part of the feed")
 	// Feed tokens are not API credentials, and read tokens are not feed credentials.
 	require.Equal(t, 401, rc.doHdr("GET", "/api/items", nil, bearer(all)).Status)
@@ -215,6 +224,27 @@ func TestSensitiveLeakageMatrix(t *testing.T) {
 			cat := c.category(secCat, true)
 			id := newItem(c, func(b obj) { b["category_id"] = cat })
 			c.ok(200, "PATCH", fmt.Sprintf("/api/items/%d", id), obj{"category_id": nil})
+			return id
+		}},
+		{"sensitive project at creation", func(t *testing.T, c *client) uint {
+			proj := c.project(secProj, true)
+			id := newItem(c, func(b obj) {})
+			require.NoError(t, c.s.db.Write().Model(&dbmodels.Item{}).Where("id = ?", id).Update("project_id", proj).Error)
+			return id
+		}},
+		{"project flagged afterwards", func(t *testing.T, c *client) uint {
+			proj := c.project(secProj, false)
+			id := newItem(c, func(b obj) {})
+			require.NoError(t, c.s.db.Write().Model(&dbmodels.Item{}).Where("id = ?", id).Update("project_id", proj).Error)
+			c.ok(200, "PATCH", fmt.Sprintf("/api/projects/%d", proj), obj{"is_sensitive": true})
+			return id
+		}},
+		{"project inherits sensitivity from category", func(t *testing.T, c *client) uint {
+			cat := c.category(secCat, true)
+			r := c.ok(http.StatusCreated, "POST", "/api/projects", obj{"name": secProj, "category_id": cat, "is_sensitive": false})
+			proj := uint(jsonOf[obj](c.t, r)["id"].(float64))
+			id := newItem(c, func(b obj) {})
+			require.NoError(t, c.s.db.Write().Model(&dbmodels.Item{}).Where("id = ?", id).Update("project_id", proj).Error)
 			return id
 		}},
 	}

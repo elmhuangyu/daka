@@ -25,18 +25,28 @@ func parseRedact(w http.ResponseWriter, r *http.Request) (redact, ok bool) {
 }
 
 // sensitiveFn reports whether an item is sensitive, directly or through its
-// category.
+// category or project.
 func sensitiveFn(db *gorm.DB, userID string) (func(dbmodels.Item) bool, error) {
 	var cats []dbmodels.Category
 	if err := db.Where("user_id = ? AND is_sensitive = ?", userID, true).Find(&cats).Error; err != nil {
 		return nil, err
 	}
-	set := map[uint]bool{}
+	catSet := map[uint]bool{}
 	for _, c := range cats {
-		set[c.ID] = true
+		catSet[c.ID] = true
+	}
+	var projs []dbmodels.Project
+	if err := db.Where("user_id = ?", userID).Find(&projs).Error; err != nil {
+		return nil, err
+	}
+	projSet := map[uint]bool{}
+	for _, p := range projs {
+		if p.IsSensitive || (p.CategoryID != nil && catSet[*p.CategoryID]) {
+			projSet[p.ID] = true
+		}
 	}
 	return func(it dbmodels.Item) bool {
-		return it.IsSensitive || (it.CategoryID != nil && set[*it.CategoryID])
+		return it.IsSensitive || (it.CategoryID != nil && catSet[*it.CategoryID]) || (it.ProjectID != nil && projSet[*it.ProjectID])
 	}, nil
 }
 
@@ -59,7 +69,7 @@ func sensitiveItemIDs(db *gorm.DB, userID string) ([]uint, error) {
 		return nil, err
 	}
 	var items []dbmodels.Item
-	if err := db.Select("id", "user_id", "category_id", "is_sensitive").Where("user_id = ?", userID).Find(&items).Error; err != nil {
+	if err := db.Select("id", "user_id", "category_id", "project_id", "is_sensitive").Where("user_id = ?", userID).Find(&items).Error; err != nil {
 		return nil, err
 	}
 	var ids []uint
