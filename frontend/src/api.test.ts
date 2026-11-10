@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createAdHocEvent, getMe, resetCsrf, setCheckin } from './api'
+import { createAdHocEvent, getMe, patchCheckin, resetCsrf, setCheckin } from './api'
 
 function jsonRes(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -70,5 +70,25 @@ describe('CSRF header', () => {
   it('getMe returns the profile', async () => {
     const m = await getMe()
     expect(m.name).toBe('U')
+  })
+
+  it('patchCheckin sends PATCH /api/checkins/{id} with CSRF header, idempotency key and JSON body', async () => {
+    let capturedUrl = ''
+    let capturedInit: RequestInit | undefined
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/auth/me') return me()
+      capturedUrl = url
+      capturedInit = init
+      return jsonRes({ id: 42, item_id: 1, date: '2026-11-07', note: 'my note' })
+    })
+    const res = await patchCheckin(42, { note: 'my note' })
+    expect(res).toEqual({ id: 42, item_id: 1, date: '2026-11-07', note: 'my note' })
+    expect(capturedUrl).toBe('/api/checkins/42')
+    expect(capturedInit?.method).toBe('PATCH')
+    const headers = capturedInit?.headers as Record<string, string>
+    expect(headers['X-Daka-CSRF']).toBe('tok-1')
+    expect(headers['Content-Type']).toBe('application/json')
+    expect(headers['Idempotency-Key']).toBeDefined()
+    expect(JSON.parse(capturedInit?.body as string)).toEqual({ note: 'my note' })
   })
 })

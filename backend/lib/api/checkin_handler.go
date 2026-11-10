@@ -57,6 +57,17 @@ type unsetResponse struct {
 	Deleted int64  `json:"deleted"`
 }
 
+type patchCheckinRequest struct {
+	Note *string `json:"note"`
+}
+
+type patchCheckinResponse struct {
+	ID     uint   `json:"id"`
+	ItemID uint   `json:"item_id"`
+	Date   string `json:"date"`
+	Note   string `json:"note"`
+}
+
 func (s *server) postCheckin(w http.ResponseWriter, r *http.Request) {
 	u, ok := auth.UserFrom(r.Context())
 	if !ok {
@@ -341,6 +352,102 @@ func (s *server) deleteCheckin(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errResult(http.StatusInternalServerError, "internal error").write(w)
 		return
+	}
+	res.write(w)
+}
+
+func (s *server) patchCheckin(w http.ResponseWriter, r *http.Request) {
+	u, ok := auth.UserFrom(r.Context())
+	if !ok {
+		errResult(http.StatusUnauthorized, "unauthorized").write(w)
+		return
+	}
+	id, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
+	if err != nil {
+		errResult(http.StatusBadRequest, "invalid id").write(w)
+		return
+	}
+	key := r.Header.Get("Idempotency-Key")
+	if len(key) > maxIdempotencyKey {
+		errResult(http.StatusBadRequest, "Idempotency-Key too long").write(w)
+		return
+	}
+	var req patchCheckinRequest
+	if !decodeStrict(w, r, &req) {
+		return
+	}
+	if req.Note == nil {
+		errResult(http.StatusBadRequest, "missing note").write(w)
+		return
+	}
+	if len(*req.Note) > maxNoteBytes {
+		errResult(http.StatusBadRequest, "note too long").write(w)
+		return
+	}
+
+	var itemID uint
+	var res result
+	err = s.db.Write().Transaction(func(tx *gorm.DB) error {
+		if key != "" {
+			var stored dbmodels.IdempotencyKey
+			err := tx.Where("user_id = ? AND key = ?", u.ID, key).Take(&stored).Error
+			if err == nil {
+				res = result{status: stored.StatusCode, body: []byte(stored.ResponseBody)}
+				return nil
+			}
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+		}
+
+		var row dbmodels.CheckinLog
+		err := tx.Where("id = ? AND user_id = ?", id, u.ID).Take(&row).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			res = errResult(http.StatusNotFound, "checkin not found")
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		itemID = row.ItemID
+
+		if err := tx.Model(&row).Update("note", *req.Note).Error; err != nil {
+			return err
+		}
+		if err := dbmodels.BumpStateVersion(tx, u.ID); err != nil {
+			return err
+		}
+		row.Note = *req.Note
+		res = jsonResult(http.StatusOK, patchCheckinResponse{
+			ID:     row.ID,
+			ItemID: row.ItemID,
+			Date:   row.CheckinDate,
+			Note:   row.Note,
+		})
+		if key != "" && res.status >= 200 && res.status < 300 {
+			return tx.Create(&dbmodels.IdempotencyKey{
+				UserID:       u.ID,
+				Key:          key,
+				StatusCode:   res.status,
+				ResponseBody: string(res.body),
+				CreatedAt:    s.now().UTC(),
+			}).Error
+		}
+		return nil
+	})
+	if err != nil && key != "" {
+		var stored dbmodels.IdempotencyKey
+		if e := s.db.Write().Where("user_id = ? AND key = ?", u.ID, key).Take(&stored).Error; e == nil {
+			res = result{status: stored.StatusCode, body: []byte(stored.ResponseBody)}
+			err = nil
+		}
+	}
+	if err != nil {
+		errResult(http.StatusInternalServerError, "internal error").write(w)
+		return
+	}
+	if itemID != 0 {
+		s.versions.Bump(itemID)
 	}
 	res.write(w)
 }

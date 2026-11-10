@@ -334,3 +334,199 @@ func TestPurgeIdempotencyKeys(t *testing.T) {
 	require.Len(t, left, 1)
 	require.Equal(t, "fresh", left[0].Key)
 }
+
+func TestPatchCheckin(t *testing.T) {
+	e := newEnv(t)
+
+	// 1. Updating note on boolean, counter, metric, and event check-in logs.
+	types := []struct {
+		name       string
+		createItem func() uint
+		postBody   func(id uint) m
+	}{
+		{
+			name: "boolean",
+			createItem: func() uint {
+				return e.item("u1", nil)
+			},
+			postBody: func(id uint) m {
+				return m{"item_id": id, "mode": "set", "note": "initial bool note"}
+			},
+		},
+		{
+			name: "counter",
+			createItem: func() uint {
+				return e.typed("u1", dbmodels.TrackerCounter, nil)
+			},
+			postBody: func(id uint) m {
+				return m{"item_id": id, "mode": "delta", "value": 2, "note": "initial counter note"}
+			},
+		},
+		{
+			name: "metric",
+			createItem: func() uint {
+				return e.typed("u1", dbmodels.TrackerMetric, nil)
+			},
+			postBody: func(id uint) m {
+				return m{"item_id": id, "mode": "append", "value": 42.5, "note": "initial metric note"}
+			},
+		},
+		{
+			name: "event",
+			createItem: func() uint {
+				return e.item("u1", func(i *dbmodels.Item) { i.Kind = dbmodels.KindEvent })
+			},
+			postBody: func(id uint) m {
+				return m{"item_id": id, "mode": "set", "note": "initial event note"}
+			},
+		},
+	}
+
+	for _, tc := range types {
+		t.Run(tc.name, func(t *testing.T) {
+			itID := tc.createItem()
+			w := e.do("POST", "/api/checkins", "", "", tc.postBody(itID))
+			require.Equal(t, 200, w.Code)
+			var posted checkinResponse
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &posted))
+
+			var stBefore dbmodels.UserSettings
+			require.NoError(t, e.db.Write().Where("user_id = ?", "u1").Take(&stBefore).Error)
+
+			newNote := fmt.Sprintf("updated note for %s", tc.name)
+			patchPath := fmt.Sprintf("/api/checkins/%d", posted.ID)
+			w = e.do("PATCH", patchPath, "", "", m{"note": newNote})
+			require.Equal(t, 200, w.Code, w.Body.String())
+
+			var patched patchCheckinResponse
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &patched))
+			require.Equal(t, posted.ID, patched.ID)
+			require.Equal(t, itID, patched.ItemID)
+			require.Equal(t, posted.Date, patched.Date)
+			require.Equal(t, newNote, patched.Note)
+
+			var row dbmodels.CheckinLog
+			require.NoError(t, e.db.Write().Where("id = ?", posted.ID).Take(&row).Error)
+			require.Equal(t, newNote, row.Note)
+
+			var stAfter dbmodels.UserSettings
+			require.NoError(t, e.db.Write().Where("user_id = ?", "u1").Take(&stAfter).Error)
+			require.Greater(t, stAfter.StateVersion, stBefore.StateVersion, "state_version bumped")
+		})
+	}
+
+	// 2. Clearing note to ""
+	t.Run("clear note to empty string", func(t *testing.T) {
+		itID := e.item("u1", nil)
+		w := e.do("POST", "/api/checkins", "", "", m{"item_id": itID, "mode": "set", "note": "to be cleared"})
+		require.Equal(t, 200, w.Code)
+		var posted checkinResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &posted))
+
+		patchPath := fmt.Sprintf("/api/checkins/%d", posted.ID)
+		w = e.do("PATCH", patchPath, "", "", m{"note": ""})
+		require.Equal(t, 200, w.Code)
+		var patched patchCheckinResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &patched))
+		require.Equal(t, "", patched.Note)
+
+		var row dbmodels.CheckinLog
+		require.NoError(t, e.db.Write().Where("id = ?", posted.ID).Take(&row).Error)
+		require.Equal(t, "", row.Note)
+	})
+
+	// 3. Missing note field or invalid JSON -> 400
+	t.Run("validation rejections", func(t *testing.T) {
+		itID := e.item("u1", nil)
+		w := e.do("POST", "/api/checkins", "", "", m{"item_id": itID, "mode": "set", "note": "orig"})
+		var posted checkinResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &posted))
+		patchPath := fmt.Sprintf("/api/checkins/%d", posted.ID)
+
+		for name, body := range map[string]any{
+			"invalid json":         "{broken json",
+			"empty object":         m{},
+			"wrong type":           m{"note": 123},
+			"unknown fields":       m{"note": "valid", "extra": 42},
+			"trailing json":        `{"note":"a"}{"note":"b"}`,
+			"note too long (2001)": m{"note": strings.Repeat("x", 2001)},
+		} {
+			w := e.do("PATCH", patchPath, "", "", body)
+			require.Equal(t, 400, w.Code, name)
+		}
+
+		// Boundary check: note exactly 2000 bytes succeeds
+		w = e.do("PATCH", patchPath, "", "", m{"note": strings.Repeat("x", 2000)})
+		require.Equal(t, 200, w.Code)
+
+		// Invalid path ID
+		require.Equal(t, 400, e.do("PATCH", "/api/checkins/abc", "", "", m{"note": "valid"}).Code)
+	})
+
+	// 4. Non-existent id or another user's check-in id -> 404
+	t.Run("not found and user isolation", func(t *testing.T) {
+		itID := e.item("u1", nil)
+		w := e.do("POST", "/api/checkins", "", "", m{"item_id": itID, "mode": "set", "note": "orig"})
+		var posted checkinResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &posted))
+		patchPath := fmt.Sprintf("/api/checkins/%d", posted.ID)
+
+		// Other user
+		w = e.do("PATCH", patchPath, "u2", "", m{"note": "hacked"})
+		require.Equal(t, 404, w.Code)
+		require.JSONEq(t, `{"error":"checkin not found"}`, w.Body.String())
+
+		// Non-existent ID
+		w = e.do("PATCH", "/api/checkins/9999999", "", "", m{"note": "ghost"})
+		require.Equal(t, 404, w.Code)
+		require.JSONEq(t, `{"error":"checkin not found"}`, w.Body.String())
+	})
+
+	// 5. Verify GET /api/checkins reflects updated note, and ?redact=1 on sensitive item hides note
+	t.Run("list checkins and redaction", func(t *testing.T) {
+		sensID := e.item("u1", func(i *dbmodels.Item) { i.IsSensitive = true })
+		w := e.do("POST", "/api/checkins", "", "", m{"item_id": sensID, "mode": "set", "note": "secret 1"})
+		var posted checkinResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &posted))
+
+		patchPath := fmt.Sprintf("/api/checkins/%d", posted.ID)
+		w = e.do("PATCH", patchPath, "", "", m{"note": "updated secret"})
+		require.Equal(t, 200, w.Code)
+
+		// Normal GET reveals updated note
+		w = e.do("GET", fmt.Sprintf("/api/checkins?item_id=%d", sensID), "", "", nil)
+		require.Equal(t, 200, w.Code)
+		var listResp struct {
+			Checkins []checkinLogResponse `json:"checkins"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &listResp))
+		require.Len(t, listResp.Checkins, 1)
+		require.Equal(t, "updated secret", listResp.Checkins[0].Note)
+
+		// Redacted GET masks note
+		w = e.do("GET", fmt.Sprintf("/api/checkins?item_id=%d&redact=1", sensID), "", "", nil)
+		require.Equal(t, 200, w.Code)
+		var redactedResp struct {
+			Checkins []checkinLogResponse `json:"checkins"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &redactedResp))
+		require.Len(t, redactedResp.Checkins, 1)
+		require.Equal(t, "", redactedResp.Checkins[0].Note)
+	})
+
+	// 6. Idempotency replay
+	t.Run("idempotency replay", func(t *testing.T) {
+		itID := e.item("u1", nil)
+		w := e.do("POST", "/api/checkins", "", "", m{"item_id": itID, "mode": "set", "note": "v1"})
+		var posted checkinResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &posted))
+
+		patchPath := fmt.Sprintf("/api/checkins/%d", posted.ID)
+		w1 := e.do("PATCH", patchPath, "", "patch-key-1", m{"note": "v2"})
+		require.Equal(t, 200, w1.Code)
+
+		w2 := e.do("PATCH", patchPath, "", "patch-key-1", m{"note": "v2"})
+		require.Equal(t, 200, w2.Code)
+		require.Equal(t, w1.Body.String(), w2.Body.String())
+	})
+}

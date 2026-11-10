@@ -101,6 +101,7 @@ func NewRouter(d Deps) http.Handler {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/checkins", s.postCheckin)
+	mux.HandleFunc("PATCH /api/checkins/{id}", s.patchCheckin)
 	mux.HandleFunc("DELETE /api/checkins/{id}", s.deleteCheckin)
 	mux.HandleFunc("GET /api/items", s.listItems)
 	mux.HandleFunc("POST /api/items", s.postItem)

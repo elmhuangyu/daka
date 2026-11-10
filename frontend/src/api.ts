@@ -485,6 +485,16 @@ export function deleteCheckin(id: number): Promise<unknown> {
   })
 }
 
+export function patchCheckin(
+  id: number,
+  body: { note: string },
+): Promise<{ id: number; item_id: number; date: string; note: string }> {
+  return request(
+    `/api/checkins/${id}`,
+    jsonInit('PATCH', body, { 'Idempotency-Key': newIdempotencyKey() }),
+  )
+}
+
 export function setCheckin(itemId: number, done: boolean): Promise<unknown> {
   return postCheckin({ item_id: itemId, mode: done ? 'set' : 'unset' })
 }
