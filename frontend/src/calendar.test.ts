@@ -95,11 +95,23 @@ let calls: Call[]
 let extResponses: Record<string, () => Response | Promise<Response>>
 let viewDays: Record<string, object>
 let viewStatus: number
+let checkinLogs: Array<{
+  id: number
+  item_id: number
+  option_id: number | null
+  date: string
+  time: string
+  value: number
+  note: string
+  source: string
+  is_supplement: boolean
+}>
 
 beforeEach(() => {
   localStorage.clear()
   calls = []
   extResponses = {}
+  checkinLogs = []
   viewStatus = 200
   viewDays = {
     '2026-11-06': day('2026-11-06', {
@@ -177,7 +189,19 @@ beforeEach(() => {
     if (url.startsWith('/api/items'))
       return jsonRes({ items: [detail(1, 'Water'), detail(3, 'Read')] })
     if (url.startsWith('/api/checkins') && method === 'GET')
-      return jsonRes({ checkins: [], next_cursor: null })
+      return jsonRes({ checkins: checkinLogs, next_cursor: null })
+    if (url.startsWith('/api/checkins/') && method === 'PATCH') {
+      const id = Number(url.split('/').pop())
+      const body = init?.body ? (JSON.parse(String(init.body)) as { note?: string }) : {}
+      const log = checkinLogs.find((l) => l.id === id)
+      if (log && body.note !== undefined) log.note = body.note
+      return jsonRes({
+        id,
+        item_id: log?.item_id ?? 1,
+        date: log?.date ?? '2026-11-06',
+        note: body.note ?? '',
+      })
+    }
     return jsonRes({})
   })
   vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-08T12:00:00Z') })
@@ -363,6 +387,45 @@ describe('CalendarView', () => {
     expect(itemPost).toBeTruthy()
     const rule = itemPost!.body!.rule as Record<string, unknown>
     expect(rule.dtstart).toBe('2026-11-20')
+    w.unmount()
+  })
+
+  it('opens details modal from DayPanel and updates check-in note via PATCH', async () => {
+    checkinLogs = [
+      {
+        id: 42,
+        item_id: 1,
+        option_id: null,
+        date: '2026-11-06',
+        time: '10:00:00',
+        value: 1,
+        note: 'Drank morning glass',
+        source: 'web',
+        is_supplement: false,
+      },
+    ]
+    const { w } = await mountView()
+    await w.get('[data-testid=day-2026-11-06]').trigger('click')
+    await flushPromises()
+
+    // Note snippet should appear in DayPanel
+    expect(w.get('[data-testid=panel-note-1]').text()).toContain('Drank morning glass')
+
+    // Click details button for item 1
+    await w.get('[data-testid=panel-item-details-1]').trigger('click')
+    await flushPromises()
+
+    expect(w.find('[data-testid=occurrence-modal]').exists()).toBe(true)
+    const input = w.get('[data-testid=occurrence-note-input]')
+    expect((input.element as HTMLTextAreaElement).value).toBe('Drank morning glass')
+
+    await input.setValue('Drank 2 glasses')
+    await w.get('[data-testid=save-occurrence-note]').trigger('click')
+    await flushPromises()
+
+    const patch = calls.find((c) => c.method === 'PATCH' && c.url === '/api/checkins/42')
+    expect(patch).toBeTruthy()
+    expect(patch!.body).toEqual({ note: 'Drank 2 glasses' })
     w.unmount()
   })
 })

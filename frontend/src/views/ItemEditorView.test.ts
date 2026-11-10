@@ -160,6 +160,7 @@ describe('ItemEditorView', () => {
 
   it('redirects to / when attempting to edit an event', async () => {
     const { router } = await mountAt('/items/5/edit')
+    await flushPromises()
     expect(router.currentRoute.value.path).toBe('/')
   })
 })

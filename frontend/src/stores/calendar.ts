@@ -252,6 +252,32 @@ export const useCalendarStore = defineStore('calendar', () => {
     return guarded(itemId, () => api.deleteCheckin(logId))
   }
 
+  async function updateNote(logId: number, note: string) {
+    const existing = dayLogs.value.find((l) => l.id === logId)
+    const itemId = existing?.item_id
+    if (itemId) {
+      return guarded(itemId, async () => {
+        const updated = await api.patchCheckin(logId, { note })
+        const idx = dayLogs.value.findIndex((l) => l.id === logId)
+        if (idx !== -1) {
+          dayLogs.value[idx] = { ...dayLogs.value[idx]!, note: updated.note }
+        }
+      })
+    } else {
+      try {
+        const updated = await api.patchCheckin(logId, { note })
+        const idx = dayLogs.value.findIndex((l) => l.id === logId)
+        if (idx !== -1) {
+          dayLogs.value[idx] = { ...dayLogs.value[idx]!, note: updated.note }
+        }
+        panelError.value = ''
+        await loadPanel()
+      } catch (e) {
+        panelError.value = api.describeError(e)
+      }
+    }
+  }
+
   return {
     mode,
     anchor,
@@ -279,6 +305,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     loadPanel,
     makeUp,
     removeLog,
+    updateNote,
     clearPlaintext,
   }
 })

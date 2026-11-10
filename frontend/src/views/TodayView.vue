@@ -9,6 +9,7 @@ import { findCategory, type CardVM } from '../today/logic'
 import CompletionRing from '../components/today/CompletionRing.vue'
 import CategoryFilter from '../components/today/CategoryFilter.vue'
 import ItemCard from '../components/today/ItemCard.vue'
+import OccurrenceDetailModal from '../components/today/OccurrenceDetailModal.vue'
 import { createAdHocEvent, createScheduledEvent, describeError, type CheckinInput } from '../api'
 import { useI18n } from '../i18n'
 import { formatCustomDate, weekdayName } from '../i18n/format'
@@ -105,6 +106,20 @@ function cat(c: CardVM) {
   return findCategory(store.categories, c.detail.category_id)
 }
 const log = (input: CheckinInput) => store.submit(input)
+
+const detailItemId = ref<number | null>(null)
+const allCards = computed<CardVM[]>(() => [
+  ...store.overdueCards,
+  ...store.todoCards,
+  ...store.maintenanceCards,
+  ...store.quotaCards,
+  ...store.doneCards,
+])
+const detailCard = computed(() =>
+  detailItemId.value !== null
+    ? (allCards.value.find((c) => c.detail.id === detailItemId.value) ?? null)
+    : null,
+)
 
 onMounted(store.refresh)
 // The store clears all plaintext synchronously when redact turns on; refetch afterwards.
@@ -268,6 +283,7 @@ watch(
               :pending="offline.pendingItems.includes(c.detail.id)"
               @log="log"
               @remove="store.remove(c.detail.id, $event)"
+              @open-details="detailItemId = c.detail.id"
             />
           </li>
         </ul>
@@ -292,6 +308,7 @@ watch(
                 :pending="offline.pendingItems.includes(c.detail.id)"
                 @log="log"
                 @remove="store.remove(c.detail.id, $event)"
+                @open-details="detailItemId = c.detail.id"
               />
             </li>
           </ul>
@@ -430,6 +447,7 @@ watch(
                 :pending="offline.pendingItems.includes(c.detail.id)"
                 @log="log"
                 @remove="store.remove(c.detail.id, $event)"
+                @open-details="detailItemId = c.detail.id"
               />
             </li>
           </ul>
@@ -494,6 +512,19 @@ watch(
           </li>
         </ul>
       </div>
+
+      <OccurrenceDetailModal
+        :open="!!detailCard"
+        :detail="detailCard?.detail ?? null"
+        :logs="detailCard?.logs ?? []"
+        :date="store.view?.date ?? ''"
+        :busy="detailCard ? store.busy.includes(detailCard.detail.id) : false"
+        :redact="privacy.redact"
+        @close="detailItemId = null"
+        @log="log"
+        @remove="detailCard && store.remove(detailCard.detail.id, $event)"
+        @patch-note="(id, note) => store.updateNote(id, note)"
+      />
     </template>
   </section>
 </template>

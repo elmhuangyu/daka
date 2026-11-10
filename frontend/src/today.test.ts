@@ -74,6 +74,15 @@ beforeEach(() => {
       }
       if (url.startsWith('/api/items')) return jsonRes({ items: world.items })
       if (url.startsWith('/api/categories')) return jsonRes({ categories: world.cats })
+      if (url.startsWith('/api/checkins/') && init?.method === 'PATCH') {
+        const id = Number(url.split('/').pop())
+        const body = JSON.parse(init.body as string)
+        const existing = (world.logs as Array<{ id: number; note: string; item_id: number }>).find(
+          (l) => l.id === id,
+        )
+        if (existing) existing.note = body.note
+        return jsonRes({ id, item_id: existing?.item_id ?? 1, date: '2026-11-07', note: body.note })
+      }
       if (url.startsWith('/api/checkins') && (!init || !init.method))
         return jsonRes({ checkins: world.logs, next_cursor: null })
       return jsonRes({})
@@ -243,6 +252,8 @@ describe('Today page', () => {
     await w.get('[data-testid=dec]').trigger('click')
     await flushPromises()
     expect(lastBody()).toEqual({ item_id: 1, mode: 'delta', value: -250 })
+    await w.get('[data-testid="card-1"] [data-testid="open-details"]').trigger('click')
+    await flushPromises()
     await w.get('[data-testid=set-input]').setValue('1200')
     await w.get('[data-testid=set]').trigger('click')
     await flushPromises()
@@ -275,6 +286,8 @@ describe('Today page', () => {
     await w.get('[data-testid=row-opt-10] [data-testid=inc]').trigger('click')
     await flushPromises()
     expect(lastBody()).toEqual({ item_id: 1, mode: 'delta', value: 2, option_id: 10 })
+    await w.get('[data-testid="card-1"] [data-testid="open-details"]').trigger('click')
+    await flushPromises()
     await w.get('input[aria-label="Ad-hoc option name"]').setValue('Swim')
     await w.get('input[aria-label="Ad-hoc value"]').setValue('3')
     await w.get('[data-testid=adhoc-form]').trigger('submit')
@@ -342,10 +355,12 @@ describe('Today page', () => {
     const card = w.get('[data-testid=maintenance-list] [data-testid=card-3]')
     expect(card.get('[data-testid=maintenance-text]').text()).toContain('overdue by 5 days')
     expect(w.find('[data-testid=card-4]').exists()).toBe(false)
-    await card.get('input[aria-label="Note (optional)"]').setValue('new filter')
-    await card.get('[data-testid=toggle]').trigger('click')
+    await card.get('[data-testid="open-details"]').trigger('click')
     await flushPromises()
-    expect(lastBody()).toEqual({ item_id: 3, mode: 'set', note: 'new filter' })
+    await w.get('[data-testid="occurrence-note-input"]').setValue('new filter')
+    await w.get('[data-testid="save-occurrence-note"]').trigger('click')
+    await flushPromises()
+    expect(lastBody()).toEqual({ item_id: 3, mode: 'set', value: 1, note: 'new filter' })
   })
 
   it('quota section: negative boolean logs occurrences and shows progress', async () => {
@@ -507,5 +522,71 @@ describe('Today page', () => {
       (c) => c[1]?.method === 'POST' && String(c[0]) === '/api/checkins',
     )
     expect(checkinPost).toBeUndefined()
+  })
+
+  it('clicking open-details on checked-in item edits note via PATCH and shows preview', async () => {
+    world.today = [tItem(1, 'Read', { done: true, log_ids: [10] })]
+    world.items = [detail({ id: 1, name: 'Read' })]
+    world.logs = [
+      {
+        id: 10,
+        item_id: 1,
+        option_id: null,
+        date: '2026-11-07',
+        value: 1,
+        note: 'Initial chapter',
+      },
+    ]
+    const w = await mountApp()
+
+    // Preview rendered on card
+    expect(w.get('[data-testid="card-1"] [data-testid="card-note-preview"]').text()).toContain(
+      'Initial chapter',
+    )
+
+    // Clicking card note preview opens modal
+    await w.get('[data-testid="card-1"] [data-testid="card-note-preview"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid="occurrence-modal"]').exists()).toBe(true)
+
+    const noteInput = w.get('[data-testid="occurrence-note-input"]')
+    expect((noteInput.element as HTMLTextAreaElement).value).toBe('Initial chapter')
+    await noteInput.setValue('Finished chapter 2')
+
+    await w.get('[data-testid="save-occurrence-note"]').trigger('click')
+    await flushPromises()
+
+    const patchCall = fetchMock.mock.calls.find(
+      (c) => c[1]?.method === 'PATCH' && String(c[0]) === '/api/checkins/10',
+    )
+    expect(patchCall).toBeTruthy()
+    expect(JSON.parse(patchCall![1].body)).toEqual({ note: 'Finished chapter 2' })
+
+    expect(w.get('[data-testid="card-1"] [data-testid="card-note-preview"]').text()).toContain(
+      'Finished chapter 2',
+    )
+  })
+
+  it('modal blocks note editing when privacy.redact is active', async () => {
+    world.today = [tItem(1, 'Secret Item', { done: true, log_ids: [10], is_sensitive: true })]
+    world.items = [detail({ id: 1, name: 'Secret Item', effective_sensitive: true })]
+    world.logs = [
+      { id: 10, item_id: 1, option_id: null, date: '2026-11-07', value: 1, note: 'Private note' },
+    ]
+    const w = await mountApp()
+
+    await w.get('[data-testid="card-1"] [data-testid="open-details"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid="occurrence-modal"]').exists()).toBe(true)
+    expect(w.find('[data-testid="occurrence-note-input"]').exists()).toBe(true)
+
+    // Activate privacy mode
+    const { usePrivacyStore } = await import('./stores/privacy')
+    usePrivacyStore().set(true)
+    await flushPromises()
+
+    // Modal shows redact notice and hides note input
+    expect(w.find('[data-testid="modal-redact-notice"]').exists()).toBe(true)
+    expect(w.find('[data-testid="occurrence-note-input"]').exists()).toBe(false)
   })
 })

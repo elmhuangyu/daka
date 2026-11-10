@@ -239,6 +239,32 @@ export const useTodayStore = defineStore('today', () => {
     return guarded(itemId, () => api.deleteCheckin(logId))
   }
 
+  async function updateNote(logId: number, note: string) {
+    const existing = logs.value.find((l) => l.id === logId)
+    const itemId = existing?.item_id
+    if (itemId) {
+      return guarded(itemId, async () => {
+        const updated = await api.patchCheckin(logId, { note })
+        const idx = logs.value.findIndex((l) => l.id === logId)
+        if (idx !== -1) {
+          logs.value[idx] = { ...logs.value[idx]!, note: updated.note }
+        }
+      })
+    } else {
+      try {
+        const updated = await api.patchCheckin(logId, { note })
+        const idx = logs.value.findIndex((l) => l.id === logId)
+        if (idx !== -1) {
+          logs.value[idx] = { ...logs.value[idx]!, note: updated.note }
+        }
+        error.value = ''
+        await refresh(selectedDate.value)
+      } catch (e) {
+        error.value = api.describeError(e)
+      }
+    }
+  }
+
   return {
     view,
     items,
@@ -269,5 +295,6 @@ export const useTodayStore = defineStore('today', () => {
     goToToday,
     submit,
     remove,
+    updateNote,
   }
 })

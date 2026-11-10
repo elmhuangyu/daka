@@ -6,10 +6,13 @@ import type { CalendarDayItem, CheckinInput } from '../../api'
 import { canMakeUp, dayStatusText, eventTime, longDate } from '../../calendar/logic'
 import { useI18n, type MessageKey } from '../../i18n'
 import { useCalendarStore } from '../../stores/calendar'
+import { usePrivacyStore } from '../../stores/privacy'
 import MakeupControl from './MakeupControl.vue'
+import OccurrenceDetailModal from '../today/OccurrenceDetailModal.vue'
 
 const { t } = useI18n()
 const store = useCalendarStore()
+const privacy = usePrivacyStore()
 const emit = defineEmits<{ close: [] }>()
 
 const day = computed(() => store.selectedDay)
@@ -24,11 +27,17 @@ const added = ref<number[]>([])
 const quickQuery = ref('')
 const quickOpen = ref(false)
 const quickBusy = ref(false)
+const modalItemId = ref<number | null>(null)
+const modalDetail = computed(() =>
+  modalItemId.value ? (store.detailById.get(modalItemId.value) ?? null) : null,
+)
+const modalLogs = computed(() => (modalItemId.value ? logsOf(modalItemId.value) : []))
 
 watch(date, () => {
   added.value = []
   quickQuery.value = ''
   quickOpen.value = false
+  modalItemId.value = null
 })
 
 const listed = computed(() => (day.value?.items ?? []).filter((i) => !i.forecast || i.overdue))
@@ -197,7 +206,27 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
                 t('calendar.panel.makeup')
               }}</span>
               <span class="badge badge-sm" :class="badge(i).cls">{{ badge(i).text }}</span>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs btn-square"
+                :aria-label="t('today.card.details')"
+                :title="t('today.card.details')"
+                :data-testid="`panel-item-details-${i.item_id}`"
+                @click="modalItemId = i.item_id"
+              >
+                <Icon icon="lucide:pencil" class="size-3.5" aria-hidden="true" />
+              </button>
             </span>
+          </div>
+          <div
+            v-if="logsOf(i.item_id).some((l) => l.note && l.note.trim())"
+            class="mt-1 flex items-center gap-1 text-xs text-base-content/70"
+            :data-testid="`panel-note-${i.item_id}`"
+          >
+            <Icon icon="lucide:pencil" class="size-3 shrink-0 opacity-70" aria-hidden="true" />
+            <span class="truncate">{{
+              logsOf(i.item_id).find((l) => l.note && l.note.trim())?.note
+            }}</span>
           </div>
           <p v-if="i.overdue" class="text-sm text-error">{{ t('calendar.panel.overdueNote') }}</p>
           <div v-if="editable && !(i.forecast && !i.overdue)" class="mt-2">
@@ -219,9 +248,31 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
           class="rounded-box border border-dashed border-base-300 p-2"
           :data-testid="`panel-added-${d.id}`"
         >
-          <span class="name font-medium" :class="{ sensitive: d.effective_sensitive }">{{
-            d.name
-          }}</span>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="name font-medium" :class="{ sensitive: d.effective_sensitive }">{{
+              d.name
+            }}</span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square"
+              :aria-label="t('today.card.details')"
+              :title="t('today.card.details')"
+              :data-testid="`panel-item-details-${d.id}`"
+              @click="modalItemId = d.id"
+            >
+              <Icon icon="lucide:pencil" class="size-3.5" aria-hidden="true" />
+            </button>
+          </div>
+          <div
+            v-if="logsOf(d.id).some((l) => l.note && l.note.trim())"
+            class="mt-1 flex items-center gap-1 text-xs text-base-content/70"
+            :data-testid="`panel-note-${d.id}`"
+          >
+            <Icon icon="lucide:pencil" class="size-3 shrink-0 opacity-70" aria-hidden="true" />
+            <span class="truncate">{{
+              logsOf(d.id).find((l) => l.note && l.note.trim())?.note
+            }}</span>
+          </div>
           <div class="mt-2">
             <MakeupControl
               :detail="d"
@@ -338,5 +389,18 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
         </li>
       </ul>
     </section>
+
+    <OccurrenceDetailModal
+      :open="!!modalDetail"
+      :detail="modalDetail"
+      :logs="modalLogs"
+      :date="date"
+      :busy="modalDetail ? store.busy.includes(modalDetail.id) : false"
+      :redact="privacy.redact"
+      @close="modalItemId = null"
+      @log="makeUp"
+      @remove="modalDetail && store.removeLog(modalDetail.id, $event)"
+      @patch-note="(id, note) => store.updateNote(id, note)"
+    />
   </aside>
 </template>

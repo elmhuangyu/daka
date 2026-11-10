@@ -4,7 +4,6 @@ import { Icon } from '@iconify/vue'
 import type { Category, CheckinInput } from '../../api'
 import { useI18n } from '../../i18n'
 import {
-  adhocLogs,
   fmt,
   maintenanceText,
   quotaText,
@@ -23,13 +22,12 @@ const props = defineProps<{
   /** An offline check-in for this item is queued and not yet confirmed. */
   pending?: boolean
 }>()
-const emit = defineEmits<{ log: [CheckinInput]; remove: [number] }>()
+const emit = defineEmits<{ log: [CheckinInput]; remove: [number]; openDetails: [] }>()
 
 const d = computed(() => props.vm.detail)
 const logs = computed(() => props.vm.logs)
 const negative = computed(() => d.value.polarity === 'negative')
 const rows = computed(() => valueRows(d.value, logs.value))
-const adhoc = computed(() => adhocLogs(d.value, logs.value))
 const hasOptions = computed(() => d.value.options.length > 0)
 const isToggle = computed(
   () =>
@@ -40,6 +38,14 @@ const isOccurrence = computed(() => d.value.tracker_type === 'boolean' && negati
 const checked = computed(() => logs.value.length > 0)
 const itemId = computed(() => d.value.id)
 const lastLogId = computed(() => logs.value.reduce((m, l) => Math.max(m, l.id), 0))
+
+const activeNote = computed(
+  () =>
+    [...logs.value]
+      .reverse()
+      .find((l) => l.note && l.note.trim())
+      ?.note?.trim() ?? '',
+)
 
 const quota = computed(() => d.value.stats?.quota ?? null)
 const trafficClass = computed(() => {
@@ -56,9 +62,6 @@ const trafficClass = computed(() => {
 })
 
 const inputs = reactive<Record<string, string>>({})
-const note = ref('')
-const adhocName = ref('')
-const adhocValue = ref('')
 const localError = ref('')
 
 // v-model on type=number inputs yields a number (or '' when empty).
@@ -79,9 +82,7 @@ function toggle() {
   emit('log', {
     item_id: itemId.value,
     mode: checked.value ? 'unset' : 'set',
-    ...(!checked.value && note.value.trim() ? { note: note.value.trim() } : {}),
   })
-  note.value = ''
 }
 
 function occurrence() {
@@ -99,19 +100,6 @@ function bump(r: ValueRow, sign: 1 | -1) {
   emit('log', { item_id: itemId.value, mode: 'delta', value: sign * amount, ...optionPart(r) })
 }
 
-function setValue(r: ValueRow) {
-  const n = parse(inputs[r.key])
-  if (n === null || n < 0) {
-    localError.value = t('today.card.err.valueMin')
-    return
-  }
-  const delta = n - (r.current ?? 0)
-  if (Math.abs(delta) < 1e-9) return
-  localError.value = ''
-  emit('log', { item_id: itemId.value, mode: 'delta', value: delta, ...optionPart(r) })
-  inputs[r.key] = ''
-}
-
 function record(r: ValueRow) {
   const n = parse(inputs[r.key])
   if (n === null) {
@@ -126,25 +114,6 @@ function record(r: ValueRow) {
   emit('log', { item_id: itemId.value, mode: 'append', value: n, ...optionPart(r) })
   inputs[r.key] = ''
 }
-
-function addAdhoc() {
-  const name = adhocName.value.trim()
-  const n = parse(adhocValue.value)
-  if (!name || n === null) {
-    localError.value = t('today.card.err.adhoc')
-    return
-  }
-  localError.value = ''
-  emit('log', {
-    item_id: itemId.value,
-    mode: d.value.tracker_type === 'counter' ? 'delta' : 'append',
-    value: n,
-    adhoc: true,
-    note: name,
-  })
-  adhocName.value = ''
-  adhocValue.value = ''
-}
 </script>
 
 <template>
@@ -158,8 +127,9 @@ function addAdhoc() {
     <div class="card-body gap-3 p-3.5 sm:p-4">
       <header class="flex flex-wrap items-center justify-between gap-2">
         <h3
-          class="name text-base font-semibold flex items-center gap-2"
+          class="name text-base font-semibold flex items-center gap-2 cursor-pointer hover:text-primary transition-colors"
           :class="{ sensitive: d.effective_sensitive }"
+          @click="emit('openDetails')"
         >
           <span
             v-if="d.color"
@@ -168,18 +138,40 @@ function addAdhoc() {
           />
           {{ d.name }}
         </h3>
-        <span v-if="pending" class="badge badge-warning badge-sm" data-testid="pending-badge">
-          <Icon icon="lucide:cloud-off" aria-hidden="true" /> {{ t('today.card.pendingSync') }}
-        </span>
-        <span
-          v-if="category"
-          class="badge badge-outline"
-          :style="category.color ? { borderColor: category.color } : {}"
-        >
-          <Icon v-if="category.is_sensitive" icon="lucide:lock" aria-hidden="true" />
-          {{ category.name }}
-        </span>
+        <div class="flex items-center gap-1.5">
+          <span v-if="pending" class="badge badge-warning badge-sm" data-testid="pending-badge">
+            <Icon icon="lucide:cloud-off" aria-hidden="true" /> {{ t('today.card.pendingSync') }}
+          </span>
+          <span
+            v-if="category"
+            class="badge badge-outline"
+            :style="category.color ? { borderColor: category.color } : {}"
+          >
+            <Icon v-if="category.is_sensitive" icon="lucide:lock" aria-hidden="true" />
+            {{ category.name }}
+          </span>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-square"
+            :aria-label="t('today.card.details')"
+            :title="t('today.card.details')"
+            data-testid="open-details"
+            @click="emit('openDetails')"
+          >
+            <Icon icon="lucide:pencil" class="size-3.5" aria-hidden="true" />
+          </button>
+        </div>
       </header>
+
+      <div
+        v-if="activeNote"
+        class="flex items-center gap-1.5 text-xs text-base-content/70 bg-base-200/50 hover:bg-base-200 rounded-md px-2.5 py-1 cursor-pointer transition-colors"
+        data-testid="card-note-preview"
+        @click="emit('openDetails')"
+      >
+        <Icon icon="lucide:pencil" class="size-3 shrink-0 opacity-70" aria-hidden="true" />
+        <span class="truncate" :class="{ sensitive: d.effective_sensitive }">{{ activeNote }}</span>
+      </div>
 
       <p
         v-if="variant === 'maintenance'"
@@ -207,14 +199,6 @@ function addAdhoc() {
 
       <!-- boolean / maintenance toggle -->
       <div v-if="isToggle" class="flex flex-wrap items-center gap-2">
-        <input
-          v-if="d.tracker_type === 'maintenance' && !checked"
-          v-model="note"
-          class="input input-sm input-bordered min-w-0 flex-1"
-          :aria-label="t('today.card.notePlaceholder')"
-          :placeholder="t('today.card.notePlaceholder')"
-          maxlength="500"
-        />
         <button
           type="button"
           class="btn"
@@ -324,29 +308,6 @@ function addAdhoc() {
           >
             <Icon icon="lucide:plus" aria-hidden="true" /> {{ fmt(r.step) }} {{ r.unit }}
           </button>
-          <input
-            v-model="inputs[r.key]"
-            type="number"
-            inputmode="decimal"
-            min="0"
-            step="any"
-            class="input input-sm input-bordered w-24"
-            :aria-label="
-              r.label ? t('today.card.setTotalFor', { label: r.label }) : t('today.card.setTotal')
-            "
-            :placeholder="t('today.card.setTo')"
-            data-testid="set-input"
-            @keydown.enter.prevent="setValue(r)"
-          />
-          <button
-            type="button"
-            class="btn btn-sm"
-            :disabled="busy"
-            data-testid="set"
-            @click="setValue(r)"
-          >
-            {{ t('today.card.set') }}
-          </button>
         </div>
 
         <div v-else class="flex flex-wrap items-center gap-2">
@@ -394,39 +355,6 @@ function addAdhoc() {
           >
             <Icon icon="lucide:x" aria-hidden="true" />
           </button>
-        </li>
-      </ul>
-
-      <!-- ad-hoc option -->
-      <form
-        v-if="hasOptions && (d.tracker_type === 'counter' || d.tracker_type === 'metric')"
-        class="flex flex-wrap items-center gap-2"
-        data-testid="adhoc-form"
-        @submit.prevent="addAdhoc"
-      >
-        <input
-          v-model="adhocName"
-          class="input input-sm input-bordered min-w-0 flex-1"
-          :aria-label="t('today.card.adhocName')"
-          :placeholder="t('today.card.adhocNamePlaceholder')"
-          maxlength="100"
-        />
-        <input
-          v-model="adhocValue"
-          type="number"
-          inputmode="decimal"
-          step="any"
-          class="input input-sm input-bordered w-24"
-          :aria-label="t('today.card.adhocValue')"
-          :placeholder="t('today.card.value')"
-        />
-        <button type="submit" class="btn btn-sm" :disabled="busy" data-testid="adhoc-add">
-          {{ t('common.add') }}
-        </button>
-      </form>
-      <ul v-if="adhoc.length && d.tracker_type === 'counter'" class="text-sm opacity-80">
-        <li v-for="l in adhoc" :key="l.id">
-          {{ l.note || t('today.card.adhocTitle') }}: {{ fmt(l.value) }}
         </li>
       </ul>
 
