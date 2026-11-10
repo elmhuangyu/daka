@@ -64,6 +64,7 @@ type createItemRequest struct {
 	Color       string          `json:"color,omitempty"`
 	CategoryID  *uint           `json:"category_id"`
 	ProjectID   *uint           `json:"project_id"`
+	ParentID    *uint           `json:"parent_id"`
 	IsSensitive bool            `json:"is_sensitive"`
 	Unit        string          `json:"unit"`
 	Step        float64         `json:"step"`
@@ -127,6 +128,7 @@ type itemResponse struct {
 	Color       string  `json:"color,omitempty"`
 	CategoryID  *uint   `json:"category_id"`
 	ProjectID   *uint   `json:"project_id"`
+	ParentID    *uint   `json:"parent_id"`
 	IsSensitive bool    `json:"is_sensitive"`
 	// EffectiveSensitive is Item.is_sensitive OR the category's flag (DESIGN 4.1).
 	EffectiveSensitive bool             `json:"effective_sensitive"`
@@ -301,6 +303,28 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 			// DESIGN 4.1 rule 1: a sensitive category makes its items sensitive.
 			sensitive = sensitive || cat.IsSensitive
 		}
+		if req.ParentID != nil {
+			var parent dbmodels.Item
+			err := tx.Where("id = ? AND user_id = ?", *req.ParentID, userID).Take(&parent).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && parent.ParentID != nil) {
+				out = errResult(http.StatusBadRequest, "invalid parent")
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			// Sub-items live in the parent's project and inherit its sensitivity.
+			if req.ProjectID != nil && (parent.ProjectID == nil || *req.ProjectID != *parent.ProjectID) {
+				out = errResult(http.StatusBadRequest, "sub-items follow their parent's project")
+				return nil
+			}
+			req.ProjectID = parent.ProjectID
+			sensFn, err := sensitiveFn(tx, userID)
+			if err != nil {
+				return err
+			}
+			sensitive = sensitive || sensFn(parent)
+		}
 		if req.ProjectID != nil {
 			proj, found, err := loadOwnedProject(tx, userID, *req.ProjectID)
 			if err != nil {
@@ -324,7 +348,7 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 			ver.QuotaWindow = dbmodels.QuotaWindowCalendar
 		}
 		item := dbmodels.Item{
-			UserID: userID, CategoryID: req.CategoryID, ProjectID: req.ProjectID, Name: name, Color: req.Color,
+			UserID: userID, CategoryID: req.CategoryID, ProjectID: req.ProjectID, ParentID: req.ParentID, Name: name, Color: req.Color,
 			TrackerType: tracker, Kind: kind, Polarity: polarity, IsSensitive: sensitive,
 			Unit: req.Unit, Step: req.Step, MinVal: req.MinVal, MaxVal: req.MaxVal,
 			Aggregate: dbmodels.Aggregate(req.Aggregate), WarningDays: req.WarningDays,
@@ -366,7 +390,7 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 		resp := itemResponse{
 			ID: item.ID, Name: item.Name, TrackerType: string(item.TrackerType),
 			Kind: string(item.Kind), Polarity: string(item.Polarity),
-			CategoryID: item.CategoryID, ProjectID: item.ProjectID, IsSensitive: item.IsSensitive, EffectiveSensitive: item.IsSensitive,
+			CategoryID: item.CategoryID, ProjectID: item.ProjectID, ParentID: item.ParentID, IsSensitive: item.IsSensitive, EffectiveSensitive: item.IsSensitive,
 			Unit: item.Unit, Step: item.Step, MinVal: item.MinVal, MaxVal: item.MaxVal,
 			Aggregate: string(item.Aggregate), WarningDays: item.WarningDays,
 			Options:     make([]optionResponse, len(opts)),

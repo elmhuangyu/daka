@@ -288,7 +288,14 @@ func (s *server) patchItem(w http.ResponseWriter, r *http.Request) {
 func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRequest) (result, error) {
 	// Row lock (PostgreSQL; SQLite serializes writers anyway) so a concurrent
 	// category freeze cannot be overwritten by this read-modify-write.
-	item, found, err := loadOwnedItem(tx.Clauses(clause.Locking{Strength: "UPDATE"}), userID, id)
+	// Children are locked in the same statement, in id order, matching
+	// patchProject's ordering so concurrent updates cannot deadlock.
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Model(&dbmodels.Item{}).
+		Where("user_id = ? AND (id = ? OR parent_id = ?)", userID, id, id).Order("id").
+		Pluck("id", &[]uint{}).Error; err != nil {
+		return result{}, err
+	}
+	item, found, err := loadOwnedItem(tx, userID, id)
 	if err != nil {
 		return result{}, err
 	}
@@ -379,6 +386,9 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 			// DESIGN 4.1 rule 1: a sensitive category makes its items sensitive.
 			item.IsSensitive = item.IsSensitive || cat.IsSensitive
 		}
+	}
+	if req.ProjectID.Set && item.ParentID != nil {
+		return errResult(http.StatusBadRequest, "sub-items follow their parent's project"), nil
 	}
 	if req.ProjectID.Set {
 		// DESIGN 4.1 rule 3: leaving a sensitive project freezes the item as
@@ -490,6 +500,13 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 		}
 	}
 
+	if item.ParentID == nil {
+		// Sub-items follow their parent's project and sensitivity.
+		if err := tx.Model(&dbmodels.Item{}).Where("user_id = ? AND parent_id = ?", userID, item.ID).
+			Updates(map[string]any{"project_id": item.ProjectID, "is_sensitive": gorm.Expr("is_sensitive OR ?", item.IsSensitive)}).Error; err != nil {
+			return result{}, err
+		}
+	}
 	if err := tx.Model(&dbmodels.Item{}).Where("id = ?", item.ID).Select(
 		"Name", "Description", "Color", "CategoryID", "ProjectID", "IsSensitive", "Pinned", "SortOrder", "Archived", "RemindTime",
 		"Unit", "Step", "MinVal", "MaxVal", "Aggregate", "WarningDays").Updates(&item).Error; err != nil {
@@ -538,16 +555,22 @@ func (s *server) deleteItem(w http.ResponseWriter, r *http.Request) {
 		if !found {
 			return errResult(http.StatusNotFound, "item not found"), nil
 		}
-		if err := tx.Where("item_id = ? AND user_id = ?", id, userID).Delete(&dbmodels.CheckinLog{}).Error; err != nil {
+		// Sub-items are deleted together with their parent.
+		var ids []uint
+		if err := tx.Model(&dbmodels.Item{}).Where("user_id = ? AND parent_id = ?", userID, id).Pluck("id", &ids).Error; err != nil {
 			return result{}, err
 		}
-		if err := tx.Where("item_id = ?", id).Delete(&dbmodels.ItemRuleVersion{}).Error; err != nil {
+		ids = append(ids, id)
+		if err := tx.Where("item_id IN ? AND user_id = ?", ids, userID).Delete(&dbmodels.CheckinLog{}).Error; err != nil {
 			return result{}, err
 		}
-		if err := tx.Where("item_id = ?", id).Delete(&dbmodels.ItemOption{}).Error; err != nil {
+		if err := tx.Where("item_id IN ?", ids).Delete(&dbmodels.ItemRuleVersion{}).Error; err != nil {
 			return result{}, err
 		}
-		if err := tx.Where("id = ? AND user_id = ?", id, userID).Delete(&dbmodels.Item{}).Error; err != nil {
+		if err := tx.Where("item_id IN ?", ids).Delete(&dbmodels.ItemOption{}).Error; err != nil {
+			return result{}, err
+		}
+		if err := tx.Where("id IN ? AND user_id = ?", ids, userID).Delete(&dbmodels.Item{}).Error; err != nil {
 			return result{}, err
 		}
 		if err := dbmodels.BumpStateVersion(tx, userID); err != nil {

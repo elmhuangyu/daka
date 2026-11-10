@@ -410,6 +410,7 @@ export interface ItemDetail {
   polarity: 'positive' | 'negative' | string
   category_id: number | null
   project_id?: number | null
+  parent_id?: number | null
   effective_sensitive: boolean
   unit?: string
   step?: number
@@ -715,24 +716,10 @@ export function getExternalCalendar(
 
 export const updateItem = patchItem
 
-export function createAdHocEvent(name: string, projectId?: number | null): Promise<{ id: number }> {
-  return request<{ id: number }>(
-    '/api/items',
-    jsonInit('POST', {
-      name: name.trim(),
-      tracker_type: 'boolean',
-      kind: 'event',
-      polarity: 'positive',
-      ...(projectId !== undefined && projectId !== null ? { project_id: projectId } : {}),
-      rule: { schedule_type: 'none', holiday_mode: 'none' },
-    }),
-  )
-}
-
-export function createScheduledEvent(
+export function createAdHocEvent(
   name: string,
-  date: string,
   projectId?: number | null,
+  parentId?: number | null,
 ): Promise<{ id: number }> {
   return request<{ id: number }>(
     '/api/items',
@@ -742,6 +729,27 @@ export function createScheduledEvent(
       kind: 'event',
       polarity: 'positive',
       ...(projectId !== undefined && projectId !== null ? { project_id: projectId } : {}),
+      ...(parentId !== undefined && parentId !== null ? { parent_id: parentId } : {}),
+      rule: { schedule_type: 'none', holiday_mode: 'none' },
+    }),
+  )
+}
+
+export function createScheduledEvent(
+  name: string,
+  date: string,
+  projectId?: number | null,
+  parentId?: number | null,
+): Promise<{ id: number }> {
+  return request<{ id: number }>(
+    '/api/items',
+    jsonInit('POST', {
+      name: name.trim(),
+      tracker_type: 'boolean',
+      kind: 'event',
+      polarity: 'positive',
+      ...(projectId !== undefined && projectId !== null ? { project_id: projectId } : {}),
+      ...(parentId !== undefined && parentId !== null ? { parent_id: parentId } : {}),
       rule: {
         schedule_type: 'fixed_rrule',
         rrule_string: 'FREQ=DAILY;COUNT=1',
@@ -757,11 +765,12 @@ export function createTodoItem(
   name: string,
   dueDate?: string | null,
   projectId?: number | null,
+  parentId?: number | null,
 ): Promise<{ id: number }> {
   if (dueDate && dueDate.trim()) {
-    return createScheduledEvent(name, dueDate.trim(), projectId)
+    return createScheduledEvent(name, dueDate.trim(), projectId, parentId)
   }
-  return createAdHocEvent(name, projectId)
+  return createAdHocEvent(name, projectId, parentId)
 }
 
 export function setTodoDueDate(itemId: number, dueDate: string | null): Promise<ItemDto> {

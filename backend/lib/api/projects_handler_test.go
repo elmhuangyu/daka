@@ -528,3 +528,63 @@ func TestProjectDynamicSensitivityCategoryFlipRegression(t *testing.T) {
 	require.Equal(t, 200, w.Code)
 	require.True(t, e.rawItem(itMove).IsSensitive, "item should be frozen sensitive when moved to insensitive category without confirm_exposure")
 }
+
+func TestSubItems(t *testing.T) {
+	e := newEnv(t)
+	p := e.createProject("u1", m{"name": "P"})
+	create := func(body m) (int, uint) {
+		w := e.do("POST", "/api/items", "u1", "", body)
+		var r struct {
+			ID uint `json:"id"`
+		}
+		_ = json.Unmarshal(w.Body.Bytes(), &r)
+		return w.Code, r.ID
+	}
+	base := func(extra m) m {
+		b := m{"name": "t", "tracker_type": "boolean", "kind": "event", "polarity": "positive",
+			"rule": m{"schedule_type": "none", "holiday_mode": "none"}}
+		for k, v := range extra {
+			b[k] = v
+		}
+		return b
+	}
+	code, parent := create(base(m{"project_id": p.ID}))
+	require.Equal(t, http.StatusCreated, code)
+
+	// The sub-item inherits the parent's project even if none is sent.
+	code, child := create(base(m{"parent_id": parent}))
+	require.Equal(t, http.StatusCreated, code)
+	var row dbmodels.Item
+	require.NoError(t, e.db.Read().Where("id = ?", child).Take(&row).Error)
+	require.NotNil(t, row.ParentID)
+	require.Equal(t, parent, *row.ParentID)
+	require.NotNil(t, row.ProjectID)
+	require.Equal(t, p.ID, *row.ProjectID)
+
+	// Only one level of nesting; unknown parents are rejected.
+	code, _ = create(base(m{"parent_id": child}))
+	require.Equal(t, http.StatusBadRequest, code)
+	code, _ = create(base(m{"parent_id": 99999}))
+	require.Equal(t, http.StatusBadRequest, code)
+
+	// A sub-item cannot be moved to another project on its own.
+	w0 := e.do("PATCH", fmt.Sprintf("/api/items/%d", child), "u1", "", m{"project_id": nil})
+	require.Equal(t, http.StatusBadRequest, w0.Code)
+
+	// A sensitive parent (via its category, flagged after creation) makes new
+	// sub-items sensitive too.
+	cat := e.category("u1", false)
+	_, sp := create(base(m{"category_id": cat}))
+	require.NoError(t, e.db.Write().Model(&dbmodels.Category{}).Where("id = ?", cat).Update("is_sensitive", true).Error)
+	_, sc := create(base(m{"parent_id": sp}))
+	var srow dbmodels.Item
+	require.NoError(t, e.db.Read().Where("id = ?", sc).Take(&srow).Error)
+	require.True(t, srow.IsSensitive)
+
+	// Deleting the parent deletes the sub-item.
+	w := e.do("DELETE", fmt.Sprintf("/api/items/%d", parent), "u1", "", nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var n int64
+	require.NoError(t, e.db.Read().Model(&dbmodels.Item{}).Where("id IN ?", []uint{parent, child}).Count(&n).Error)
+	require.Zero(t, n)
+}

@@ -5,10 +5,12 @@ package dbmodels
 // (current rule = latest effective_from <= date). last_completed_at and
 // next_due_at are derived from CheckinLog and never stored.
 type Item struct {
-	ID          uint   `gorm:"primaryKey"`
-	UserID      string `gorm:"size:64;not null;index"`
-	CategoryID  *uint  `gorm:"index"`
-	ProjectID   *uint  `gorm:"index"`
+	ID         uint   `gorm:"primaryKey"`
+	UserID     string `gorm:"size:64;not null;index"`
+	CategoryID *uint  `gorm:"index"`
+	ProjectID  *uint  `gorm:"index"`
+	// ParentID makes this item a sub-item of another (one level deep only).
+	ParentID    *uint  `gorm:"index"`
 	Name        string `gorm:"size:255;not null"`
 	Description string `gorm:"type:text"`
 

@@ -88,6 +88,7 @@ type exportItem struct {
 	ID          uint     `json:"id"`
 	CategoryID  *uint    `json:"category_id"`
 	ProjectID   *uint    `json:"project_id,omitempty"`
+	ParentID    *uint    `json:"parent_id,omitempty"`
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
 	TrackerType string   `json:"tracker_type"`

@@ -316,3 +316,28 @@ func TestExportIsPlaintextAndGuarded(t *testing.T) {
 	require.Equal(t, 401, s.newClient().doHdr("GET", "/api/export", nil, bearer(tok)).Status)
 	noLeak(t, "server logs", s.logs.String())
 }
+
+// Sub-items of a sensitive parent are sensitive too, including when the
+// parent's sensitivity is dynamic (category flagged after creation) or arrives
+// after the sub-item exists.
+func TestSubItemsInheritSensitivity(t *testing.T) {
+	s := startStack(t, "2025-09-10", stackOpts{})
+	c := s.newClient()
+	c.createItem(obj{"name": pubName, "tracker_type": "boolean", "rule": fixedRule("FREQ=DAILY", "none")})
+
+	cat := c.category(secCat, false)
+	parent := c.createItem(obj{"name": "parent", "tracker_type": "boolean", "kind": "event", "category_id": cat,
+		"rule": obj{"schedule_type": "none", "holiday_mode": "none"}})
+	c.ok(200, "PUT", fmt.Sprintf("/api/categories/%d", cat), obj{"is_sensitive": true})
+	child := c.createItem(obj{"name": secName, "tracker_type": "boolean", "kind": "event",
+		"parent_id": parent, "rule": fixedRule("FREQ=DAILY", "none")})
+	assertProtected(t, s, c, child)
+
+	// Sensitivity arriving after the sub-item exists propagates to it.
+	p2 := c.createItem(obj{"name": "parent2", "tracker_type": "boolean", "kind": "event",
+		"rule": obj{"schedule_type": "none", "holiday_mode": "none"}})
+	child2 := c.createItem(obj{"name": secName, "tracker_type": "boolean", "kind": "event",
+		"parent_id": p2, "rule": fixedRule("FREQ=DAILY", "none")})
+	c.ok(200, "PATCH", fmt.Sprintf("/api/items/%d", p2), obj{"is_sensitive": true})
+	assertProtected(t, s, c, child2)
+}

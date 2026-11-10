@@ -218,6 +218,9 @@ func validateImport(doc *importDoc, applySettings bool, now time.Time) (*importP
 		if it.ProjectID != nil && !projIDs[*it.ProjectID] {
 			return nil, bad(where, "unknown_project")
 		}
+		if it.ParentID != nil && *it.ParentID == it.ID {
+			return nil, bad(where, "bad_parent")
+		}
 		optIDs, f := validateImportItem(where, it)
 		if f != nil {
 			return nil, f
@@ -227,6 +230,18 @@ func validateImport(doc *importDoc, applySettings bool, now time.Time) (*importP
 		p.summary.RuleVersions += len(it.RuleVersions)
 	}
 	p.summary.Items = len(doc.Items)
+
+	// Sub-items: the parent must be another item in the document that is
+	// itself a root (one level only, which also rules out cycles).
+	roots := make(map[uint]bool, len(doc.Items))
+	for i := range doc.Items {
+		roots[doc.Items[i].ID] = doc.Items[i].ParentID == nil
+	}
+	for i := range doc.Items {
+		if pid := doc.Items[i].ParentID; pid != nil && !roots[*pid] {
+			return nil, bad("items["+strconv.Itoa(i)+"]", "bad_parent")
+		}
+	}
 
 	for i, c := range doc.Checkins {
 		where := "checkins[" + strconv.Itoa(i) + "]"
@@ -539,6 +554,21 @@ func (p *importPlan) write(tx *gorm.DB, userID string) error {
 			if err := tx.Create(&ver).Error; err != nil {
 				return err
 			}
+		}
+	}
+
+	// Sub-item links are resolved after every item has its new id.
+	for i := range doc.Items {
+		it := &doc.Items[i]
+		if it.ParentID == nil {
+			continue
+		}
+		pid, ok := itemMap[*it.ParentID]
+		if !ok {
+			continue
+		}
+		if err := tx.Model(&dbmodels.Item{}).Where("id = ? AND user_id = ?", itemMap[it.ID], userID).Update("parent_id", pid).Error; err != nil {
+			return err
 		}
 	}
 

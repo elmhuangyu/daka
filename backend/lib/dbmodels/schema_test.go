@@ -52,7 +52,7 @@ func TestSchemaMatchesDesign(t *testing.T) {
 		{&Project{}, "projects", map[string]string{"id": tInt, "user_id": tStr, "category_id": tInt, "name": tStr,
 			"description": tStr, "color": tStr, "status": tStr, "target_date": tStr, "is_sensitive": tBool,
 			"sort_order": tInt, "created_at": tTime, "updated_at": tTime}},
-		{&Item{}, "items", map[string]string{"id": tInt, "user_id": tStr, "category_id": tInt, "project_id": tInt, "name": tStr, "description": tStr,
+		{&Item{}, "items", map[string]string{"id": tInt, "user_id": tStr, "category_id": tInt, "project_id": tInt, "parent_id": tInt, "name": tStr, "description": tStr,
 			"color": tStr, "tracker_type": tStr, "unit": tStr, "aggregate": tStr, "step": tFloat, "min_val": tFloat, "max_val": tFloat,
 			"warning_days": tInt, "kind": tStr, "polarity": tStr, "pinned": tBool, "is_sensitive": tBool, "remind_time": tStr,
 			"sort_order": tInt, "archived": tBool}},

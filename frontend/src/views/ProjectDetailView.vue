@@ -91,6 +91,21 @@ const categoriesById = computed(() => {
   return map
 })
 
+const rootTasks = computed(() => {
+  const ids = new Set(tasks.value.map((t) => t.id))
+  return tasks.value.filter((t) => !t.parent_id || !ids.has(t.parent_id))
+})
+const childrenByParent = computed(() => {
+  const map = new Map<number, ItemDetail[]>()
+  for (const t of tasks.value) {
+    if (!t.parent_id) continue
+    const list = map.get(t.parent_id) ?? []
+    list.push(t)
+    map.set(t.parent_id, list)
+  }
+  return map
+})
+
 const totalTasks = computed(() => tasks.value.length)
 const completedTasks = computed(
   () => tasks.value.filter((task) => (task.stats?.counts?.total ?? 0) > 0).length,
@@ -273,6 +288,54 @@ async function handleQuickAddTask() {
   }
 }
 
+// Task Management: Sub-tasks
+const subtaskParentId = ref<number | null>(null)
+const subtaskName = ref('')
+const addingSubtask = ref(false)
+
+function openSubtaskForm(task: ItemDetail) {
+  subtaskParentId.value = task.id
+  subtaskName.value = ''
+}
+
+function closeSubtaskForm() {
+  subtaskParentId.value = null
+  subtaskName.value = ''
+}
+
+async function handleAddSubtask(parent: ItemDetail) {
+  const name = subtaskName.value.trim()
+  if (!name || !project.value) return
+  addingSubtask.value = true
+  quickAddError.value = ''
+  try {
+    await api.createTodoItem(name, null, project.value.id, parent.id)
+    subtaskName.value = ''
+    await refreshTasks()
+  } catch (e) {
+    quickAddError.value = api.describeError(e)
+  } finally {
+    addingSubtask.value = false
+  }
+}
+
+async function refreshTasks() {
+  if (!projectId.value) return
+  const res = await api.listProjectItems(projectId.value, { redact: privacy.redact })
+  tasks.value = res.items
+}
+
+// Task Management: Assign / change a due date
+async function changeTaskDate(task: ItemDetail, value: string) {
+  if (taskDueDate(task) === (value || null)) return
+  try {
+    await api.setTodoDueDate(task.id, value || null)
+    await refreshTasks()
+  } catch (e) {
+    error.value = api.describeError(e)
+  }
+}
+
 // Task Management: Toggle Task
 async function toggleTask(task: ItemDetail) {
   const isDone = (task.stats?.counts?.total ?? 0) > 0
@@ -295,21 +358,25 @@ async function toggleTask(task: ItemDetail) {
   }
 }
 
-// Task Management: Unlink Task
+function removeTaskLocally(task: ItemDetail) {
+  tasks.value = tasks.value.filter((t) => t.id !== task.id && t.parent_id !== task.id)
+}
+
+// Task Management: Unlink Task (sub-tasks move with their parent)
 async function unlinkTask(task: ItemDetail) {
   try {
     await api.updateItem(task.id, { project_id: null })
-    tasks.value = tasks.value.filter((t) => t.id !== task.id)
+    removeTaskLocally(task)
   } catch (e) {
     error.value = api.describeError(e)
   }
 }
 
-// Task Management: Delete Task
+// Task Management: Delete Task (the backend also deletes its sub-tasks)
 async function deleteTask(task: ItemDetail) {
   try {
     await api.deleteItem(task.id)
-    tasks.value = tasks.value.filter((t) => t.id !== task.id)
+    removeTaskLocally(task)
   } catch (e) {
     error.value = api.describeError(e)
   }
@@ -540,25 +607,30 @@ function taskDueDate(task: ItemDetail): string | null {
         </h2>
 
         <!-- Quick Add Task Bar -->
-        <div class="card bg-base-100 border border-base-300 p-3 shadow-xs space-y-2">
-          <form
-            class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
-            @submit.prevent="handleQuickAddTask"
-          >
-            <!-- Task Name Input -->
-            <div class="flex-1">
+        <div class="card bg-base-100 border border-base-300 p-3 shadow-xs">
+          <form class="space-y-2" @submit.prevent="handleQuickAddTask">
+            <div class="flex items-center gap-2">
               <input
                 v-model="newTaskName"
                 type="text"
-                class="input input-sm input-bordered w-full"
+                class="input input-sm input-bordered min-w-0 flex-1"
                 :placeholder="t('projects.addTaskPlaceholder')"
                 autocomplete="off"
                 data-testid="input-quick-task-name"
               />
+              <button
+                type="submit"
+                class="btn btn-sm btn-primary gap-1 shadow-xs shrink-0"
+                :disabled="!newTaskName.trim() || addingTask"
+                data-testid="btn-quick-add-task"
+              >
+                <span v-if="addingTask" class="loading loading-spinner loading-xs" />
+                <Icon v-else icon="lucide:plus" class="size-4" />
+                <span class="hidden sm:inline">{{ t('projects.addTask') }}</span>
+              </button>
             </div>
 
-            <!-- Due Date Options -->
-            <div class="flex items-center gap-1.5">
+            <div class="flex flex-wrap items-center gap-1.5">
               <button
                 type="button"
                 class="btn btn-xs rounded-md"
@@ -585,25 +657,13 @@ function taskDueDate(task: ItemDetail): string | null {
               >
                 {{ t('projects.tomorrow') }}
               </button>
-              <div class="w-32">
+              <div class="w-40">
                 <DateInput v-model="newTaskDate" clearable data-testid="input-quick-task-date" />
               </div>
             </div>
-
-            <!-- Submit Button -->
-            <button
-              type="submit"
-              class="btn btn-sm btn-primary gap-1 shadow-xs"
-              :disabled="!newTaskName.trim() || addingTask"
-              data-testid="btn-quick-add-task"
-            >
-              <span v-if="addingTask" class="loading loading-spinner loading-xs" />
-              <Icon v-else icon="lucide:plus" class="size-4" />
-              <span>{{ t('projects.addTask') }}</span>
-            </button>
           </form>
 
-          <div v-if="quickAddError" class="text-xs text-error px-1">
+          <div v-if="quickAddError" class="text-xs text-error px-1 pt-2">
             {{ quickAddError }}
           </div>
         </div>
@@ -618,70 +678,113 @@ function taskDueDate(task: ItemDetail): string | null {
         </div>
 
         <div v-else class="space-y-2" data-testid="project-tasks-list">
-          <div
-            v-for="task in tasks"
-            :key="task.id"
-            class="rounded-xl border border-base-300 bg-base-100 p-3 sm:px-4 sm:py-3 flex items-center justify-between gap-3 transition-colors hover:bg-base-200/40"
-            :data-testid="`task-item-${task.id}`"
-          >
-            <!-- Checkbox & Task Name -->
-            <div class="flex items-center gap-3 min-w-0 flex-1">
+          <template v-for="root in rootTasks" :key="root.id">
+            <template
+              v-for="entry in [
+                { task: root, depth: 0 },
+                ...(childrenByParent.get(root.id) ?? []).map((c) => ({ task: c, depth: 1 })),
+              ]"
+              :key="entry.task.id"
+            >
+              <div
+                class="group rounded-xl border border-base-300 bg-base-100 p-3 sm:px-4 flex flex-wrap items-center gap-x-3 gap-y-2 transition-colors hover:bg-base-200/40"
+                :class="entry.depth ? 'ml-6 sm:ml-8' : ''"
+                :data-testid="`task-item-${entry.task.id}`"
+              >
+                <div class="flex items-center gap-3 min-w-0 flex-1 basis-48">
+                  <input
+                    type="checkbox"
+                    class="checkbox checkbox-sm checkbox-primary"
+                    :checked="(entry.task.stats?.counts?.total ?? 0) > 0"
+                    :data-testid="`task-checkbox-${entry.task.id}`"
+                    @change="toggleTask(entry.task)"
+                  />
+                  <span
+                    class="text-sm font-medium truncate"
+                    :class="{
+                      'line-through text-base-content/40':
+                        (entry.task.stats?.counts?.total ?? 0) > 0,
+                    }"
+                    data-testid="task-name"
+                  >
+                    {{ entry.task.name }}
+                  </span>
+                </div>
+
+                <div class="flex items-center gap-1.5 shrink-0 ml-auto">
+                  <div class="w-36" :data-testid="`task-date-${entry.task.id}`">
+                    <DateInput
+                      :model-value="taskDueDate(entry.task) ?? ''"
+                      clearable
+                      :placeholder="t('projects.setDate')"
+                      :aria-label="t('projects.setDate')"
+                      @update:model-value="changeTaskDate(entry.task, $event)"
+                    />
+                  </div>
+
+                  <button
+                    v-if="!entry.depth"
+                    type="button"
+                    class="btn btn-xs btn-ghost btn-circle text-base-content/60 hover:text-primary sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
+                    :title="t('projects.addSubtask')"
+                    :data-testid="`btn-add-subtask-${entry.task.id}`"
+                    @click="openSubtaskForm(entry.task)"
+                  >
+                    <Icon icon="lucide:list-plus" class="size-3.5" />
+                  </button>
+
+                  <button
+                    v-if="!entry.depth"
+                    type="button"
+                    class="btn btn-xs btn-ghost btn-circle text-base-content/60 hover:text-warning"
+                    :title="t('projects.unlinkTask')"
+                    :data-testid="`btn-unlink-task-${entry.task.id}`"
+                    @click="unlinkTask(entry.task)"
+                  >
+                    <Icon icon="lucide:unlink" class="size-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    class="btn btn-xs btn-ghost btn-circle text-base-content/60 hover:text-error"
+                    :title="t('projects.deleteTask')"
+                    :data-testid="`btn-delete-task-${entry.task.id}`"
+                    @click="deleteTask(entry.task)"
+                  >
+                    <Icon icon="lucide:trash-2" class="size-3.5" />
+                  </button>
+                </div>
+              </div>
+            </template>
+
+            <form
+              v-if="subtaskParentId === root.id"
+              class="ml-6 sm:ml-8 flex items-center gap-2"
+              @submit.prevent="handleAddSubtask(root)"
+            >
               <input
-                type="checkbox"
-                class="checkbox checkbox-sm checkbox-primary"
-                :checked="(task.stats?.counts?.total ?? 0) > 0"
-                :data-testid="`task-checkbox-${task.id}`"
-                @change="toggleTask(task)"
+                v-model="subtaskName"
+                type="text"
+                class="input input-sm input-bordered min-w-0 flex-1"
+                :placeholder="t('projects.subtaskPlaceholder')"
+                autocomplete="off"
+                autofocus
+                @keydown.esc="closeSubtaskForm"
+                :data-testid="`input-subtask-name-${root.id}`"
               />
-              <span
-                class="text-sm font-medium truncate"
-                :class="{
-                  'line-through text-base-content/40': (task.stats?.counts?.total ?? 0) > 0,
-                }"
-                data-testid="task-name"
-              >
-                {{ task.name }}
-              </span>
-            </div>
-
-            <!-- Right side: Due Date & Actions -->
-            <div class="flex items-center gap-2 shrink-0">
-              <!-- Due Date Chip -->
-              <span
-                v-if="taskDueDate(task)"
-                class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-md bg-base-200 text-base-content/70"
-                data-testid="task-due-date"
-              >
-                <Icon icon="lucide:calendar" class="size-3" />
-                <span>{{ formatCustomDate(taskDueDate(task)!) }}</span>
-              </span>
-              <span v-else class="text-xs text-base-content/40" data-testid="task-no-due-date">
-                {{ t('projects.noDueDate') }}
-              </span>
-
-              <!-- Unlink Button -->
               <button
-                type="button"
-                class="btn btn-xs btn-ghost btn-circle text-base-content/60 hover:text-warning"
-                :title="t('projects.unlinkTask')"
-                :data-testid="`btn-unlink-task-${task.id}`"
-                @click="unlinkTask(task)"
+                type="submit"
+                class="btn btn-sm btn-primary"
+                :disabled="!subtaskName.trim() || addingSubtask"
+                :data-testid="`btn-submit-subtask-${root.id}`"
               >
-                <Icon icon="lucide:unlink" class="size-3.5" />
+                {{ t('projects.addTask') }}
               </button>
-
-              <!-- Delete Task Button -->
-              <button
-                type="button"
-                class="btn btn-xs btn-ghost btn-circle text-base-content/60 hover:text-error"
-                :title="t('projects.deleteTask')"
-                :data-testid="`btn-delete-task-${task.id}`"
-                @click="deleteTask(task)"
-              >
-                <Icon icon="lucide:trash-2" class="size-3.5" />
+              <button type="button" class="btn btn-sm btn-ghost" @click="closeSubtaskForm">
+                {{ t('common.cancel') }}
               </button>
-            </div>
-          </div>
+            </form>
+          </template>
         </div>
       </div>
 
