@@ -10,6 +10,7 @@ export interface TodayItem {
   id: number
   name: string
   category_id: number | null
+  project_id?: number | null
   tracker_type: string
   kind?: string
   color?: string
@@ -25,6 +26,7 @@ export interface UpcomingItem {
   id: number
   name: string
   category_id: number | null
+  project_id?: number | null
   tracker_type: string
   kind: string
   color?: string
@@ -407,6 +409,7 @@ export interface ItemDetail {
   kind: 'habit' | 'event' | string
   polarity: 'positive' | 'negative' | string
   category_id: number | null
+  project_id?: number | null
   effective_sensitive: boolean
   unit?: string
   step?: number
@@ -552,6 +555,7 @@ export interface ItemDto {
   kind: string
   polarity: string
   category_id: number | null
+  project_id?: number | null
   is_sensitive: boolean
   effective_sensitive: boolean
   unit?: string
@@ -565,6 +569,8 @@ export interface ItemDto {
   options: ItemOptionDto[]
   current_rule: ItemRuleDto
 }
+
+export type Item = ItemDto
 
 export interface CategoryDto {
   id: number
@@ -632,6 +638,7 @@ export interface CalendarDayItem {
   item_id: number
   name: string
   category_id: number | null
+  project_id?: number | null
   tracker_type: string
   is_sensitive: boolean
   due: boolean
@@ -924,6 +931,94 @@ export function removeCategory(
   else q.set('uncategorize', '1')
   if (confirmExposure) q.set('confirm_exposure', '1')
   return request(`/api/categories/${id}?${q}`, { method: 'DELETE' })
+}
+
+// ---- Projects ----
+
+export type ProjectStatus = 'active' | 'completed' | 'archived'
+
+export interface Project {
+  id: number
+  category_id: number | null
+  name: string
+  description: string
+  color: string
+  status: ProjectStatus
+  target_date: string | null
+  is_sensitive: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateProjectRequest {
+  name: string
+  description?: string
+  color?: string
+  status?: ProjectStatus
+  target_date?: string | null
+  category_id?: number | null
+  is_sensitive?: boolean
+  sort_order?: number
+}
+
+export interface UpdateProjectRequest {
+  name?: string
+  description?: string
+  color?: string
+  status?: ProjectStatus
+  target_date?: string | null
+  category_id?: number | null
+  is_sensitive?: boolean
+  sort_order?: number
+}
+
+export function listProjects(params?: {
+  status?: ProjectStatus
+  category_id?: number
+  redact?: boolean
+}): Promise<Project[]> {
+  const q = new URLSearchParams()
+  if (params?.status) q.set('status', params.status)
+  if (params?.category_id !== undefined && params?.category_id !== null) {
+    q.set('category_id', String(params.category_id))
+  }
+  if (params?.redact) q.set('redact', '1')
+  const qs = q.toString()
+  return request<Project[]>(`/api/projects${qs ? `?${qs}` : ''}`)
+}
+
+export function getProject(id: number, redact = false): Promise<Project> {
+  return request<Project>(`/api/projects/${id}${redact ? '?redact=1' : ''}`)
+}
+
+export function createProject(data: CreateProjectRequest): Promise<Project> {
+  return request<Project>('/api/projects', jsonInit('POST', data))
+}
+
+export function updateProject(
+  id: number,
+  data: UpdateProjectRequest,
+  confirmExposure = false,
+): Promise<Project> {
+  return request<Project>(
+    `/api/projects/${id}${confirmExposure ? '?confirm_exposure=1' : ''}`,
+    jsonInit('PATCH', data),
+  )
+}
+
+export function deleteProject(
+  id: number,
+  options?: { cascade?: boolean; unlink?: boolean; confirmExposure?: boolean },
+): Promise<{ deleted: boolean }> {
+  const q = new URLSearchParams()
+  if (options?.cascade) q.set('cascade', '1')
+  if (options?.unlink) q.set('unlink', '1')
+  if (options?.confirmExposure) q.set('confirm_exposure', '1')
+  const qs = q.toString()
+  return request<{ deleted: boolean }>(`/api/projects/${id}${qs ? `?${qs}` : ''}`, {
+    method: 'DELETE',
+  })
 }
 
 // ---- Items panel and detail page ----
