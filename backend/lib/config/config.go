@@ -136,13 +136,17 @@ type AuthConfig struct {
 	SecureCookie bool `yaml:"secure_cookie" json:"secure_cookie"`
 }
 
-// HolidayConfig configures the statutory-holiday data (region CN).
+// HolidayConfig configures the statutory-holiday data: CN from holiday-cn,
+// US and CA (with provinces/states) from Nager.Date.
 type HolidayConfig struct {
 	// Disabled turns off holiday awareness entirely (no calendar, no refresh).
 	Disabled bool `yaml:"disabled" json:"disabled"`
 	// URLTemplate overrides the remote data URL ({year} is replaced by the year); empty
 	// uses the built-in default. Only the embedded snapshot is used offline.
 	URLTemplate string `yaml:"url_template" json:"url_template"`
+	// NagerURLTemplate overrides the Nager.Date URL for US/CA ({year} and
+	// {country} are replaced); empty uses the built-in default.
+	NagerURLTemplate string `yaml:"nager_url_template" json:"nager_url_template"`
 }
 
 // SecretsConfig holds values that come ONLY from environment variables.

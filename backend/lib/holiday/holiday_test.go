@@ -95,12 +95,12 @@ func TestUnpublishedYear(t *testing.T) {
 
 func TestUnsupportedRegion(t *testing.T) {
 	_, p := newCal(t)
-	us := NewCalendar(p, "US")
-	if us.Published(2025) || us.IsStatutoryHoliday("2025-10-01") || !us.IsWorkday("2025-10-01") {
-		t.Error("US must be plain weekend semantics")
+	fr := NewCalendar(p, "FR")
+	if fr.Published(2025) || fr.IsStatutoryHoliday("2025-10-01") || !fr.IsWorkday("2025-10-01") {
+		t.Error("FR must be plain weekend semantics")
 	}
-	if us.IsWorkday("2025-10-11") {
-		t.Error("plain Saturday is not a workday for US")
+	if fr.IsWorkday("2025-10-11") {
+		t.Error("plain Saturday is not a workday for FR")
 	}
 }
 
@@ -201,7 +201,7 @@ func TestRunDailyRefresh(t *testing.T) {
 	ticks := make(chan time.Time)
 	now := func() time.Time { return time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC) }
 	after := func(time.Duration) <-chan time.Time { return ticks }
-	_, p := newCal(t, WithURLTemplate(srv.URL+"/{year}.json"), WithAllowInsecure(), WithClock(now, after))
+	_, p := newCal(t, WithURLTemplate(srv.URL+"/{year}.json"), WithNagerURLTemplate(srv.URL+"/{country}/{year}"), WithAllowInsecure(), WithClock(now, after))
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { p.RunDailyRefresh(ctx); close(done) }()
@@ -215,5 +215,70 @@ func TestRunDailyRefresh(t *testing.T) {
 	}
 	if got := hits.Load(); got < 6 {
 		t.Errorf("hits = %d, want >= 6", got)
+	}
+}
+
+func TestNagerRegions(t *testing.T) {
+	_, p := newCal(t)
+	tests := []struct {
+		region, date string
+		holiday      bool
+	}{
+		{"US", "2026-07-03", true}, // Independence Day, observed Friday
+		{"US", "2026-07-06", false},
+		{"CA", "2026-07-01", true},  // Canada Day (national)
+		{"CA", "2026-02-16", false}, // provincial only
+		{"CA-MB", "2026-02-16", true},
+		{"CA-ON", "2026-02-16", true}, // Family Day in Ontario
+		{"CA-QC", "2026-02-16", false},
+		{"CN", "2026-07-01", false},
+		{"FR", "2026-07-14", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.region+"/"+tc.date, func(t *testing.T) {
+			c := NewCalendar(p, tc.region)
+			if got := c.IsStatutoryHoliday(tc.date); got != tc.holiday {
+				t.Errorf("IsStatutoryHoliday = %v, want %v", got, tc.holiday)
+			}
+		})
+	}
+	if !NewCalendar(p, "CA-ON").Published(2026) || NewCalendar(p, "FR").Published(2026) {
+		t.Error("Published mismatch")
+	}
+}
+
+func TestValidRegion(t *testing.T) {
+	for r, want := range map[string]bool{
+		"CN": true, "US": true, "CA": true, "CA-ON": true, "US-NY": true,
+		"": false, "FR": false, "CA-XX": false, "US-ON": false, "CN-11": false, "ca": false,
+	} {
+		if got := ValidRegion(r); got != want {
+			t.Errorf("ValidRegion(%q) = %v, want %v", r, got, want)
+		}
+	}
+}
+
+func TestRefreshNager(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/CA/2099" {
+			_, _ = w.Write([]byte(`[{"date":"2099-01-01","name":"X","global":true,"types":["Public"]},` +
+				`{"date":"2099-02-02","name":"Y","global":false,"counties":["CA-BC"],"types":["Public"]},` +
+				`{"date":"2099-03-03","name":"Z","global":true,"types":["Observance"]}]`))
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	_, p := newCal(t, WithNagerURLTemplate(srv.URL+"/{country}/{year}"), WithAllowInsecure())
+	p.RefreshNager(context.Background(), 2099)
+	bc, on := NewCalendar(p, "CA-BC"), NewCalendar(p, "CA-ON")
+	if !bc.IsStatutoryHoliday("2099-01-01") || !bc.IsStatutoryHoliday("2099-02-02") {
+		t.Error("BC data missing")
+	}
+	if !on.IsStatutoryHoliday("2099-01-01") || on.IsStatutoryHoliday("2099-02-02") || on.IsStatutoryHoliday("2099-03-03") {
+		t.Error("ON filtering wrong")
+	}
+	if NewCalendar(p, "US").Published(2099) {
+		t.Error("204 year must stay unpublished")
 	}
 }

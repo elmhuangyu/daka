@@ -19,7 +19,10 @@ func TestHolidayCalendars(t *testing.T) {
 	cn := f(dbmodels.RegionCN)
 	require.NotNil(t, cn)
 	require.True(t, cn.IsStatutoryHoliday("2025-10-01"))
-	require.Nil(t, f(dbmodels.RegionUS), "region without data: no calendar")
+	us := f(dbmodels.RegionUS)
+	require.NotNil(t, us)
+	require.True(t, us.IsStatutoryHoliday("2026-07-03"))
+	require.Nil(t, f("FR"), "region without data: no calendar")
 	require.Nil(t, f(""), "unset region: no calendar")
 
 	hp, err = newHolidayProvider(config.HolidayConfig{Disabled: true})

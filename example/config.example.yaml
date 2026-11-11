@@ -52,3 +52,6 @@ holiday:
   disabled: false
   # Override the remote data URL ({year} is replaced); empty = built-in default.
   # url_template: ""
+  # Override the Nager.Date URL used for US and CA ({year} and {country} are
+  # replaced); empty = built-in default.
+  # nager_url_template: ""

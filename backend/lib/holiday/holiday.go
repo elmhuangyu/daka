@@ -18,8 +18,10 @@ const (
 	Workday Kind = "workday"
 )
 
-// RegionCN is the only region with holiday data. Every other region
-// (including "US") is unsupported: plain weekend semantics, Published=false.
+// RegionCN is the holiday-cn region (with makeup workdays). The other
+// supported regions are Nager.Date countries "US" and "CA", optionally with a
+// subdivision ("CA-ON"); see ValidRegion. Anything else is unsupported: plain
+// weekend semantics, Published=false.
 const RegionCN = "CN"
 
 // DayInfo describes one date.
@@ -50,16 +52,19 @@ type Calendar struct {
 	region string
 }
 
-// NewCalendar returns a Calendar for region (case-sensitive, "CN" supported).
+// NewCalendar returns a Calendar for region (case-sensitive, see ValidRegion).
 func NewCalendar(p *Provider, region string) *Calendar {
 	return &Calendar{p: p, region: region}
 }
 
 func (c *Calendar) data(year int) (map[string]rawDay, bool) {
-	if c.region != RegionCN || c.p == nil {
+	if c.p == nil {
 		return nil, false
 	}
-	return c.p.lookup(year)
+	if c.region == RegionCN {
+		return c.p.lookup(year)
+	}
+	return c.p.lookupRegion(c.region, year)
 }
 
 // Published reports whether holiday data exists for year.

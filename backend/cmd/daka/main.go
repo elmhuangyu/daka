@@ -258,5 +258,8 @@ func newHolidayProvider(c config.HolidayConfig) (*holiday.Provider, error) {
 	if c.URLTemplate != "" {
 		opts = append(opts, holiday.WithURLTemplate(c.URLTemplate))
 	}
+	if c.NagerURLTemplate != "" {
+		opts = append(opts, holiday.WithNagerURLTemplate(c.NagerURLTemplate))
+	}
 	return holiday.NewProvider(opts...)
 }

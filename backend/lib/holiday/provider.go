@@ -17,7 +17,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-//go:embed data/*.json
+//go:embed data/*.json data/nager/*.json
 var snapshotFS embed.FS
 
 const (
@@ -25,6 +25,9 @@ const (
 	DefaultURLTemplate = "https://raw.githubusercontent.com/NateScarlet/holiday-cn/master/{year}.json"
 	// DefaultRefreshInterval is the interval used by RunDailyRefresh.
 	DefaultRefreshInterval = 24 * time.Hour
+	// DefaultNagerURLTemplate is the default Nager.Date source for US and CA;
+	// {year} and {country} are replaced.
+	DefaultNagerURLTemplate = "https://date.nager.at/api/v3/PublicHolidays/{year}/{country}"
 
 	fetchTimeout = 10 * time.Second
 	maxBodyBytes = 5 << 20
@@ -49,7 +52,10 @@ type rawYear struct {
 type Provider struct {
 	mu            sync.RWMutex
 	years         map[int]map[string]rawDay
+	nager         map[string]map[int][]nagerDay // country -> year -> raw Nager entries
+	regionCache   map[string]map[int]map[string]rawDay
 	urlTemplate   string
+	nagerTemplate string
 	client        *http.Client
 	allowInsecure bool
 	now           func() time.Time
@@ -62,6 +68,9 @@ type Option func(*Provider)
 
 // WithURLTemplate sets the remote URL template ({year} is substituted).
 func WithURLTemplate(t string) Option { return func(p *Provider) { p.urlTemplate = t } }
+
+// WithNagerURLTemplate sets the Nager.Date URL template ({year} and {country}).
+func WithNagerURLTemplate(t string) Option { return func(p *Provider) { p.nagerTemplate = t } }
 
 // WithHTTPClient replaces the HTTP client (the 10s per-request timeout still applies).
 func WithHTTPClient(c *http.Client) Option { return func(p *Provider) { p.client = c } }
@@ -81,11 +90,14 @@ func WithRefreshInterval(d time.Duration) Option { return func(p *Provider) { p.
 // It never touches the network and fails only if the embedded data is corrupt.
 func NewProvider(opts ...Option) (*Provider, error) {
 	p := &Provider{
-		years:       map[int]map[string]rawDay{},
-		urlTemplate: DefaultURLTemplate,
-		now:         time.Now,
-		after:       time.After,
-		interval:    DefaultRefreshInterval,
+		years:         map[int]map[string]rawDay{},
+		nager:         map[string]map[int][]nagerDay{},
+		regionCache:   map[string]map[int]map[string]rawDay{},
+		urlTemplate:   DefaultURLTemplate,
+		nagerTemplate: DefaultNagerURLTemplate,
+		now:           time.Now,
+		after:         time.After,
+		interval:      DefaultRefreshInterval,
 	}
 	for _, o := range opts {
 		o(p)
@@ -114,6 +126,27 @@ func NewProvider(opts ...Option) (*Provider, error) {
 			return nil, fmt.Errorf("holiday: snapshot %s: %w", e.Name(), err)
 		}
 		p.years[year] = days
+	}
+	nentries, err := snapshotFS.ReadDir("data/nager")
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range nentries {
+		name := strings.TrimSuffix(e.Name(), ".json")
+		country, ys, ok := strings.Cut(name, "-")
+		year, aerr := strconv.Atoi(ys)
+		if !ok || aerr != nil || !nagerCountries[country] || !strings.HasSuffix(e.Name(), ".json") {
+			return nil, fmt.Errorf("holiday: bad snapshot name %q", e.Name())
+		}
+		b, err := snapshotFS.ReadFile("data/nager/" + e.Name())
+		if err != nil {
+			return nil, err
+		}
+		days, err := parseNager(b, year)
+		if err != nil {
+			return nil, fmt.Errorf("holiday: snapshot %s: %w", e.Name(), err)
+		}
+		p.setNager(country, year, days)
 	}
 	return p, nil
 }
@@ -152,7 +185,12 @@ func (p *Provider) lookup(year int) (map[string]rawDay, bool) {
 }
 
 func (p *Provider) buildURL(year int) (string, error) {
-	raw := strings.ReplaceAll(p.urlTemplate, "{year}", strconv.Itoa(year))
+	return p.expandURL(p.urlTemplate, year, "")
+}
+
+func (p *Provider) expandURL(tmpl string, year int, country string) (string, error) {
+	raw := strings.ReplaceAll(tmpl, "{year}", strconv.Itoa(year))
+	raw = strings.ReplaceAll(raw, "{country}", country)
 	u, err := url.Parse(raw)
 	if err != nil {
 		return "", err
@@ -163,12 +201,21 @@ func (p *Provider) buildURL(year int) (string, error) {
 	return raw, nil
 }
 
-// fetch downloads and validates one year. The cache is not touched.
+// fetch downloads and validates one holiday-cn year. The cache is not touched.
 func (p *Provider) fetch(ctx context.Context, year int) (map[string]rawDay, error) {
 	raw, err := p.buildURL(year)
 	if err != nil {
 		return nil, err
 	}
+	body, err := p.get(ctx, raw)
+	if err != nil {
+		return nil, err
+	}
+	return parseYear(body, year)
+}
+
+// get performs one size-limited, https-only GET.
+func (p *Provider) get(ctx context.Context, raw string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, fetchTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
@@ -190,7 +237,7 @@ func (p *Provider) fetch(ctx context.Context, year int) (map[string]rawDay, erro
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode == http.StatusNotFound {
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusNoContent {
 		return nil, errNotPublished
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -203,7 +250,7 @@ func (p *Provider) fetch(ctx context.Context, year int) (map[string]rawDay, erro
 	if len(body) > maxBodyBytes {
 		return nil, errors.New("response body too large")
 	}
-	return parseYear(body, year)
+	return body, nil
 }
 
 // Refresh fetches the given years. A failing year keeps its old cache entry
@@ -226,12 +273,13 @@ func (p *Provider) Refresh(ctx context.Context, years ...int) {
 	}
 }
 
-// RunDailyRefresh refreshes previous, current and next year immediately and
+// RunDailyRefresh refreshes (CN and Nager) previous, current and next year immediately and
 // then once per interval until ctx is cancelled.
 func (p *Provider) RunDailyRefresh(ctx context.Context) {
 	for {
 		y := p.now().Year()
 		p.Refresh(ctx, y-1, y, y+1)
+		p.RefreshNager(ctx, y-1, y, y+1)
 		select {
 		case <-ctx.Done():
 			return

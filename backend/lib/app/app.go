@@ -5,6 +5,7 @@ package app
 
 import (
 	"net/http"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -120,17 +121,26 @@ func NewHandler(cfg *config.Config, d *db.DB, hp *holiday.Provider, tg *notify.S
 	return h, manager, nil
 }
 
-// HolidayCalendars maps UserSettings.holiday_region to a calendar: CN has
-// data, every other region (and a disabled provider) has none.
+// HolidayCalendars maps UserSettings.holiday_region to a calendar: CN, the
+// Nager countries US and CA, and their subdivisions ("CA-ON") have data;
+// every other region (and a disabled provider) has none.
 func HolidayCalendars(hp *holiday.Provider) func(dbmodels.HolidayRegion) schedule.DayCalendar {
 	if hp == nil {
 		return nil
 	}
-	cn := holiday.NewCalendar(hp, holiday.RegionCN)
+	var mu sync.Mutex
+	cals := map[string]*holiday.Calendar{}
 	return func(r dbmodels.HolidayRegion) schedule.DayCalendar {
-		if string(r) == holiday.RegionCN {
-			return cn
+		if !holiday.ValidRegion(string(r)) {
+			return nil
 		}
-		return nil
+		mu.Lock()
+		defer mu.Unlock()
+		c, ok := cals[string(r)]
+		if !ok {
+			c = holiday.NewCalendar(hp, string(r))
+			cals[string(r)] = c
+		}
+		return c
 	}
 }

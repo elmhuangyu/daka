@@ -13,6 +13,7 @@ import (
 	"github.com/elmhuangyu/daka/backend/lib/auth"
 	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
 	"github.com/elmhuangyu/daka/backend/lib/extcal"
+	"github.com/elmhuangyu/daka/backend/lib/holiday"
 	"github.com/elmhuangyu/daka/backend/lib/schedule"
 	"github.com/elmhuangyu/daka/backend/lib/secret"
 )
@@ -134,10 +135,8 @@ func (s *server) putCalendarSettings(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if req.HolidayRegion != nil {
-			switch dbmodels.HolidayRegion(*req.HolidayRegion) {
-			case dbmodels.RegionCN, dbmodels.RegionUS:
-			case st.HolidayRegion: // echoing the current (possibly unset) value is a no-op
-			default:
+			if !holiday.ValidRegion(*req.HolidayRegion) && dbmodels.HolidayRegion(*req.HolidayRegion) != st.HolidayRegion {
+				// Echoing the current (possibly unset) value is a no-op.
 				return inputErr("invalid holiday_region")
 			}
 			if *req.HolidayRegion != string(st.HolidayRegion) {

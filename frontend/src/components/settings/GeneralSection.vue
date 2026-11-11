@@ -8,6 +8,7 @@ import {
   type CalendarSettings,
 } from '../../api'
 import { SUPPORTED_LOCALES, currentLocale, setLocale, useI18n } from '../../i18n'
+import { SUBDIVISIONS, splitRegion } from '../../holidayRegions'
 import {
   currentDateFormat,
   setDateFormat,
@@ -19,6 +20,21 @@ const { t } = useI18n()
 const lang = ref(currentLocale())
 
 const dateFormat = ref<DateFormat>(currentDateFormat())
+
+const country = computed({
+  get: () => splitRegion(region.value)[0],
+  set: (c: string) => {
+    region.value = c
+  },
+})
+const subdivision = computed({
+  get: () => splitRegion(region.value)[1],
+  set: (v: string) => {
+    region.value = v || country.value
+  },
+})
+const subOptions = computed(() => SUBDIVISIONS[country.value] ?? [])
+const zh = computed(() => lang.value.startsWith('zh'))
 
 function changeDateFormat() {
   setDateFormat(dateFormat.value)
@@ -226,7 +242,7 @@ async function save() {
         <label class="form-control gap-1.5">
           <span class="label-text font-medium text-xs">{{ t('settings.general.region') }}</span>
           <select
-            v-model="region"
+            v-model="country"
             class="select select-bordered select-sm md:select-md w-full"
             data-testid="g-region"
           >
@@ -236,6 +252,25 @@ async function save() {
             </option>
             <option value="CN">{{ t('settings.general.regionCN') }}</option>
             <option value="US">{{ t('settings.general.regionUS') }}</option>
+            <option value="CA">{{ t('settings.general.regionCA') }}</option>
+          </select>
+        </label>
+
+        <label v-if="subOptions.length" class="form-control gap-1.5">
+          <span class="label-text font-medium text-xs">{{
+            country === 'CA'
+              ? t('settings.general.subdivisionCA')
+              : t('settings.general.subdivisionUS')
+          }}</span>
+          <select
+            v-model="subdivision"
+            class="select select-bordered select-sm md:select-md w-full"
+            data-testid="g-subdivision"
+          >
+            <option value="">{{ t('settings.general.subdivisionAll') }}</option>
+            <option v-for="o in subOptions" :key="o.code" :value="`${country}-${o.code}`">
+              {{ zh ? o.zh : o.en }}
+            </option>
           </select>
         </label>
       </div>

@@ -16,6 +16,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
+	"github.com/elmhuangyu/daka/backend/lib/holiday"
 	"github.com/elmhuangyu/daka/backend/lib/schedule"
 )
 
@@ -302,9 +303,7 @@ func validateImportSettings(st *exportSettings, now time.Time) *importFail {
 	if st.WeekStart != 0 && st.WeekStart != 1 {
 		return bad("settings", "bad_week_start")
 	}
-	switch dbmodels.HolidayRegion(st.HolidayRegion) {
-	case "", dbmodels.RegionCN, dbmodels.RegionUS:
-	default:
+	if st.HolidayRegion != "" && !holiday.ValidRegion(st.HolidayRegion) {
 		return bad("settings", "bad_holiday_region")
 	}
 	return nil
