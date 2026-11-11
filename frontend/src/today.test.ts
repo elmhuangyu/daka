@@ -126,7 +126,10 @@ beforeEach(() => {
   )
   vi.stubGlobal('fetch', fetchMock)
 })
+const mounted: Array<{ unmount: () => void }> = []
 afterEach(() => {
+  // Leaked apps would keep their shortcut registrations and global listeners alive.
+  for (const w of mounted.splice(0)) w.unmount()
   vi.unstubAllGlobals()
 })
 
@@ -137,6 +140,7 @@ async function mountApp(path = '/', withRouter = false) {
   await router.push(path)
   await router.isReady()
   const w = mount(App, { global: { plugins: [pinia, router] }, attachTo: document.body })
+  mounted.push(w)
   await flushPromises()
   return withRouter ? Object.assign(w, { router }) : w
 }
@@ -938,5 +942,106 @@ describe('Today page', () => {
     const checkinBody = JSON.parse(checkinPost![1].body)
     expect(checkinBody.mode).toBe('delta')
     expect(checkinBody.value).toBe(1)
+  })
+})
+
+describe('Today keyboard shortcuts', () => {
+  const press = (key: string, target: EventTarget = document.body) =>
+    target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+  const todayUrls = () =>
+    fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.startsWith('/api/view/today'))
+  const setup = () => {
+    world.today = [tItem(1, 'Read'), tItem(2, 'Pushups', { tracker_type: 'counter' })]
+    world.items = [
+      detail({ id: 1, name: 'Read' }),
+      detail({ id: 2, name: 'Pushups', tracker_type: 'counter' }),
+    ]
+  }
+  const focusCard = (id: number) => {
+    const el = document.querySelector<HTMLElement>(`[data-testid=card-${id}]`)!
+    el.focus()
+    return el
+  }
+
+  it('[ ] and t navigate days', async () => {
+    const w = await mountApp('/?date=2026-11-03')
+    press(']')
+    await flushPromises()
+    expect(todayUrls().at(-1)).toContain('date=2026-11-04')
+    press('[')
+    await flushPromises()
+    expect(todayUrls().at(-1)).toContain('date=2026-11-03')
+    press('t')
+    await flushPromises()
+    expect(todayUrls().at(-1)).not.toContain('date=2026-11-03')
+    w.unmount()
+  })
+
+  it('x toggles the focused card only', async () => {
+    setup()
+    const w = await mountApp()
+    press('x')
+    await flushPromises()
+    expect(writes()).toHaveLength(0)
+    focusCard(1)
+    press('x', document.activeElement!)
+    await flushPromises()
+    expect(lastBody()).toEqual({ item_id: 1, mode: 'set' })
+    w.unmount()
+  })
+
+  it('x does nothing for a counter card, while typing, or with a modal open', async () => {
+    setup()
+    const w = await mountApp()
+    focusCard(2)
+    press('x', document.activeElement!)
+    await flushPromises()
+    expect(writes()).toHaveLength(0)
+
+    focusCard(1)
+    const input = document.createElement('input')
+    document.querySelector('[data-testid=card-1]')!.appendChild(input)
+    input.focus()
+    press('x', input)
+    await flushPromises()
+    expect(writes()).toHaveLength(0)
+    input.remove()
+
+    const modal = document.createElement('div')
+    modal.setAttribute('role', 'dialog')
+    modal.setAttribute('aria-modal', 'true')
+    document.body.appendChild(modal)
+    focusCard(1)
+    press('x', document.activeElement!)
+    await flushPromises()
+    expect(writes()).toHaveLength(0)
+    modal.remove()
+    w.unmount()
+  })
+
+  it('Enter on the card opens details once; Enter on a child button does not', async () => {
+    setup()
+    const w = await mountApp()
+    const card = w.getComponent({ name: 'ItemCard' })
+    const article = focusCard(1)
+    press('Enter', article)
+    await flushPromises()
+    expect(card.emitted('openDetails')).toHaveLength(1)
+    press('Enter', article.querySelector('[data-testid=toggle]')!)
+    await flushPromises()
+    expect(card.emitted('openDetails')).toHaveLength(1)
+    w.unmount()
+  })
+
+  it('keeps Tab order unchanged: no positive tabindex in cards', async () => {
+    setup()
+    const w = await mountApp()
+    const cards = document.querySelectorAll('[data-card]')
+    expect(cards.length).toBeGreaterThan(0)
+    for (const c of cards) {
+      expect(c.getAttribute('tabindex')).toBe('-1')
+      expect(c.querySelector('[tabindex]:not([tabindex="-1"]):not([tabindex="0"])')).toBeNull()
+    }
+    w.unmount()
   })
 })

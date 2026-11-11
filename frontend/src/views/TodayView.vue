@@ -18,6 +18,7 @@ import {
   describeError,
   type CheckinInput,
 } from '../api'
+import { useShortcut } from '../composables/useShortcuts'
 import { useI18n } from '../i18n'
 import { formatCustomDate, weekdayName } from '../i18n/format'
 
@@ -347,6 +348,43 @@ watch(
     void store.refresh(q)
   },
 )
+
+/** Click the enabled toggle of the focused card; a no-op without a focused card or toggle. */
+function toggleFocusedCard() {
+  const card = document.activeElement?.closest('[data-card]')
+  card?.querySelector<HTMLButtonElement>('[data-testid="toggle"]:not(:disabled)')?.click()
+}
+
+useShortcut([
+  {
+    id: 'today.prevDay',
+    keys: ['['],
+    scope: 'today',
+    label: 'Previous day',
+    handler: () => store.goToPrevDay(),
+  },
+  {
+    id: 'today.nextDay',
+    keys: [']'],
+    scope: 'today',
+    label: 'Next day',
+    handler: () => store.goToNextDay(),
+  },
+  {
+    id: 'today.goToday',
+    keys: ['t'],
+    scope: 'today',
+    label: 'Jump to today',
+    handler: () => store.goToToday(),
+  },
+  {
+    id: 'today.toggleCard',
+    keys: ['x'],
+    scope: 'today',
+    label: 'Check or uncheck the focused item',
+    handler: toggleFocusedCard,
+  },
+])
 
 onMounted(() => {
   void store.refresh(queryDate())

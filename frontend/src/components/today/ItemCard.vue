@@ -135,7 +135,10 @@ function record(r: ValueRow) {
     :class="{ 'done opacity-70 bg-base-100/60': variant === 'done' }"
     :style="d.color ? { borderLeftColor: d.color, borderLeftWidth: '4px' } : {}"
     :data-testid="`card-${d.id}`"
+    data-card
+    tabindex="-1"
     :aria-busy="busy"
+    @keydown.enter.self="emit('openDetails')"
   >
     <div class="card-body gap-2 p-2.5 sm:px-3.5">
       <header class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
