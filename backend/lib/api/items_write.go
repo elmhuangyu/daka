@@ -79,6 +79,7 @@ type patchItemRequest struct {
 	Name        *string          `json:"name"`
 	Description *string          `json:"description"`
 	Color       *string          `json:"color"`
+	Emoji       *string          `json:"emoji"`
 	CategoryID  nullable[uint]   `json:"category_id"`
 	ProjectID   nullable[uint]   `json:"project_id"`
 	IsSensitive *bool            `json:"is_sensitive"`
@@ -335,6 +336,12 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 	if req.Color != nil {
 		item.Color = *req.Color
 	}
+	if req.Emoji != nil {
+		if !validEmoji(*req.Emoji) {
+			return errResult(http.StatusBadRequest, "invalid emoji"), nil
+		}
+		item.Emoji = *req.Emoji
+	}
 	if req.Pinned != nil {
 		item.Pinned = *req.Pinned
 	}
@@ -512,7 +519,7 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 		}
 	}
 	if err := tx.Model(&dbmodels.Item{}).Where("id = ?", item.ID).Select(
-		"Name", "Description", "Color", "CategoryID", "ProjectID", "IsSensitive", "Pinned", "SortOrder", "Archived", "RemindTime",
+		"Name", "Description", "Color", "Emoji", "CategoryID", "ProjectID", "IsSensitive", "Pinned", "SortOrder", "Archived", "RemindTime",
 		"Unit", "Step", "MinVal", "MaxVal", "Aggregate", "WarningDays").Updates(&item).Error; err != nil {
 		return result{}, err
 	}

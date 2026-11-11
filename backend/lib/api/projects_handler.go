@@ -25,6 +25,7 @@ type projectResponse struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`
 	Color       string                 `json:"color"`
+	Emoji       string                 `json:"emoji"`
 	Status      dbmodels.ProjectStatus `json:"status"`
 	TargetDate  *string                `json:"target_date"`
 	IsSensitive bool                   `json:"is_sensitive"`
@@ -40,6 +41,7 @@ func newProjectResponse(p dbmodels.Project) projectResponse {
 		Name:        p.Name,
 		Description: p.Description,
 		Color:       p.Color,
+		Emoji:       p.Emoji,
 		Status:      p.Status,
 		TargetDate:  p.TargetDate,
 		IsSensitive: p.IsSensitive,
@@ -51,6 +53,7 @@ func newProjectResponse(p dbmodels.Project) projectResponse {
 
 func redactProject(resp *projectResponse) {
 	resp.Name = "[REDACTED]"
+	resp.Emoji = ""
 	resp.Description = ""
 }
 
@@ -146,6 +149,7 @@ type createProjectRequest struct {
 	Name        *string                 `json:"name"`
 	Description *string                 `json:"description"`
 	Color       *string                 `json:"color"`
+	Emoji       *string                 `json:"emoji"`
 	Status      *dbmodels.ProjectStatus `json:"status"`
 	TargetDate  *string                 `json:"target_date"`
 	CategoryID  *uint                   `json:"category_id"`
@@ -191,6 +195,14 @@ func (s *server) postProject(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		color = *req.Color
+	}
+	var emoji string
+	if req.Emoji != nil {
+		if !validEmoji(*req.Emoji) {
+			errResult(http.StatusBadRequest, "invalid emoji").write(w)
+			return
+		}
+		emoji = *req.Emoji
 	}
 	status := dbmodels.ProjectStatusActive
 	if req.Status != nil && *req.Status != "" {
@@ -242,6 +254,7 @@ func (s *server) postProject(w http.ResponseWriter, r *http.Request) {
 		Name:        name,
 		Description: desc,
 		Color:       color,
+		Emoji:       emoji,
 		Status:      status,
 		TargetDate:  targetDate,
 		IsSensitive: isSensitive,
@@ -299,6 +312,7 @@ type patchProjectRequest struct {
 	Name        *string                 `json:"name"`
 	Description *string                 `json:"description"`
 	Color       *string                 `json:"color"`
+	Emoji       *string                 `json:"emoji"`
 	Status      *dbmodels.ProjectStatus `json:"status"`
 	TargetDate  nullable[string]        `json:"target_date"`
 	CategoryID  nullable[uint]          `json:"category_id"`
@@ -360,6 +374,12 @@ func (s *server) patchProject(w http.ResponseWriter, r *http.Request) {
 				return errResult(http.StatusBadRequest, "color too long"), nil
 			}
 			p.Color = *req.Color
+		}
+		if req.Emoji != nil {
+			if !validEmoji(*req.Emoji) {
+				return errResult(http.StatusBadRequest, "invalid emoji"), nil
+			}
+			p.Emoji = *req.Emoji
 		}
 		if req.Status != nil {
 			switch *req.Status {

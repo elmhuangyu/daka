@@ -405,6 +405,7 @@ export interface ItemDetail {
   id: number
   name: string
   color?: string
+  emoji?: string
   tracker_type: 'boolean' | 'counter' | 'maintenance' | 'metric' | string
   kind: 'habit' | 'event' | string
   polarity: 'positive' | 'negative' | string
@@ -551,6 +552,7 @@ export interface ItemDto {
   name: string
   description: string
   color?: string
+  emoji?: string
   remind_time: string | null
   tracker_type: string
   kind: string
@@ -969,6 +971,7 @@ export interface Project {
   name: string
   description: string
   color: string
+  emoji?: string
   status: ProjectStatus
   target_date: string | null
   is_sensitive: boolean
@@ -981,6 +984,7 @@ export interface CreateProjectRequest {
   name: string
   description?: string
   color?: string
+  emoji?: string
   status?: ProjectStatus
   target_date?: string | null
   category_id?: number | null
@@ -992,6 +996,7 @@ export interface UpdateProjectRequest {
   name?: string
   description?: string
   color?: string
+  emoji?: string
   status?: ProjectStatus
   target_date?: string | null
   category_id?: number | null

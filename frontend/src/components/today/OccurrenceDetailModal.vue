@@ -193,6 +193,7 @@ function logUnit(l: CheckinLog): string {
               class="size-3 rounded-full shrink-0"
               :style="{ backgroundColor: detail.color }"
             />
+            <span v-if="detail.emoji" aria-hidden="true" class="text-lg">{{ detail.emoji }}</span>
             <h3 class="name text-lg font-bold" :class="{ sensitive: detail.effective_sensitive }">
               {{ detail.name }}
             </h3>

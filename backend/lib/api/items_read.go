@@ -189,7 +189,7 @@ func buildItemResponses(db *gorm.DB, items []dbmodels.Item, today string) ([]ite
 		targets := optionTargetsOf(cur)
 		resp := itemResponse{
 			ID: it.ID, Name: it.Name, Description: it.Description, TrackerType: string(it.TrackerType),
-			Kind: string(it.Kind), Polarity: string(it.Polarity), Color: it.Color, CategoryID: it.CategoryID,
+			Kind: string(it.Kind), Polarity: string(it.Polarity), Color: it.Color, Emoji: it.Emoji, CategoryID: it.CategoryID,
 			ProjectID:   it.ProjectID,
 			ParentID:    it.ParentID,
 			IsSensitive: it.IsSensitive, EffectiveSensitive: sens(it), Pinned: it.Pinned, SortOrder: it.SortOrder, Archived: it.Archived,
@@ -208,6 +208,7 @@ func buildItemResponses(db *gorm.DB, items []dbmodels.Item, today string) ([]ite
 
 func redactItem(resp *itemResponse) {
 	resp.Name = privateItemName
+	resp.Emoji = ""
 	resp.Description = ""
 	resp.Unit = ""
 	for i := range resp.Options {

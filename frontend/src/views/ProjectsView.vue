@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
+import EmojiPicker from '../components/EmojiPicker.vue'
 import * as api from '../api'
 import type { Category, CreateProjectRequest, Project, ProjectStatus } from '../api'
 import DateInput from '../components/DateInput.vue'
@@ -41,6 +42,7 @@ interface ProjectFormData {
   name: string
   description: string
   color: string
+  emoji: string
   category_id: number | null
   target_date: string
   is_sensitive: boolean
@@ -50,6 +52,7 @@ const form = reactive<ProjectFormData>({
   name: '',
   description: '',
   color: '',
+  emoji: '',
   category_id: null,
   target_date: '',
   is_sensitive: false,
@@ -130,6 +133,7 @@ function openNewModal() {
   form.name = ''
   form.description = ''
   form.color = ''
+  form.emoji = ''
   form.category_id = null
   form.target_date = ''
   form.is_sensitive = false
@@ -155,6 +159,7 @@ async function handleCreateProject() {
       name,
       description: form.description.trim() || undefined,
       color: form.color || undefined,
+      emoji: form.emoji || undefined,
       category_id: form.category_id,
       target_date: form.target_date || null,
       is_sensitive: form.is_sensitive,
@@ -301,6 +306,7 @@ function getProjectStats(projectId: number) {
           <!-- Card Title & Status Badge -->
           <div class="flex items-start justify-between gap-2">
             <h2 class="card-title text-lg font-semibold text-base-content flex items-center gap-2">
+              <span v-if="p.emoji" aria-hidden="true">{{ p.emoji }}</span>
               <span
                 v-if="p.color"
                 class="size-3 rounded-full shrink-0"
@@ -497,6 +503,11 @@ function getProjectStats(projectId: number) {
           </div>
 
           <!-- Color presets -->
+          <div class="form-control flex flex-col gap-1.5">
+            <span class="label-text font-medium">{{ t('emoji.label') }}</span>
+            <EmojiPicker v-model="form.emoji" testid="project-emoji" />
+          </div>
+
           <div class="form-control space-y-1">
             <label class="label py-1">
               <span class="label-text font-medium">{{ t('projects.color') }}</span>

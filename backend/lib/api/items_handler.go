@@ -62,6 +62,7 @@ type createItemRequest struct {
 	Kind        string          `json:"kind"`
 	Polarity    string          `json:"polarity"`
 	Color       string          `json:"color,omitempty"`
+	Emoji       string          `json:"emoji,omitempty"`
 	CategoryID  *uint           `json:"category_id"`
 	ProjectID   *uint           `json:"project_id"`
 	ParentID    *uint           `json:"parent_id"`
@@ -126,6 +127,7 @@ type itemResponse struct {
 	Kind        string  `json:"kind"`
 	Polarity    string  `json:"polarity"`
 	Color       string  `json:"color,omitempty"`
+	Emoji       string  `json:"emoji,omitempty"`
 	CategoryID  *uint   `json:"category_id"`
 	ProjectID   *uint   `json:"project_id"`
 	ParentID    *uint   `json:"parent_id"`
@@ -197,6 +199,10 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 	}
 	if utf8.RuneCountInString(name) > maxNameLen {
 		return errResult(http.StatusBadRequest, "name too long"), nil
+	}
+	emoji := req.Emoji
+	if !validEmoji(emoji) {
+		return errResult(http.StatusBadRequest, "invalid emoji"), nil
 	}
 	if len(req.Options) > maxOptions {
 		return invalidCombination(schedule.ReasonInvalidOption), nil
@@ -348,7 +354,7 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 			ver.QuotaWindow = dbmodels.QuotaWindowCalendar
 		}
 		item := dbmodels.Item{
-			UserID: userID, CategoryID: req.CategoryID, ProjectID: req.ProjectID, ParentID: req.ParentID, Name: name, Color: req.Color,
+			UserID: userID, CategoryID: req.CategoryID, ProjectID: req.ProjectID, ParentID: req.ParentID, Name: name, Color: req.Color, Emoji: emoji,
 			TrackerType: tracker, Kind: kind, Polarity: polarity, IsSensitive: sensitive,
 			Unit: req.Unit, Step: req.Step, MinVal: req.MinVal, MaxVal: req.MaxVal,
 			Aggregate: dbmodels.Aggregate(req.Aggregate), WarningDays: req.WarningDays,
@@ -389,7 +395,7 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 		}
 		resp := itemResponse{
 			ID: item.ID, Name: item.Name, TrackerType: string(item.TrackerType),
-			Kind: string(item.Kind), Polarity: string(item.Polarity),
+			Kind: string(item.Kind), Polarity: string(item.Polarity), Color: item.Color, Emoji: item.Emoji,
 			CategoryID: item.CategoryID, ProjectID: item.ProjectID, ParentID: item.ParentID, IsSensitive: item.IsSensitive, EffectiveSensitive: item.IsSensitive,
 			Unit: item.Unit, Step: item.Step, MinVal: item.MinVal, MaxVal: item.MaxVal,
 			Aggregate: string(item.Aggregate), WarningDays: item.WarningDays,

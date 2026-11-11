@@ -31,6 +31,7 @@ export interface ItemForm {
   name: string
   kind: 'habit' | 'event'
   color: string
+  emoji: string
   trackerType: TrackerType
   polarity: Polarity
   categoryId: number | null
@@ -75,6 +76,7 @@ export function emptyForm(): ItemForm {
     name: '',
     kind: 'habit',
     color: '',
+    emoji: '',
     trackerType: 'boolean',
     polarity: 'positive',
     categoryId: null,
@@ -336,6 +338,7 @@ export function buildCreateBody(f: ItemForm): Json {
     rule,
   }
   if (f.color) body.color = f.color
+  if (f.emoji) body.emoji = f.emoji
   if (isNumeric(f.trackerType)) {
     body.unit = nums.unit
     body.step = nums.step
@@ -355,6 +358,7 @@ export function formFromItem(it: ItemDto): ItemForm {
   f.name = it.name
   f.kind = (it.kind as 'habit' | 'event') || 'habit'
   f.color = it.color ?? ''
+  f.emoji = it.emoji ?? ''
   f.trackerType = it.tracker_type as TrackerType
   f.polarity = it.polarity as Polarity
   f.categoryId = it.category_id
@@ -454,6 +458,7 @@ export function buildEditPlan(
   if (f.name.trim() !== o.name) patch.name = f.name.trim()
   if (f.kind !== o.kind) patch.kind = f.kind
   if (f.color !== o.color) patch.color = f.color
+  if (f.emoji !== o.emoji) patch.emoji = f.emoji
   if (f.categoryId !== o.categoryId) patch.category_id = f.categoryId
   if (f.projectId !== o.projectId) patch.project_id = f.projectId
   if (f.isSensitive !== o.isSensitive) patch.is_sensitive = f.isSensitive

@@ -169,6 +169,12 @@ importers:
       '@iconify/vue':
         specifier: ^5.0.5
         version: 5.0.5(vue@3.5.45(typescript@6.0.3))
+      emoji-picker-element:
+        specifier: ^1.29.1
+        version: 1.29.1
+      emoji-picker-element-data:
+        specifier: ^1.8.0
+        version: 1.8.0
       pinia:
         specifier: ^4.1.0
         version: 4.1.0(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.45(typescript@6.0.3))
@@ -935,6 +941,12 @@ packages:
     resolution: {integrity: sha512-T0ix8GhtxyKVfUFEcvdNDt3YGqlwkFHbD4/5bgFUDgFmxhI/cSRAeJ87/Sz//Cq8Eam6JX/e23RkoFO71P7aAA==}
     engines: {node: '>=20'}
     hasBin: true
+
+  emoji-picker-element-data@1.8.0:
+    resolution: {integrity: sha512-VfRuRJNEDLS1JKlNS4olaqhjX5S1nnZ+ZHG73b/dV8QeZyi0yPruTPEE72EmF6XO3k/9hj3lybMIYMOYXb/57A==}
+
+  emoji-picker-element@1.29.1:
+    resolution: {integrity: sha512-TOiHzu9Dqib3x4MwcAi3wi3RdyT4SoeB4b15AvH1ks4SBwTl7DeebhZ0d3x6dNi4XfNU7IGRZ7NBQllj0RqwrQ==}
 
   enhanced-resolve@5.26.1:
     resolution: {integrity: sha512-PPnnSJq3azKOIewXR/uppBV/6h98dprBJ/WaQ9Qgj10xX1lJLNfg+XShpbsrSqcDSy2yYYyhfXM1wWhftqgyzw==}
@@ -2041,6 +2053,10 @@ snapshots:
       commander: 14.0.3
       minimatch: 10.2.6
       semver: 7.8.6
+
+  emoji-picker-element-data@1.8.0: {}
+
+  emoji-picker-element@1.29.1: {}
 
   enhanced-resolve@5.26.1:
     dependencies:

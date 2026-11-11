@@ -243,6 +243,9 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
                   aria-hidden="true"
                 />
               </button>
+              <span v-if="store.detailById.get(i.item_id)?.emoji" aria-hidden="true">{{
+                store.detailById.get(i.item_id)?.emoji
+              }}</span>
               <span class="name font-medium" :class="{ sensitive: i.is_sensitive }">{{
                 i.name
               }}</span>
@@ -321,6 +324,7 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
                   aria-hidden="true"
                 />
               </button>
+              <span v-if="d.emoji" aria-hidden="true">{{ d.emoji }}</span>
               <span class="name font-medium" :class="{ sensitive: d.effective_sensitive }">{{
                 d.name
               }}</span>

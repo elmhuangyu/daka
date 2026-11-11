@@ -177,7 +177,7 @@ func validateImport(doc *importDoc, applySettings bool, now time.Time) (*importP
 			return nil, bad(where, "bad_name")
 		case utf8.RuneCountInString(pr.Description) > maxDescriptionLen:
 			return nil, bad(where, "bad_description")
-		case len(pr.Color) > 32:
+		case len(pr.Color) > 32 || !validEmoji(pr.Emoji):
 			return nil, bad(where, "bad_field")
 		case pr.CategoryID != nil && !catIDs[*pr.CategoryID]:
 			return nil, bad(where, "unknown_category")
@@ -320,7 +320,7 @@ func validateImportItem(where string, it *exportItem) (map[uint]bool, *importFai
 		return nil, bad(where, "bad_description")
 	case it.RemindTime != nil && !remindTimeRe.MatchString(*it.RemindTime):
 		return nil, bad(where, "bad_remind_time")
-	case utf8.RuneCountInString(it.Unit) > 32:
+	case utf8.RuneCountInString(it.Unit) > 32 || !validEmoji(it.Emoji):
 		return nil, bad(where, "bad_field")
 	case !finitePtr(it.MinVal) || !finitePtr(it.MaxVal) || !finiteBounded(it.Step):
 		return nil, bad(where, "bad_number")
@@ -478,6 +478,7 @@ func (p *importPlan) write(tx *gorm.DB, userID string) error {
 			Name:        strings.TrimSpace(pr.Name),
 			Description: pr.Description,
 			Color:       pr.Color,
+			Emoji:       pr.Emoji,
 			Status:      status,
 			TargetDate:  pr.TargetDate,
 			IsSensitive: pr.IsSensitive,
@@ -502,7 +503,7 @@ func (p *importPlan) write(tx *gorm.DB, userID string) error {
 	for i := range doc.Items {
 		it := &doc.Items[i]
 		row := dbmodels.Item{
-			UserID: userID, Name: strings.TrimSpace(it.Name), Description: it.Description,
+			UserID: userID, Name: strings.TrimSpace(it.Name), Emoji: it.Emoji, Description: it.Description,
 			TrackerType: dbmodels.TrackerType(it.TrackerType), Unit: it.Unit, Aggregate: dbmodels.Aggregate(it.Aggregate),
 			Step: it.Step, MinVal: it.MinVal, MaxVal: it.MaxVal, WarningDays: it.WarningDays,
 			Kind: dbmodels.Kind(it.Kind), Polarity: dbmodels.Polarity(it.Polarity), Pinned: it.Pinned,

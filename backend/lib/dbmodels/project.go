@@ -17,6 +17,7 @@ type Project struct {
 	Name        string        `gorm:"size:255;not null"`
 	Description string        `gorm:"type:text;not null;default:''"`
 	Color       string        `gorm:"size:32;not null;default:''"`
+	Emoji       string        `gorm:"size:32;not null;default:''"` // optional user-chosen icon
 	Status      ProjectStatus `gorm:"size:32;not null;default:'active'"`
 	TargetDate  *string       `gorm:"size:10"` // YYYY-MM-DD
 	IsSensitive bool          `gorm:"not null;default:false"`

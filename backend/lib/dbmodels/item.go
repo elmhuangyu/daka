@@ -25,6 +25,8 @@ type Item struct {
 	Kind     Kind     `gorm:"size:16;not null;default:habit"`
 	Polarity Polarity `gorm:"size:16;not null;default:positive"`
 	Color    string   `gorm:"size:32"`
+	// Emoji is an optional user-chosen icon (one emoji, possibly a ZWJ sequence); empty means none.
+	Emoji string `gorm:"size:32;not null;default:''"`
 
 	Pinned      bool `gorm:"not null;default:false"`
 	IsSensitive bool `gorm:"not null;default:false"`

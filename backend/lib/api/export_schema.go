@@ -35,6 +35,7 @@ type exportProject struct {
 	Name        string  `json:"name"`
 	Description string  `json:"description"`
 	Color       string  `json:"color"`
+	Emoji       string  `json:"emoji,omitempty"`
 	Status      string  `json:"status"`
 	TargetDate  *string `json:"target_date"`
 	IsSensitive bool    `json:"is_sensitive"`
@@ -90,6 +91,7 @@ type exportItem struct {
 	ProjectID   *uint    `json:"project_id,omitempty"`
 	ParentID    *uint    `json:"parent_id,omitempty"`
 	Name        string   `json:"name"`
+	Emoji       string   `json:"emoji,omitempty"`
 	Description string   `json:"description"`
 	TrackerType string   `json:"tracker_type"`
 	Unit        string   `json:"unit"`

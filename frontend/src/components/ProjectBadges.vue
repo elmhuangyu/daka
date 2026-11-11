@@ -21,7 +21,8 @@ defineProps<{
       :style="project.color ? { borderColor: project.color } : {}"
       data-testid="project-badge"
     >
-      <Icon icon="lucide:folder" class="size-3" aria-hidden="true" />
+      <span v-if="project.emoji" aria-hidden="true">{{ project.emoji }}</span>
+      <Icon v-else icon="lucide:folder" class="size-3" aria-hidden="true" />
       {{ project.name }}
     </RouterLink>
   </template>

@@ -150,6 +150,7 @@ watch(
                     class="size-2 rounded-full shrink-0"
                     :style="{ backgroundColor: it.color }"
                   />
+                  <span v-if="it.emoji" aria-hidden="true" class="shrink-0">{{ it.emoji }}</span>
                   <span class="truncate">{{ it.name }}</span>
                   <span
                     v-for="b in badgesOf(it)"

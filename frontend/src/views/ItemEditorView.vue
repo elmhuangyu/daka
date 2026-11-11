@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
+import EmojiPicker from '../components/EmojiPicker.vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   createCategory,
@@ -340,6 +341,11 @@ const showHoliday = computed(() => holidayAllowed(form))
             <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </fieldset>
+
+        <div class="flex flex-col gap-1.5">
+          <span class="text-sm font-medium">{{ t('emoji.label') }}</span>
+          <EmojiPicker v-model="form.emoji" testid="f-emoji" />
+        </div>
 
         <!-- Color and Privacy Toggle -->
         <div class="flex flex-wrap items-center justify-between gap-4 pt-1">

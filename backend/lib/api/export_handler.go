@@ -147,6 +147,7 @@ func exportProjects(tx *gorm.DB, userID string, emit func(any) error) error {
 			Name:        p.Name,
 			Description: p.Description,
 			Color:       p.Color,
+			Emoji:       p.Emoji,
 			Status:      string(p.Status),
 			TargetDate:  p.TargetDate,
 			IsSensitive: p.IsSensitive,
@@ -196,7 +197,7 @@ func exportItems(tx *gorm.DB, userID string, emit func(any) error) error {
 		}
 		for _, it := range items {
 			e := exportItem{
-				ID: it.ID, CategoryID: it.CategoryID, ProjectID: it.ProjectID, ParentID: it.ParentID, Name: it.Name, Description: it.Description,
+				ID: it.ID, CategoryID: it.CategoryID, ProjectID: it.ProjectID, ParentID: it.ParentID, Name: it.Name, Emoji: it.Emoji, Description: it.Description,
 				TrackerType: string(it.TrackerType), Unit: it.Unit, Aggregate: string(it.Aggregate), Step: it.Step,
 				MinVal: it.MinVal, MaxVal: it.MaxVal, WarningDays: it.WarningDays, Kind: string(it.Kind),
 				Polarity: string(it.Polarity), Pinned: it.Pinned, IsSensitive: it.IsSensitive, RemindTime: it.RemindTime,

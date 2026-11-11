@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
+import EmojiPicker from '../components/EmojiPicker.vue'
 import * as api from '../api'
 import type { Category, ItemDetail, Project, ProjectStatus, UpdateProjectRequest } from '../api'
 import DateInput from '../components/DateInput.vue'
@@ -32,6 +33,7 @@ const editForm = reactive({
   name: '',
   description: '',
   color: '',
+  emoji: '',
   category_id: null as number | null,
   target_date: '',
   is_sensitive: false,
@@ -230,6 +232,7 @@ function openEditModal() {
   editForm.name = project.value.name
   editForm.description = project.value.description
   editForm.color = project.value.color
+  editForm.emoji = project.value.emoji ?? ''
   editForm.category_id = project.value.category_id
   editForm.target_date = project.value.target_date || ''
   editForm.is_sensitive = project.value.is_sensitive
@@ -256,6 +259,7 @@ async function handleSaveEdit() {
       name,
       description: editForm.description.trim() || undefined,
       color: editForm.color,
+      emoji: editForm.emoji,
       category_id: editForm.category_id,
       target_date: editForm.target_date || null,
       is_sensitive: editForm.is_sensitive,
@@ -472,6 +476,9 @@ function taskDueDate(task: ItemDetail): string | null {
           <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
             <div class="space-y-1.5">
               <div class="flex items-center gap-2.5 flex-wrap">
+                <span v-if="project.emoji" aria-hidden="true" class="text-2xl">{{
+                  project.emoji
+                }}</span>
                 <span
                   v-if="project.color"
                   class="size-3.5 rounded-full shrink-0"
@@ -749,6 +756,7 @@ function taskDueDate(task: ItemDetail): string | null {
                   }"
                   data-testid="task-name"
                 >
+                  <span v-if="row.task.emoji" aria-hidden="true">{{ row.task.emoji }}</span>
                   {{ row.task.name }}
                 </span>
               </div>
@@ -877,6 +885,11 @@ function taskDueDate(task: ItemDetail): string | null {
                 rows="3"
                 data-testid="input-edit-project-description"
               />
+            </div>
+
+            <div class="form-control flex flex-col gap-1.5">
+              <span class="label-text font-medium">{{ t('emoji.label') }}</span>
+              <EmojiPicker v-model="editForm.emoji" testid="edit-project-emoji" />
             </div>
 
             <!-- Color presets -->
