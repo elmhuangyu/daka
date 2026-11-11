@@ -173,6 +173,40 @@ describe('ShortcutsSection', () => {
     expect(shortcutPrefs.bindings).toEqual({})
   })
 
+  it('rejects an oversized import', async () => {
+    await importText(JSON.stringify({ v: 1, enabled: false, bindings: {}, pad: 'x'.repeat(70000) }))
+    expect(w.get('[data-testid="sc-error"]').text()).toContain('too large')
+    expect(shortcutPrefs.enabled).toBe(true)
+  })
+
+  it('drops __proto__ ids from an import', async () => {
+    await importText('{"v":1,"enabled":true,"bindings":{"__proto__":["q"],"item.new":["q"]}}')
+    expect(w.find('[data-testid="sc-error"]').exists()).toBe(false)
+    expect(Object.keys(shortcutPrefs.bindings)).toEqual(['item.new'])
+    expect(shortcutPrefs.bindings['item.new']).toEqual(['q'])
+    expect(Object.getPrototypeOf(shortcutPrefs.bindings)).toBe(Object.prototype)
+    expect(w.get('[data-testid="sc-notice"]').text()).toContain('1 unknown')
+    expect((Object.prototype as Record<string, unknown>)['0']).toBeUndefined()
+  })
+
+  it('shows ctrl++ as two keys', async () => {
+    setBinding('item.new', ['ctrl++'])
+    await nextTick()
+    const kbds = row('item.new').findAll('[data-testid="sc-keys"] kbd')
+    expect(kbds.map((k) => k.text())).toEqual(['ctrl', '+'])
+  })
+
+  it('recording state is announced and linked to the button', async () => {
+    const btn = w.get('[data-testid="sc-change-item.new"]')
+    expect(btn.attributes('aria-pressed')).toBe('false')
+    await btn.trigger('click')
+    const hint = w.get('[data-testid="sc-recording"]')
+    expect(hint.attributes('aria-live')).toBe('polite')
+    expect(hint.attributes('role')).toBe('status')
+    expect(btn.attributes('aria-pressed')).toBe('true')
+    expect(btn.attributes('aria-describedby')).toBe(hint.attributes('id'))
+  })
+
   it('exports a JSON download', async () => {
     const create = vi.fn<() => string>(() => 'blob:x')
     const revoke = vi.fn<() => void>()
@@ -209,7 +243,7 @@ describe('help panel', () => {
     await nextTick()
     expect(document.querySelector('[data-testid="shortcut-help-off"]')).not.toBeNull()
     expect(panel()).not.toContain('New item')
-    expect(panel()).toContain('Toggle privacy mask')
+    expect(panel()).toContain('Toggle privacy guard')
     h.unmount()
     helpOpen.value = false
     scope.stop()

@@ -51,12 +51,27 @@ const RESERVED = new Set([
   'ctrl+shift+i',
   'ctrl+shift+j',
   'ctrl+shift+delete',
+  'ctrl+shift+a',
+  'ctrl+shift+b',
+  'ctrl+shift+o',
+  'ctrl+shift+p',
+  'ctrl+shift+k',
+  'ctrl+shift+m',
+  'ctrl+shift+c',
+  'shift+meta+n',
+  'shift+meta+t',
+  'shift+meta+w',
+  'shift+meta+p',
+  'shift+meta+b',
+  'shift+meta+delete',
   'meta+t',
   'meta+w',
   'meta+n',
   'meta+r',
   'meta+l',
   'meta+q',
+  'meta+h',
+  'meta+m',
   'meta+tab',
   'alt+arrowleft',
   'alt+arrowright',
@@ -111,6 +126,39 @@ export function parseBinding(binding: string): string[] {
     .map((step) => stepToString(parseStep(step)))
 }
 
+/**
+ * Display parts of a binding, steps flattened: modifiers then key for each step.
+ * `ctrl++` yields ['ctrl', '+'] and `g t` yields ['g', 't'].
+ */
+export function bindingKeyParts(binding: string): string[] {
+  return binding
+    .trim()
+    .split(/\s+/)
+    .filter((step) => step !== '')
+    .flatMap((step) => {
+      const { mods, key } = parseStep(step)
+      return [...mods, displayKey(key)]
+    })
+}
+
+const DISPLAY_NAMES: Record<string, string> = {
+  arrowup: 'ArrowUp',
+  arrowdown: 'ArrowDown',
+  arrowleft: 'ArrowLeft',
+  arrowright: 'ArrowRight',
+  pageup: 'PageUp',
+  pagedown: 'PageDown',
+  home: 'Home',
+  end: 'End',
+  enter: 'Enter',
+}
+
+/** Pretty-cased key label: ArrowLeft, PageUp, F5. Single characters are unchanged. */
+function displayKey(key: string): string {
+  if (/^f\d{1,2}$/.test(key)) return key.toUpperCase()
+  return DISPLAY_NAMES[key] ?? key
+}
+
 export function canonicalBinding(binding: string): string {
   return parseBinding(binding).join(' ')
 }
@@ -128,6 +176,11 @@ function validateStep(raw: string): MessageKey | null {
   if (key === '' || MODS.has(key)) return 'shortcuts.error.modifierAlone'
   if (FORBIDDEN_KEYS.has(key)) return 'shortcuts.error.forbiddenKey'
   if (key.length > 1 && !NAMED_KEYS.has(key)) return 'shortcuts.error.unsupportedKey'
+  // normalizeEvent drops shift for printable symbols and digits (the key already carries it),
+  // so such a binding could never match a real key event.
+  if (mods.includes('shift') && key.length === 1 && key.toLowerCase() === key.toUpperCase()) {
+    return 'shortcuts.error.shiftSymbol'
+  }
   if (RESERVED.has(stepToString({ mods, key }))) return 'shortcuts.error.reserved'
   return null
 }
@@ -135,8 +188,9 @@ function validateStep(raw: string): MessageKey | null {
 const isChord = (step: string) => parseStep(step).mods.some((m) => SEQUENCE_PREFIX_MODS.includes(m))
 
 /**
- * Returns an error message key, or null when the binding is allowed: a single plain key,
- * a ctrl/alt/meta chord, or a two-step sequence of plain keys.
+ * Returns an error message key, or null when the binding is allowed: a single key (shift
+ * allowed with letters and named keys), a ctrl/alt/meta chord, or a two-step sequence whose
+ * steps use no ctrl/alt/meta (shift is fine).
  */
 export function validateBinding(binding: string): MessageKey | null {
   const steps = binding.trim().split(/\s+/)

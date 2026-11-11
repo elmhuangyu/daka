@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { canonicalBinding, findConflicts, validateBinding } from './shortcutBindings'
+import {
+  bindingKeyParts,
+  canonicalBinding,
+  findConflicts,
+  validateBinding,
+} from './shortcutBindings'
 import { SHORTCUT_CATALOG } from './shortcutCatalog'
 import { NAV_ITEMS } from '../nav'
 
@@ -39,6 +44,19 @@ describe('validateBinding', () => {
     'ctrl+shift+t',
     'ctrl+shift+n',
     'ctrl+shift+w',
+    'ctrl+shift+b',
+    'ctrl+shift+o',
+    'ctrl+shift+delete',
+    'ctrl+shift+a',
+    'ctrl+shift+p',
+    'ctrl+shift+k',
+    'meta+shift+n',
+    'meta+shift+t',
+    'meta+shift+w',
+    'shift+?',
+    'shift+/',
+    'shift+[',
+    'shift+1',
     'F5',
     'alt+ArrowLeft',
     'alt+ArrowRight',
@@ -50,6 +68,39 @@ describe('validateBinding', () => {
     'foo',
     '',
   ])('rejects %j', (b) => expect(validateBinding(b)).not.toBeNull())
+})
+
+describe('bindingKeyParts', () => {
+  it.each([
+    ['ctrl++', ['ctrl', '+']],
+    ['+', ['+']],
+    ['g t', ['g', 't']],
+    ['ctrl+shift+h', ['ctrl', 'shift', 'h']],
+    ['Shift+Ctrl+H', ['ctrl', 'shift', 'h']],
+    ['  ', []],
+    ['arrowleft', ['ArrowLeft']],
+    ['ctrl+pagedown', ['ctrl', 'PageDown']],
+    ['f5', ['F5']],
+  ])('splits %j', (b, parts) => expect(bindingKeyParts(b)).toEqual(parts))
+})
+
+describe('bindingKeyParts display case', () => {
+  it('pretty-cases catalog default named keys', () => {
+    const parts = SHORTCUT_CATALOG.flatMap((e) => e.keys.flatMap((k) => bindingKeyParts(k)))
+    for (const name of [
+      'ArrowLeft',
+      'ArrowRight',
+      'ArrowUp',
+      'ArrowDown',
+      'PageUp',
+      'PageDown',
+      'Enter',
+    ]) {
+      expect(parts).toContain(name)
+    }
+    const named = parts.filter((p) => p.length > 1 && !['ctrl', 'alt', 'shift', 'meta'].includes(p))
+    expect(named.filter((p) => !/^[A-Z]/.test(p))).toEqual([])
+  })
 })
 
 describe('canonicalBinding', () => {

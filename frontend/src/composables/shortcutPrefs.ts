@@ -22,6 +22,11 @@ export type ParseResult =
   | { ok: true; prefs: ShortcutPrefs; ignored: number }
   | { ok: false; error: MessageKey }
 
+// Never keep these as binding ids, whatever the catalog says (prototype pollution guard).
+const UNSAFE_IDS = new Set(['__proto__', 'constructor', 'prototype'])
+
+const STORED_IDS = new Set(SHORTCUT_CATALOG.map((c) => c.id))
+
 const isRecord = (x: unknown): x is Record<string, unknown> =>
   typeof x === 'object' && x !== null && !Array.isArray(x)
 
@@ -44,7 +49,7 @@ export function parseShortcutPrefs(text: string, knownIds?: Set<string>): ParseR
   const bindings: BindingOverrides = {}
   let ignored = 0
   for (const [id, value] of Object.entries(raw.bindings)) {
-    if (knownIds && !knownIds.has(id)) {
+    if (UNSAFE_IDS.has(id) || (knownIds && !knownIds.has(id))) {
       ignored++
       continue
     }
@@ -94,7 +99,7 @@ export function reloadShortcutPrefs() {
   } catch {
     // storage may be unavailable
   }
-  const parsed = text === null ? null : parseShortcutPrefs(text)
+  const parsed = text === null ? null : parseShortcutPrefs(text, STORED_IDS)
   if (parsed?.ok) {
     shortcutPrefs.enabled = parsed.prefs.enabled
     shortcutPrefs.bindings = parsed.prefs.bindings

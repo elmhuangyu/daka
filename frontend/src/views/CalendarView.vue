@@ -106,7 +106,8 @@ function onGridKey(e: KeyboardEvent) {
 /** Shortcut entry: act only once the grid exists and focus is not already inside it. */
 function fromOutside(fn: () => void) {
   return () => {
-    if (!store.view || gridEl.value?.contains(document.activeElement)) return
+    // false = not handled, so the key keeps its default (page scroll) while the grid loads.
+    if (!store.view || gridEl.value?.contains(document.activeElement)) return false
     fn()
   }
 }

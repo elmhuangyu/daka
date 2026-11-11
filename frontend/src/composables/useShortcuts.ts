@@ -18,7 +18,8 @@ export interface ShortcutDef {
   allowInInput?: boolean
   /** Fire on auto-repeat keydown events too. */
   repeatable?: boolean
-  handler?: (e: KeyboardEvent) => void
+  /** Return false to report "not handled": the dispatcher then leaves the event's default alone. */
+  handler?: (e: KeyboardEvent) => unknown
   /** Listed in the help panel only; never dispatched. */
   displayOnly?: boolean
 }
@@ -140,8 +141,7 @@ function active(def: ShortcutDef): boolean {
 }
 
 function fire(def: ShortcutDef, e: KeyboardEvent): void {
-  e.preventDefault()
-  def.handler?.(e)
+  if (def.handler?.(e) !== false) e.preventDefault()
 }
 
 function onKeydown(e: KeyboardEvent) {

@@ -8,7 +8,11 @@ import {
   catalogEntry,
   type CatalogEntry,
 } from '../../composables/shortcutCatalog'
-import { canonicalBinding, validateBinding } from '../../composables/shortcutBindings'
+import {
+  bindingKeyParts,
+  canonicalBinding,
+  validateBinding,
+} from '../../composables/shortcutBindings'
 import {
   applyPrefs,
   catalogConflicts,
@@ -38,6 +42,7 @@ const SCOPE_TITLES: Record<ShortcutScope, MessageKey> = {
 }
 const SCOPE_ORDER: ShortcutScope[] = ['global', 'today', 'calendar']
 const EXPORT_FILE = 'daka-shortcuts.json'
+const MAX_IMPORT_BYTES = 64 * 1024
 
 const groups = computed(() =>
   SCOPE_ORDER.map((scope) => ({
@@ -48,13 +53,7 @@ const groups = computed(() =>
 )
 
 const map = computed(() => effectiveMap())
-const keysOf = (id: string): string[][] =>
-  (map.value[id] ?? []).map((k) =>
-    k
-      .trim()
-      .split(/\s+/)
-      .flatMap((step) => (step === '+' ? [step] : step.split('+'))),
-  )
+const keysOf = (id: string): string[][] => (map.value[id] ?? []).map(bindingKeyParts)
 const isOverridden = (id: string) => shortcutPrefs.bindings[id] !== undefined
 const canUnbind = (e: CatalogEntry) =>
   !e.displayOnly && e.id !== PRIVACY_TOGGLE_ID && (map.value[e.id] ?? []).length > 0
@@ -228,6 +227,10 @@ async function onImport(e: Event) {
   error.value = ''
   notice.value = ''
   if (!file) return
+  if (file.size > MAX_IMPORT_BYTES) {
+    error.value = t('shortcuts.settings.tooLarge')
+    return
+  }
   let text: string
   try {
     text = await readText(file)
@@ -343,7 +346,13 @@ onBeforeUnmount(() => {
             <span>{{ t(r.labelKey) }}</span>
             <span class="flex flex-wrap items-center gap-2">
               <template v-if="recordingId === r.id">
-                <span class="text-xs opacity-70" data-testid="sc-recording">
+                <span
+                  :id="`sc-hint-${r.id}`"
+                  class="text-xs opacity-70"
+                  role="status"
+                  aria-live="polite"
+                  data-testid="sc-recording"
+                >
                   {{
                     steps.length === 0
                       ? t('shortcuts.settings.press')
@@ -372,6 +381,8 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   class="btn btn-xs"
+                  :aria-pressed="recordingId === r.id"
+                  :aria-describedby="recordingId === r.id ? `sc-hint-${r.id}` : undefined"
                   :data-testid="`sc-change-${r.id}`"
                   @click="startRecording(r.id)"
                 >

@@ -549,6 +549,19 @@ describe('CalendarView shortcuts', () => {
     w.unmount()
   })
 
+  it('leaves arrow keys and PageDown alone while the view is still loading', async () => {
+    const { w } = await mountView()
+    const store = useCalendarStore()
+    ;(document.activeElement as HTMLElement).blur()
+    store.view = null
+    for (const key of ['ArrowRight', 'PageDown']) {
+      const e = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+      document.body.dispatchEvent(e)
+      expect(e.defaultPrevented).toBe(false)
+    }
+    w.unmount()
+  })
+
   it('does not steal focus on entry or while typing', async () => {
     const input = document.createElement('input')
     document.body.appendChild(input)

@@ -123,8 +123,8 @@ describe('dispatch with overrides', () => {
   })
   it('refuses to unbind the privacy toggle but allows rebinding it', () => {
     expect(setBinding('privacy.toggle', null)).toBe(false)
-    expect(setBinding('privacy.toggle', ['ctrl+shift+p'])).toBe(true)
-    expect(shortcutPrefs.bindings['privacy.toggle']).toEqual(['ctrl+shift+p'])
+    expect(setBinding('privacy.toggle', ['ctrl+shift+y'])).toBe(true)
+    expect(shortcutPrefs.bindings['privacy.toggle']).toEqual(['ctrl+shift+y'])
   })
   it('master toggle off disables everything except privacy.toggle', () => {
     const nav = vi.fn<() => void>()
@@ -154,6 +154,17 @@ describe('dispatch with overrides', () => {
 })
 
 describe('parseShortcutPrefs', () => {
+  it('drops unsafe ids even without a known-id set', () => {
+    const r = parseShortcutPrefs(
+      '{"v":1,"enabled":true,"bindings":{"__proto__":["q"],"constructor":["w"],"item.new":["q"]}}',
+    )
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.ignored).toBe(2)
+    expect(Object.keys(r.prefs.bindings)).toEqual(['item.new'])
+    expect(Object.getPrototypeOf(r.prefs.bindings)).toBe(Object.prototype)
+  })
+
   const doc = (bindings: unknown, extra: object = {}) =>
     JSON.stringify({ v: 1, enabled: true, bindings, ...extra })
   it('rejects bad shapes', () => {
@@ -179,6 +190,30 @@ describe('parseShortcutPrefs', () => {
       ignored: 1,
       prefs: { v: 1, enabled: true, bindings: { 'item.new': ['m'] } },
     })
+  })
+  it('rejects shift with a symbol key', () => {
+    expect(parseShortcutPrefs(doc({ 'item.new': ['shift+?'] })).ok).toBe(false)
+    expect(parseShortcutPrefs(doc({ 'item.new': ['shift+a'] })).ok).toBe(true)
+  })
+  it('never keeps prototype-ish ids', () => {
+    const text =
+      '{"v":1,"enabled":true,"bindings":{"__proto__":["q"],"constructor":["q"],"prototype":["q"],"item.new":["m"]}}'
+    for (const known of [undefined, new Set(['item.new', '__proto__', 'constructor'])]) {
+      const r = parseShortcutPrefs(text, known)
+      expect(r.ok).toBe(true)
+      if (!r.ok) continue
+      expect(Object.keys(r.prefs.bindings)).toEqual(['item.new'])
+      expect(r.ignored).toBe(3)
+    }
+    expect(({} as Record<string, unknown>).q).toBeUndefined()
+  })
+  it('storage keeps only catalog ids', () => {
+    localStorage.setItem(
+      SHORTCUTS_STORAGE_KEY,
+      '{"v":1,"enabled":true,"bindings":{"__proto__":["q"],"bogus":["q"],"item.new":["m"]}}',
+    )
+    reloadShortcutPrefs()
+    expect(Object.keys(shortcutPrefs.bindings)).toEqual(['item.new'])
   })
   it('applyPrefs replaces state', () => {
     applyPrefs({ v: 1, enabled: false, bindings: { 'item.new': null } })

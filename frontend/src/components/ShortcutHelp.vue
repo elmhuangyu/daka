@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n, type MessageKey } from '../i18n'
 import { helpOpen } from '../composables/useGlobalShortcuts'
 import { PRIVACY_TOGGLE_ID } from '../composables/shortcutCatalog'
+import { bindingKeyParts } from '../composables/shortcutBindings'
 import { shortcutPrefs } from '../composables/shortcutPrefs'
 import { effectiveKeys, useShortcutList, type ShortcutScope } from '../composables/useShortcuts'
 
@@ -29,12 +30,7 @@ const groups = computed(() =>
       .map((d) => ({
         id: d.id,
         label: t(d.labelKey),
-        keys: effectiveKeys(d).map((k) =>
-          k
-            .trim()
-            .split(/\s+/)
-            .flatMap((step) => (step === '+' ? [step] : step.split('+'))),
-        ),
+        keys: effectiveKeys(d).map(bindingKeyParts),
       })),
   })).filter((g) => g.rows.length > 0),
 )

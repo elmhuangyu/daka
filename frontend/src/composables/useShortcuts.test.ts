@@ -72,6 +72,19 @@ describe('dispatch', () => {
     expect(e.defaultPrevented).toBe(true)
   })
 
+  it('leaves the default alone when a handler returns false', () => {
+    reg({ id: 'a', keys: ['x'], handler: () => false })
+    expect(press('x').defaultPrevented).toBe(false)
+    reg({ id: 'b', keys: ['y'], handler: () => {} })
+    expect(press('y').defaultPrevented).toBe(true)
+  })
+
+  it('honours a false return on the sequence path too', () => {
+    reg({ id: 's', keys: ['g t'], handler: () => false })
+    press('g')
+    expect(press('t').defaultPrevented).toBe(false)
+  })
+
   it('ignores single keys with ctrl/alt/meta', () => {
     const handler = vi.fn<() => void>()
     reg({ id: 'a', keys: ['x'], handler })
