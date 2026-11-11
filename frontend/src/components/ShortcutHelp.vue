@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { helpOpen } from '../composables/useGlobalShortcuts'
+import { PRIVACY_TOGGLE_ID } from '../composables/shortcutCatalog'
+import { shortcutPrefs } from '../composables/shortcutPrefs'
 import { effectiveKeys, useShortcutList, type ShortcutScope } from '../composables/useShortcuts'
 
 // Static English text only; this panel must never read item, project or category data.
@@ -12,6 +14,9 @@ const SCOPE_TITLES: Record<ShortcutScope, string> = {
   calendar: 'Calendar',
 }
 const SCOPE_ORDER: ShortcutScope[] = ['global', 'today', 'calendar']
+const UNBOUND = 'Unbound'
+const DISABLED_NOTE =
+  'Keyboard shortcuts are turned off in Settings. Only the privacy toggle stays active.'
 const GENERAL_TITLE = 'General'
 const GENERAL_ROWS = [
   { label: 'Move between controls', keys: [['Tab'], ['Shift', 'Tab']] },
@@ -24,7 +29,7 @@ const groups = computed(() =>
     scope,
     title: SCOPE_TITLES[scope],
     rows: list.value
-      .filter((d) => d.scope === scope)
+      .filter((d) => d.scope === scope && (shortcutPrefs.enabled || d.id === PRIVACY_TOGGLE_ID))
       .map((d) => ({
         id: d.id,
         label: d.label,
@@ -90,12 +95,20 @@ onBeforeUnmount(() => {
   >
     <div ref="box" class="modal-box" tabindex="-1">
       <h2 id="shortcut-help-title" class="text-lg font-bold">{{ TITLE }}</h2>
+      <p
+        v-if="!shortcutPrefs.enabled"
+        class="mt-2 text-sm opacity-70"
+        data-testid="shortcut-help-off"
+      >
+        {{ DISABLED_NOTE }}
+      </p>
       <section v-for="g in groups" :key="g.scope" class="mt-4">
         <h3 class="text-sm font-semibold text-base-content/70">{{ g.title }}</h3>
         <ul class="mt-1 space-y-1">
           <li v-for="r in g.rows" :key="r.id" class="flex justify-between gap-4 text-sm">
             <span>{{ r.label }}</span>
             <span class="flex gap-2">
+              <span v-if="r.keys.length === 0" class="opacity-60">{{ UNBOUND }}</span>
               <span v-for="(seq, i) in r.keys" :key="i" class="flex gap-1">
                 <kbd v-for="(k, j) in seq" :key="j" class="kbd kbd-sm">{{ k }}</kbd>
               </span>

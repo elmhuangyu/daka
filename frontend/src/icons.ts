@@ -6,6 +6,9 @@ const wrap = (body: string) =>
   `<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</g>`
 
 const ICONS: Record<string, string> = {
+  'lucide:keyboard': wrap(
+    '<path d="M10 8h.01M12 12h.01M14 8h.01M16 12h.01M18 8h.01M6 8h.01M7 16h10M8 12h.01"/><rect width="20" height="16" x="2" y="4" rx="2"/>',
+  ),
   'lucide:smile-plus': wrap(
     '<path d="M22 11v1a10 10 0 1 1-9-10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01M16 5h6M19 2v6"/>',
   ),

@@ -7,6 +7,7 @@ import CategoriesSection from '../components/settings/CategoriesSection.vue'
 import TokensSection from '../components/settings/TokensSection.vue'
 import ExternalCalendarsSection from '../components/settings/ExternalCalendarsSection.vue'
 import TelegramSection from '../components/settings/TelegramSection.vue'
+import ShortcutsSection from '../components/settings/ShortcutsSection.vue'
 import DataSection from '../components/settings/DataSection.vue'
 import PrivacyAccountSections from '../components/settings/PrivacyAccountSections.vue'
 import { useI18n, type MessageKey } from '../i18n'
@@ -15,14 +16,18 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-type TabKey = 'general' | 'categories' | 'integrations' | 'privacy' | 'data'
+type TabKey = 'general' | 'categories' | 'integrations' | 'privacy' | 'data' | 'shortcuts'
 
-const TABS: { id: TabKey; labelKey: MessageKey; icon: string }[] = [
+// Tabs without a message key use a plain English label until the strings are localized.
+const SHORTCUTS_TAB_LABEL = 'Shortcuts'
+
+const TABS: { id: TabKey; labelKey?: MessageKey; label?: string; icon: string }[] = [
   { id: 'general', labelKey: 'settings.tabs.general', icon: 'lucide:sliders' },
   { id: 'categories', labelKey: 'settings.tabs.categories', icon: 'lucide:tags' },
   { id: 'integrations', labelKey: 'settings.tabs.integrations', icon: 'lucide:link-2' },
   { id: 'privacy', labelKey: 'settings.tabs.privacyAccount', icon: 'lucide:shield' },
   { id: 'data', labelKey: 'settings.tabs.data', icon: 'lucide:database' },
+  { id: 'shortcuts', label: SHORTCUTS_TAB_LABEL, icon: 'lucide:keyboard' },
 ]
 
 const validTab = (k: string): k is TabKey => TABS.some((tab) => tab.id === k)
@@ -71,7 +76,7 @@ watch(
         @click="setTab(tb.id)"
       >
         <Icon :icon="tb.icon" class="size-4" aria-hidden="true" />
-        <span>{{ t(tb.labelKey) }}</span>
+        <span>{{ tb.labelKey ? t(tb.labelKey) : tb.label }}</span>
       </button>
     </nav>
 
@@ -96,7 +101,7 @@ watch(
             @click="setTab(tb.id)"
           >
             <Icon :icon="tb.icon" class="size-4.5 shrink-0" aria-hidden="true" />
-            <span class="truncate">{{ t(tb.labelKey) }}</span>
+            <span class="truncate">{{ tb.labelKey ? t(tb.labelKey) : tb.label }}</span>
           </button>
         </nav>
       </aside>
@@ -118,6 +123,8 @@ watch(
         </div>
 
         <DataSection v-show="activeTab === 'data'" />
+
+        <ShortcutsSection v-show="activeTab === 'shortcuts'" />
       </main>
     </div>
   </div>

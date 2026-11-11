@@ -123,6 +123,14 @@ async function mountView() {
 }
 
 describe('SettingsView', () => {
+  it('shows the shortcuts tab', async () => {
+    const w = await mountView()
+    expect(w.find('[data-testid=tab-shortcuts]').exists()).toBe(true)
+    await w.get('[data-testid=tab-shortcuts]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid=section-shortcuts]').isVisible()).toBe(true)
+  })
+
   it('saves general settings via PUT', async () => {
     const w = await mountView()
     await w.get('[data-testid=g-week-start]').setValue(0)

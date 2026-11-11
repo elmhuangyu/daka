@@ -18,6 +18,7 @@ import {
   describeError,
   type CheckinInput,
 } from '../api'
+import { catalogDef } from '../composables/shortcutCatalog'
 import { useShortcut } from '../composables/useShortcuts'
 import { useI18n } from '../i18n'
 import { formatCustomDate, weekdayName } from '../i18n/format'
@@ -356,34 +357,10 @@ function toggleFocusedCard() {
 }
 
 useShortcut([
-  {
-    id: 'today.prevDay',
-    keys: ['['],
-    scope: 'today',
-    label: 'Previous day',
-    handler: () => store.goToPrevDay(),
-  },
-  {
-    id: 'today.nextDay',
-    keys: [']'],
-    scope: 'today',
-    label: 'Next day',
-    handler: () => store.goToNextDay(),
-  },
-  {
-    id: 'today.goToday',
-    keys: ['t'],
-    scope: 'today',
-    label: 'Jump to today',
-    handler: () => store.goToToday(),
-  },
-  {
-    id: 'today.toggleCard',
-    keys: ['x'],
-    scope: 'today',
-    label: 'Check or uncheck the focused item',
-    handler: toggleFocusedCard,
-  },
+  catalogDef('today.prevDay', () => store.goToPrevDay()),
+  catalogDef('today.nextDay', () => store.goToNextDay()),
+  catalogDef('today.goToday', () => store.goToToday()),
+  catalogDef('today.toggleCard', toggleFocusedCard),
 ])
 
 onMounted(() => {

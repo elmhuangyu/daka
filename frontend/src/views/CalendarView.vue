@@ -8,6 +8,7 @@ import { usePrivacyStore } from '../stores/privacy'
 import { useCalendarStore } from '../stores/calendar'
 import DayCell from '../components/calendar/DayCell.vue'
 import DayPanel from '../components/calendar/DayPanel.vue'
+import { catalogDef } from '../composables/shortcutCatalog'
 import { useShortcut } from '../composables/useShortcuts'
 import { useI18n } from '../i18n'
 import { extCalErrorKey } from '../i18n/errors'
@@ -116,71 +117,26 @@ const ARROW_STEPS = [
   ['Down', 7],
 ] as const
 useShortcut([
-  ...ARROW_STEPS.map(([name, step]) => ({
-    id: `calendar.move${name}`,
-    keys: [`Arrow${name}`],
-    scope: 'calendar' as const,
-    label: `Move focus ${name === 'Left' || name === 'Up' ? 'back' : 'forward'} (${
-      Math.abs(step) === 1 ? 'one day' : 'one week'
-    })`,
-    handler: fromOutside(() => void moveFocus(addDays(focusDate.value, step))),
-  })),
-  {
-    id: 'calendar.pageUp',
-    keys: ['PageUp'],
-    scope: 'calendar',
-    label: 'Previous period',
-    handler: fromOutside(() => void navigate(-1, true)),
-  },
-  {
-    id: 'calendar.pageDown',
-    keys: ['PageDown'],
-    scope: 'calendar',
-    label: 'Next period',
-    handler: fromOutside(() => void navigate(1, true)),
-  },
-  {
-    id: 'calendar.select',
-    keys: ['Enter'],
-    scope: 'calendar',
-    label: 'Select the focused day',
-    displayOnly: true,
-  },
-  {
-    id: 'calendar.month',
-    keys: ['m'],
-    scope: 'calendar',
-    label: 'Month view',
-    handler: () => setMode('month'),
-  },
-  {
-    id: 'calendar.week',
-    keys: ['w'],
-    scope: 'calendar',
-    label: 'Week view',
-    handler: () => setMode('week'),
-  },
-  {
-    id: 'calendar.today',
-    keys: ['t'],
-    scope: 'calendar',
-    label: 'Jump to today',
-    handler: () => void goToday(),
-  },
-  {
-    id: 'calendar.prev',
-    keys: ['['],
-    scope: 'calendar',
-    label: 'Previous period',
-    handler: () => void navigate(-1, true),
-  },
-  {
-    id: 'calendar.next',
-    keys: [']'],
-    scope: 'calendar',
-    label: 'Next period',
-    handler: () => void navigate(1, true),
-  },
+  ...ARROW_STEPS.map(([name, step]) =>
+    catalogDef(
+      `calendar.move${name}`,
+      fromOutside(() => void moveFocus(addDays(focusDate.value, step))),
+    ),
+  ),
+  catalogDef(
+    'calendar.pageUp',
+    fromOutside(() => void navigate(-1, true)),
+  ),
+  catalogDef(
+    'calendar.pageDown',
+    fromOutside(() => void navigate(1, true)),
+  ),
+  catalogDef('calendar.select'),
+  catalogDef('calendar.month', () => setMode('month')),
+  catalogDef('calendar.week', () => setMode('week')),
+  catalogDef('calendar.today', () => void goToday()),
+  catalogDef('calendar.prev', () => void navigate(-1, true)),
+  catalogDef('calendar.next', () => void navigate(1, true)),
 ])
 
 function select(date: string) {

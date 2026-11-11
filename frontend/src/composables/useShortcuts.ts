@@ -1,4 +1,7 @@
 import { computed, getCurrentScope, onScopeDispose, reactive } from 'vue'
+import { parseBinding } from './shortcutBindings'
+import { PRIVACY_TOGGLE_ID } from './shortcutCatalog'
+import { shortcutPrefs } from './shortcutPrefs'
 
 export type ShortcutScope = 'global' | 'today' | 'calendar'
 
@@ -30,9 +33,17 @@ const NON_TYPING_INPUT_TYPES = new Set(['checkbox', 'radio', 'button', 'submit']
 
 const registry = reactive(new Map<string, Entry>())
 
-/** Seam for user overrides (added later). */
+/** The user's override (null = unbound) or the default keys. */
 export function effectiveKeys(def: ShortcutDef): string[] {
-  return def.keys
+  const o = shortcutPrefs.bindings[def.id]
+  return o === undefined ? def.keys : (o ?? [])
+}
+
+/** True while the settings page captures a new binding; all dispatch is suspended. */
+let recording = false
+export function setShortcutRecording(on: boolean) {
+  recording = on
+  if (on) resetSequence()
 }
 
 function register(def: ShortcutDef, owner: symbol) {
@@ -99,20 +110,6 @@ export function isModalOpen(): boolean {
   )
 }
 
-/** Canonicalize a binding's steps so they compare equal to normalizeEvent output. */
-function parseBinding(binding: string): string[] {
-  return binding
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((step) => {
-      const parts = step.toLowerCase().split('+')
-      const key = parts.pop() ?? ''
-      const mods = ['ctrl', 'alt', 'shift', 'meta'].filter((m) => parts.includes(m))
-      return [...mods, key].join('+')
-    })
-}
-
 /** Plain keys (no ctrl/alt/meta) are subject to the typing and modal filters. */
 function isPlainStep(step: string): boolean {
   return !/(^|\+)(ctrl|alt|meta)\+/.test(step)
@@ -136,20 +133,28 @@ function startSequence(first: string) {
   pendingTimer = setTimeout(resetSequence, SEQUENCE_TIMEOUT_MS)
 }
 
+/** With the master toggle off only the privacy toggle stays live (Esc is handled outside the registry). */
+function active(def: ShortcutDef): boolean {
+  return shortcutPrefs.enabled || def.id === PRIVACY_TOGGLE_ID
+}
+
 function fire(def: ShortcutDef, e: KeyboardEvent): void {
   e.preventDefault()
   def.handler?.(e)
 }
 
 function onKeydown(e: KeyboardEvent) {
-  if (e.defaultPrevented || e.isComposing) return
+  if (recording || e.defaultPrevented || e.isComposing) return
   if (MODIFIER_KEYS.has(e.key.toLowerCase())) return
 
   const chord = normalizeEvent(e)
   const blocked = isTypingTarget(e.target) || isModalOpen()
   const blockedPlain = (def: ShortcutDef) => blocked && !def.allowInInput
   const allowed = (def: ShortcutDef, plain: boolean) =>
-    !def.displayOnly && (!e.repeat || def.repeatable) && (!plain || !blockedPlain(def))
+    !def.displayOnly &&
+    active(def) &&
+    (!e.repeat || def.repeatable) &&
+    (!plain || !blockedPlain(def))
 
   if (pending !== null) {
     const first = pending
@@ -181,7 +186,13 @@ function onKeydown(e: KeyboardEvent) {
           fire(def, e)
           return
         }
-      } else if (!e.repeat && !def.displayOnly && isPlainStep(chord) && !blockedPlain(def)) {
+      } else if (
+        !e.repeat &&
+        !def.displayOnly &&
+        active(def) &&
+        isPlainStep(chord) &&
+        !blockedPlain(def)
+      ) {
         sequenceStart = true
       }
     }
