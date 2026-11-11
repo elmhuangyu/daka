@@ -500,6 +500,7 @@ watch(
                 "
                 autocomplete="off"
                 data-testid="quick-log-input"
+                data-shortcut-search
                 @focus="quickLogOpen = true"
                 @blur="onBlurQuickLog"
                 @keydown.escape="quickLogOpen = false"

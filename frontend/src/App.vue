@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import './icons'
 import AppLayout from './components/AppLayout.vue'
 import ReauthModal from './components/ReauthModal.vue'
+import ShortcutHelp from './components/ShortcutHelp.vue'
+import { useGlobalShortcuts } from './composables/useGlobalShortcuts'
 import { installShortcutListener, useShortcut } from './composables/useShortcuts'
 import { useAuthStore } from './stores/auth'
 import { useOfflineStore } from './stores/offline'
@@ -68,6 +70,8 @@ useShortcut({
   handler: () => privacy.toggle(),
 })
 
+useGlobalShortcuts()
+
 let removeShortcutListener: (() => void) | null = null
 
 onMounted(() => {
@@ -94,4 +98,5 @@ onBeforeUnmount(() => {
     </main>
   </AppLayout>
   <ReauthModal />
+  <ShortcutHelp v-if="!route.meta.public" />
 </template>

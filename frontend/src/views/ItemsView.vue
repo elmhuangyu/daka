@@ -62,6 +62,7 @@ watch(
             type="search"
             class="grow"
             data-testid="search"
+            data-shortcut-search
             :aria-label="t('items.search')"
             :placeholder="privacy.redact ? t('items.searchOff') : t('items.search')"
             :disabled="privacy.redact"
