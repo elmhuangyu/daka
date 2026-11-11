@@ -307,11 +307,10 @@ describe('CalendarView', () => {
     await w.get('[data-testid=day-2026-11-06]').trigger('click')
     await flushPromises()
     expect(w.get('[data-testid=day-panel]').text()).toContain('Water')
-    await w.get('[data-testid=makeup-note-1]').setValue('forgot')
     await w.get('[data-testid=makeup-toggle-1]').trigger('click')
     await flushPromises()
     const post = calls.find((c) => c.method === 'POST' && c.url === '/api/checkins')!
-    expect(post.body).toEqual({ item_id: 1, mode: 'set', note: 'forgot', date: '2026-11-06' })
+    expect(post.body).toEqual({ item_id: 1, mode: 'set', date: '2026-11-06' })
     expect(post.headers['Idempotency-Key']).toBeTruthy()
     w.unmount()
   })

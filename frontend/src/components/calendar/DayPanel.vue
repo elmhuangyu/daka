@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
 import * as api from '../../api'
 import type { CalendarDayItem, CheckinInput, CheckinLog } from '../../api'
@@ -8,11 +8,14 @@ import { useI18n, type MessageKey } from '../../i18n'
 import { useCalendarStore } from '../../stores/calendar'
 import { usePrivacyStore } from '../../stores/privacy'
 import MakeupControl from './MakeupControl.vue'
+import ProjectBadges from '../ProjectBadges.vue'
+import { useProjectsStore } from '../../stores/projects'
 import OccurrenceDetailModal from '../today/OccurrenceDetailModal.vue'
 
 const { t } = useI18n()
 const store = useCalendarStore()
 const privacy = usePrivacyStore()
+const projectsStore = useProjectsStore()
 const emit = defineEmits<{ close: [] }>()
 
 const day = computed(() => store.selectedDay)
@@ -102,6 +105,25 @@ const activeNoteFor = (logs: CheckinLog[]) =>
     .reverse()
     .find((l) => l.note && l.note.trim())
     ?.note?.trim() ?? ''
+onMounted(() => {
+  void projectsStore.fetchProjects()
+})
+
+/** One-shot items (boolean / maintenance) are checked from a round button in the row header. */
+function isToggleItem(d: { tracker_type: string; polarity: string } | undefined) {
+  if (!d) return false
+  return (
+    (d.tracker_type === 'boolean' && d.polarity !== 'negative') || d.tracker_type === 'maintenance'
+  )
+}
+const isChecked = (id: number) => logsOf(id).length > 0
+function toggleItem(id: number) {
+  void makeUp({ item_id: id, mode: isChecked(id) ? 'unset' : 'set' })
+}
+function projectOf(id: number) {
+  const pid = store.detailById.get(id)?.project_id
+  return pid ? (projectsStore.projectById.get(pid) ?? null) : null
+}
 const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
 </script>
 
@@ -189,10 +211,35 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
           :data-testid="`panel-item-${i.item_id}`"
         >
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <span class="name font-medium" :class="{ sensitive: i.is_sensitive }">{{
-              i.name
-            }}</span>
-            <span class="flex items-center gap-1">
+            <span class="flex min-w-0 items-center gap-2">
+              <button
+                v-if="isToggleItem(store.detailById.get(i.item_id))"
+                type="button"
+                class="btn btn-circle btn-sm shrink-0"
+                :class="isChecked(i.item_id) ? 'btn-success' : 'btn-outline btn-primary'"
+                :disabled="store.busy.includes(i.item_id)"
+                :aria-pressed="isChecked(i.item_id)"
+                :aria-label="
+                  isChecked(i.item_id) ? t('calendar.makeup.undo') : t('calendar.makeup.markDone')
+                "
+                :title="
+                  isChecked(i.item_id) ? t('calendar.makeup.undo') : t('calendar.makeup.markDone')
+                "
+                :data-testid="`makeup-toggle-${i.item_id}`"
+                @click="toggleItem(i.item_id)"
+              >
+                <Icon
+                  :icon="isChecked(i.item_id) ? 'lucide:check' : 'lucide:circle'"
+                  class="size-4"
+                  aria-hidden="true"
+                />
+              </button>
+              <span class="name font-medium" :class="{ sensitive: i.is_sensitive }">{{
+                i.name
+              }}</span>
+            </span>
+            <span class="flex flex-wrap items-center gap-1">
+              <ProjectBadges :item-id="i.item_id" :project="projectOf(i.item_id)" />
               <span v-if="i.has_supplement" class="badge badge-ghost badge-sm">{{
                 t('calendar.panel.makeup')
               }}</span>
@@ -217,8 +264,14 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
             <Icon icon="lucide:pencil" class="size-3 shrink-0 opacity-70" aria-hidden="true" />
             <span class="truncate">{{ activeNoteFor(logsOf(i.item_id)) }}</span>
           </div>
-          <p v-if="i.overdue" class="text-sm text-error">{{ t('calendar.panel.overdueNote') }}</p>
-          <div v-if="editable && !(i.forecast && !i.overdue)" class="mt-2">
+          <div
+            v-if="
+              editable &&
+              !(i.forecast && !i.overdue) &&
+              !isToggleItem(store.detailById.get(i.item_id))
+            "
+            class="mt-2"
+          >
             <MakeupControl
               v-if="store.detailById.get(i.item_id)"
               :detail="store.detailById.get(i.item_id)!"
@@ -238,9 +291,32 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
           :data-testid="`panel-added-${d.id}`"
         >
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <span class="name font-medium" :class="{ sensitive: d.effective_sensitive }">{{
-              d.name
-            }}</span>
+            <span class="flex min-w-0 items-center gap-2">
+              <button
+                v-if="isToggleItem(d)"
+                type="button"
+                class="btn btn-circle btn-sm shrink-0"
+                :class="isChecked(d.id) ? 'btn-success' : 'btn-outline btn-primary'"
+                :disabled="store.busy.includes(d.id)"
+                :aria-pressed="isChecked(d.id)"
+                :aria-label="
+                  isChecked(d.id) ? t('calendar.makeup.undo') : t('calendar.makeup.markDone')
+                "
+                :title="isChecked(d.id) ? t('calendar.makeup.undo') : t('calendar.makeup.markDone')"
+                :data-testid="`makeup-toggle-${d.id}`"
+                @click="toggleItem(d.id)"
+              >
+                <Icon
+                  :icon="isChecked(d.id) ? 'lucide:check' : 'lucide:circle'"
+                  class="size-4"
+                  aria-hidden="true"
+                />
+              </button>
+              <span class="name font-medium" :class="{ sensitive: d.effective_sensitive }">{{
+                d.name
+              }}</span>
+            </span>
+            <ProjectBadges :item-id="d.id" :project="projectOf(d.id)" />
             <button
               type="button"
               class="btn btn-ghost btn-xs btn-square"
@@ -260,7 +336,7 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
             <Icon icon="lucide:pencil" class="size-3 shrink-0 opacity-70" aria-hidden="true" />
             <span class="truncate">{{ activeNoteFor(logsOf(d.id)) }}</span>
           </div>
-          <div class="mt-2">
+          <div v-if="!isToggleItem(d)" class="mt-2">
             <MakeupControl
               :detail="d"
               :logs="logsOf(d.id)"
