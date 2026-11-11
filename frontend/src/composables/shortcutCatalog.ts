@@ -166,6 +166,18 @@ export const SHORTCUT_CATALOG: CatalogEntry[] = [
     labelKey: 'shortcuts.label.project.rowDown',
   },
   {
+    id: 'project.moveUp',
+    keys: ['alt+ArrowUp'],
+    scope: 'projects',
+    labelKey: 'shortcuts.label.project.moveUp',
+  },
+  {
+    id: 'project.moveDown',
+    keys: ['alt+ArrowDown'],
+    scope: 'projects',
+    labelKey: 'shortcuts.label.project.moveDown',
+  },
+  {
     id: 'project.toggleRow',
     keys: ['x'],
     scope: 'projects',

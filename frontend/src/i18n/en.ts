@@ -928,6 +928,8 @@ export const en = {
   'shortcuts.label.project.toggleRow': 'Check or uncheck the focused task',
   'shortcuts.label.project.deleteRow': 'Delete the focused task',
   'shortcuts.label.project.newSibling': 'Add a task below the focused task',
+  'shortcuts.label.project.moveUp': 'Move the focused task up',
+  'shortcuts.label.project.moveDown': 'Move the focused task down',
   'shortcuts.label.project.indent': 'Make the focused task a sub-task of the task above',
   'shortcuts.label.project.outdent': 'Move the focused sub-task up one level',
 } as const

@@ -420,6 +420,7 @@ export interface ItemDetail {
   aggregate?: string
   warning_days?: number
   pinned?: boolean
+  sort_order?: number
   archived?: boolean
   options: OptionDetail[]
   current_rule: RuleDetail

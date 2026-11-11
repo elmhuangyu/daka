@@ -11,7 +11,7 @@ import { formatCustomDate } from '../i18n/format'
 import { usePrivacyStore } from '../stores/privacy'
 import { useProjectsStore } from '../stores/projects'
 import { catalogDef } from '../composables/shortcutCatalog'
-import { useShortcut } from '../composables/useShortcuts'
+import { isModalOpen, isTypingTarget, useShortcut } from '../composables/useShortcuts'
 
 const { t, tn } = useI18n()
 const route = useRoute()
@@ -103,9 +103,15 @@ const form = ref<{ after: number; parent: number | null; sibling: boolean } | nu
 const subtaskName = ref('')
 const addingSubtask = ref(false)
 
+// The tree follows the backend sibling order (sort_order, id) used by /move, not the list API's
+// pinned-first order, so the visual order always matches the order the server moves within.
+const orderedTasks = computed(() =>
+  [...tasks.value].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id - b.id),
+)
+
 const childrenByParent = computed(() => {
   const map = new Map<number, ItemDetail[]>()
-  for (const t of tasks.value) {
+  for (const t of orderedTasks.value) {
     if (!t.parent_id) continue
     const list = map.get(t.parent_id) ?? []
     list.push(t)
@@ -136,7 +142,7 @@ const treeRows = computed<TreeRow[]>(() => {
         depth: f.sibling ? depth : depth + 1,
       })
   }
-  for (const t of tasks.value) {
+  for (const t of orderedTasks.value) {
     if (!t.parent_id || !ids.has(t.parent_id)) visit(t, 0)
   }
   return rows
@@ -656,7 +662,60 @@ function onTabKey(e: KeyboardEvent, task: ItemDetail) {
   void moveTask(task, { parent_id: prev.task.id })
 }
 
+// Move up / down (Alt+Up / Alt+Down, rebindable registry shortcuts). Visual-line semantics,
+// computed on the visible rows outside the moved row's own subtree:
+// - Up: P is the row immediately above the moved row. Place the row directly before P as P's
+//   sibling ({ parent_id: P.parent, before_id: P.id }). If P is the row's parent the row leaves
+//   it, above the parent; if P is the deepest last descendant of the previous sibling, the row
+//   enters that subtree right before P. For a leaf sibling this is a plain reorder.
+// - Down: N is the row immediately below the moved row's whole subtree. If N has children the
+//   row becomes N's first child ({ parent_id: N.id, before_id: first child }); otherwise it is
+//   placed directly after N as its sibling ({ parent_id: N.parent, after_id: N.id }).
+// - No row above (Up) or below (Down): no-op and the native key is left alone.
+// Alt chords bypass the registry's typing filter, so the handler checks it itself.
+function moveRow(dir: -1 | 1): boolean {
+  if (isTypingTarget(document.activeElement) || isModalOpen()) return false
+  if (confirmTask.value || showEditModal.value || showDeleteModal.value || form.value) return false
+  const task = focusedTask()
+  if (!task) return false
+  if (moving.value) return true
+  const rows = treeRows.value.filter(
+    (r): r is Extract<TreeRow, { kind: 'task' }> => r.kind === 'task',
+  )
+  const idx = rows.findIndex((r) => r.task.id === task.id)
+  if (idx < 0) return false
+  let body: api.MoveItemBody
+  let parentLevel: number // level of the new parent (0 = top level)
+  if (dir === -1) {
+    const p = rows[idx - 1]
+    if (!p) return false
+    body = { parent_id: parentOf(p.task), before_id: p.task.id }
+    parentLevel = p.depth
+  } else {
+    let end = idx + 1
+    while (end < rows.length && rows[end]!.depth > rows[idx]!.depth) end++
+    const n = rows[end]
+    if (!n) return false
+    const first = childrenByParent.value.get(n.task.id)?.[0]
+    if (first) {
+      body = { parent_id: n.task.id, before_id: first.id }
+      parentLevel = n.depth + 1
+    } else {
+      body = { parent_id: parentOf(n.task), after_id: n.task.id }
+      parentLevel = n.depth
+    }
+  }
+  if (parentLevel + subtreeHeight(task.id) > api.MAX_ITEM_DEPTH) {
+    error.value = t('errors.itemTooDeep')
+    return true
+  }
+  void moveTask(task, body)
+  return true
+}
+
 useShortcut([
+  catalogDef('project.moveUp', () => moveRow(-1)),
+  catalogDef('project.moveDown', () => moveRow(1)),
   catalogDef('project.rowUp', () => moveRowFocus(-1)),
   catalogDef('project.rowDown', () => moveRowFocus(1)),
   catalogDef('project.toggleRow', () => {

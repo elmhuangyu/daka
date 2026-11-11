@@ -8,7 +8,9 @@ import { usePrivacyStore } from '../stores/privacy'
 import ProjectDetailView from './ProjectDetailView.vue'
 import { setAuthHooks, type ItemDetail, type Project } from '../api'
 import { installShortcutListener, useShortcutList } from '../composables/useShortcuts'
-import { catalogEntry } from '../composables/shortcutCatalog'
+import { resetAllBindings, setBinding } from '../composables/shortcutPrefs'
+import { findConflicts } from '../composables/shortcutBindings'
+import { SHORTCUT_CATALOG, catalogEntry } from '../composables/shortcutCatalog'
 import { en } from '../i18n/en'
 import zhCN from '../i18n/zh-CN'
 import ShortcutHelp from '../components/ShortcutHelp.vue'
@@ -899,6 +901,286 @@ describe('ProjectDetailView keyboard', () => {
     w.unmount()
   })
 
+  describe('move up and down', () => {
+    const moves = () => calls.filter((c) => c.url.endsWith('/move'))
+    const alt = (dir: 'Up' | 'Down', target: EventTarget, extra: KeyboardEventInit = {}) => {
+      const e = new KeyboardEvent('keydown', {
+        key: `Arrow${dir}`,
+        altKey: true,
+        bubbles: true,
+        cancelable: true,
+        ...extra,
+      })
+      target.dispatchEvent(e)
+      return e
+    }
+    const row = (id: number) =>
+      document.querySelector<HTMLElement>(`[data-task-row][data-task-id="${id}"]`)!
+    const banner = () => document.querySelector('[data-testid="project-error"]')
+    const bodies = () => moves().map((m) => [m.url, m.body])
+
+    function serverMoves(respond?: () => Response | Promise<Response>) {
+      const inner = globalThis.fetch
+      vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+        if (url.endsWith('/move') && init?.method === 'POST') {
+          calls.push({ url, method: 'POST', body: JSON.parse(String(init.body)) })
+          if (respond) return respond()
+          return jsonRes({})
+        }
+        return inner(url, init)
+      })
+    }
+    // 1, 2, 3 top level; 2 has no children.
+    const flat = () => mountWith([task(1, 'A'), task(2, 'B'), task(3, 'C')])
+
+    it('reorders top-level siblings with before/after bodies and refocuses', async () => {
+      const w = await flat()
+      serverMoves()
+      row(2).focus()
+      expect(alt('Up', row(2)).defaultPrevented).toBe(true)
+      await flushPromises()
+      expect(bodies()).toEqual([['/api/items/2/move', { parent_id: null, before_id: 1 }]])
+      expect(active()).toBe('2')
+      row(2).focus()
+      expect(alt('Down', row(2)).defaultPrevented).toBe(true)
+      await flushPromises()
+      expect(bodies().at(-1)).toEqual(['/api/items/2/move', { parent_id: null, after_id: 3 }])
+      w.unmount()
+    })
+
+    it('moves a first child out above its parent', async () => {
+      const w = await mountWith([task(1, 'A'), task(2, 'B', 1), task(3, 'C', 1)])
+      serverMoves()
+      row(2).focus()
+      alt('Up', row(2))
+      await flushPromises()
+      expect(bodies()).toEqual([['/api/items/2/move', { parent_id: null, before_id: 1 }]])
+      w.unmount()
+    })
+
+    it('moves a last child down after the next top-level row', async () => {
+      const w = await mountWith([task(1, 'A'), task(2, 'B', 1), task(3, 'C')])
+      serverMoves()
+      row(2).focus()
+      alt('Down', row(2))
+      await flushPromises()
+      expect(bodies()).toEqual([['/api/items/2/move', { parent_id: null, after_id: 3 }]])
+      w.unmount()
+    })
+
+    it('Alt+Up enters the previous sibling subtree before its last descendant', async () => {
+      const w = await mountWith([task(1, 'A'), task(2, 'B', 1), task(3, 'C')])
+      serverMoves()
+      row(3).focus()
+      alt('Up', row(3))
+      await flushPromises()
+      expect(bodies()).toEqual([['/api/items/3/move', { parent_id: 1, before_id: 2 }]])
+      w.unmount()
+    })
+
+    describe('sibling order is (sort_order, id), not pinned-first', () => {
+      const so = (t: ItemDetail, sort_order: number, pinned = false): ItemDetail => ({
+        ...t,
+        sort_order,
+        pinned,
+      })
+
+      it('orders roots and children by sort_order then id', async () => {
+        const w = await mountWith([
+          so(task(1, 'P'), 5, true),
+          so(task(2, 'A'), 1),
+          so(task(3, 'B'), 1),
+          so(task(4, 'c1', 2), 9, true),
+          so(task(5, 'c2', 2), 3),
+        ])
+        expect(rowIds()).toEqual(['2', '5', '4', '3', '1'])
+        w.unmount()
+      })
+
+      it('Alt+Down onto a parent uses the minimum (sort_order, id) child', async () => {
+        const w = await mountWith(
+          [
+            so(task(1, 'A'), 0),
+            so(task(2, 'B'), 1),
+            so(task(3, 'pinned child'), 0, true),
+            so(task(4, 'first child'), 0),
+          ].map((t, i) => (i >= 2 ? { ...t, parent_id: 2, sort_order: i === 2 ? 7 : 2 } : t)),
+        )
+        serverMoves()
+        row(1).focus()
+        alt('Down', row(1))
+        await flushPromises()
+        expect(bodies()).toEqual([['/api/items/1/move', { parent_id: 2, before_id: 4 }]])
+        w.unmount()
+      })
+
+      it('Alt+Up and Tab use the previous sibling in that order', async () => {
+        const w = await mountWith([
+          so(task(1, 'pinned'), 5, true),
+          so(task(2, 'low'), 1),
+          so(task(3, 'mid'), 3),
+        ])
+        serverMoves()
+        row(1).focus()
+        alt('Up', row(1))
+        await flushPromises()
+        expect(bodies()).toEqual([['/api/items/1/move', { parent_id: null, before_id: 3 }]])
+        row(1).focus()
+        row(1).dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }),
+        )
+        await flushPromises()
+        expect(bodies().at(-1)).toEqual(['/api/items/1/move', { parent_id: 3 }])
+        w.unmount()
+      })
+    })
+
+    it('Alt+Down onto a row with children becomes its first child', async () => {
+      const w = await mountWith([task(1, 'A'), task(2, 'B'), task(3, 'C', 2), task(4, 'D', 2)])
+      serverMoves()
+      row(1).focus()
+      alt('Down', row(1))
+      await flushPromises()
+      expect(bodies()).toEqual([['/api/items/1/move', { parent_id: 2, before_id: 3 }]])
+      w.unmount()
+    })
+
+    it('skips the moved subtree when moving down', async () => {
+      const w = await mountWith([task(1, 'A'), task(2, 'B', 1), task(3, 'C')])
+      serverMoves()
+      row(1).focus()
+      alt('Down', row(1))
+      await flushPromises()
+      expect(bodies()).toEqual([['/api/items/1/move', { parent_id: null, after_id: 3 }]])
+      w.unmount()
+    })
+
+    it('is a no-op at the very top and very end and leaves the native key alone', async () => {
+      const w = await flat()
+      row(1).focus()
+      expect(alt('Up', row(1)).defaultPrevented).toBe(false)
+      row(3).focus()
+      expect(alt('Down', row(3)).defaultPrevented).toBe(false)
+      expect(moves()).toHaveLength(0)
+      w.unmount()
+    })
+
+    it('does not act without a focused row', async () => {
+      const w = await flat()
+      expect(alt('Up', document.body).defaultPrevented).toBe(false)
+      expect(alt('Down', document.body).defaultPrevented).toBe(false)
+      expect(moves()).toHaveLength(0)
+      w.unmount()
+    })
+
+    it('blocks a move beyond 5 levels without a request', async () => {
+      // 1 > 2 > 3 > 4 > 5 and a top-level 6 with a child 7 (height 2) after it.
+      const w = await mountWith([
+        task(1, 'L1'),
+        task(2, 'L2', 1),
+        task(3, 'L3', 2),
+        task(4, 'L4', 3),
+        task(5, 'L5', 4),
+        task(6, 'T'),
+        task(7, 'U', 6),
+      ])
+      // Up: 6 (height 2) before 5 would sit under 4 at level 5, reaching level 6.
+      row(6).focus()
+      expect(alt('Up', row(6)).defaultPrevented).toBe(true)
+      await flushPromises()
+      expect(moves()).toHaveLength(0)
+      expect(banner()!.textContent).toContain('at most 5 levels')
+      w.unmount()
+    })
+
+    it('shows the banner and refreshes on server 409 and 400', async () => {
+      for (const status of [409, 400]) {
+        const w = await flat()
+        serverMoves(() => jsonRes({ error: 'the item tree changed concurrently, retry' }, status))
+        const lists = () => calls.filter((c) => c.url.startsWith('/api/items?')).length
+        const before = lists()
+        row(2).focus()
+        alt('Up', row(2))
+        await flushPromises()
+        expect(banner()).not.toBeNull()
+        expect(banner()!.textContent).not.toContain('B')
+        expect(lists()).toBe(before + 1)
+        expect(active()).toBe('2')
+        w.unmount()
+        document.body.innerHTML = ''
+        off?.()
+      }
+    })
+
+    it('swallows a second chord while a move is in flight', async () => {
+      const w = await flat()
+      let release!: () => void
+      const gate = new Promise<void>((r) => (release = r))
+      serverMoves(async () => {
+        await gate
+        return jsonRes({})
+      })
+      row(2).focus()
+      alt('Up', row(2))
+      await flushPromises()
+      expect(alt('Down', row(2)).defaultPrevented).toBe(true)
+      await flushPromises()
+      expect(moves()).toHaveLength(1)
+      release()
+      await flushPromises()
+      w.unmount()
+    })
+
+    it('is ignored while typing and while a dialog or form is open', async () => {
+      const w = await flat()
+      const input = document.createElement('input')
+      row(2).appendChild(input)
+      input.focus()
+      expect(alt('Up', input).defaultPrevented).toBe(false)
+      row(2).focus()
+      press('d', row(2))
+      await flushPromises()
+      expect(alt('Up', row(2)).defaultPrevented).toBe(false)
+      expect(moves()).toHaveLength(0)
+      w.unmount()
+    })
+
+    it('is ignored while the add form is open', async () => {
+      const w = await flat()
+      row(2).focus()
+      press('Enter', row(2))
+      await flushPromises()
+      const formInput = document.querySelector('[data-testid="input-task-form"]')!
+      expect(alt('Up', formInput).defaultPrevented).toBe(false)
+      expect(alt('Up', row(2)).defaultPrevented).toBe(false)
+      expect(moves()).toHaveLength(0)
+      w.unmount()
+    })
+
+    it('can be rebound', async () => {
+      const w = await flat()
+      serverMoves()
+      setBinding('project.moveUp', ['k'])
+      row(2).focus()
+      expect(alt('Up', row(2)).defaultPrevented).toBe(false)
+      expect(press('k', row(2)).defaultPrevented).toBe(true)
+      await flushPromises()
+      expect(bodies()).toEqual([['/api/items/2/move', { parent_id: null, before_id: 1 }]])
+      resetAllBindings()
+      w.unmount()
+    })
+
+    it('alt+arrow does not conflict inside the projects scope or with other scopes', () => {
+      const bindings = Object.fromEntries(SHORTCUT_CATALOG.map((e) => [e.id, e.keys]))
+      expect(findConflicts(bindings, SHORTCUT_CATALOG)).toEqual([])
+      const clash = findConflicts(
+        { ...bindings, 'project.rowUp': ['alt+ArrowUp'] },
+        SHORTCUT_CATALOG,
+      )
+      expect(clash.map((c) => [c.a, c.b])).toEqual([['project.rowUp', 'project.moveUp']])
+    })
+  })
+
   describe('indent and outdent', () => {
     const moves = () => calls.filter((c) => c.url.endsWith('/move'))
     const tab = (target: EventTarget, shiftKey = false, extra: KeyboardEventInit = {}) => {
@@ -1139,6 +1421,8 @@ describe('ProjectDetailView keyboard', () => {
       [
         'project.deleteRow',
         'project.indent',
+        'project.moveDown',
+        'project.moveUp',
         'project.newSibling',
         'project.outdent',
         'project.rowDown',
@@ -1162,6 +1446,8 @@ describe('ProjectDetailView keyboard', () => {
         'newSibling',
         'indent',
         'outdent',
+        'moveUp',
+        'moveDown',
       ]) {
         expect(m[catalogEntry(`project.${id}`)!.labelKey]).toBeTruthy()
       }
@@ -1176,6 +1462,8 @@ describe('ProjectDetailView keyboard', () => {
     expect(help.text()).toContain('Make the focused task a sub-task of the task above')
     expect(help.text()).toContain('Move the focused sub-task up one level')
     expect(help.text()).toContain('Tab')
+    expect(help.text()).toContain('Move the focused task up')
+    expect(help.text()).toContain('Move the focused task down')
     helpOpen.value = false
     help.unmount()
     w.unmount()

@@ -898,6 +898,8 @@ const zhCN: Record<MessageKey, string> = {
   'shortcuts.label.project.toggleRow': '打卡或取消打卡当前任务',
   'shortcuts.label.project.deleteRow': '删除当前任务',
   'shortcuts.label.project.newSibling': '在当前任务下方添加任务',
+  'shortcuts.label.project.moveUp': '上移当前任务',
+  'shortcuts.label.project.moveDown': '下移当前任务',
   'shortcuts.label.project.indent': '将当前任务设为上方任务的子任务',
   'shortcuts.label.project.outdent': '将当前子任务上移一级',
   'shortcuts.label.calendar.next': '下一个周期',
