@@ -1,3 +1,4 @@
+import type { MessageKey } from '../i18n'
 import { computed, getCurrentScope, onScopeDispose, reactive } from 'vue'
 import { parseBinding } from './shortcutBindings'
 import { PRIVACY_TOGGLE_ID } from './shortcutCatalog'
@@ -11,8 +12,8 @@ export interface ShortcutDef {
   keys: string[]
   /** Metadata for the help panel only; dispatch does not consult it. */
   scope: ShortcutScope
-  /** English label (not localized yet). */
-  label: string
+  /** Message key of the label; resolve with t() at render time. */
+  labelKey: MessageKey
   /** Fire even when focus is in a typing target or a modal is open. */
   allowInInput?: boolean
   /** Fire on auto-repeat keydown events too. */

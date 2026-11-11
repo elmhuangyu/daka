@@ -30,7 +30,7 @@ let scopes: ReturnType<typeof effectScope>[] = []
 function reg(def: Partial<ShortcutDef> & { id: string; keys: string[] }) {
   const scope = effectScope()
   scopes.push(scope)
-  scope.run(() => useShortcut({ scope: 'global', label: def.id, ...def }))
+  scope.run(() => useShortcut({ scope: 'global', labelKey: 'common.close', ...def }))
 }
 
 beforeEach(() => {
@@ -275,7 +275,7 @@ describe('registry', () => {
     const handler = vi.fn<() => void>()
     const C = defineComponent({
       setup() {
-        useShortcut({ id: 'c', keys: ['x'], scope: 'global', label: 'c', handler })
+        useShortcut({ id: 'c', keys: ['x'], scope: 'global', labelKey: 'common.close', handler })
         return () => h('div')
       },
     })
@@ -296,7 +296,7 @@ describe('registry', () => {
     const list = useShortcutList()
     const first = effectScope()
     const second = effectScope()
-    const def: ShortcutDef = { id: 'dup', keys: ['x'], scope: 'global', label: 'dup' }
+    const def: ShortcutDef = { id: 'dup', keys: ['x'], scope: 'global', labelKey: 'common.close' }
     first.run(() => useShortcut(def))
     second.run(() => useShortcut(def))
     expect(warn).toHaveBeenCalledOnce()

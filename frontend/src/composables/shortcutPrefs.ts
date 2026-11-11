@@ -1,4 +1,5 @@
 import { reactive } from 'vue'
+import type { MessageKey } from '../i18n'
 import { PRIVACY_TOGGLE_ID, SHORTCUT_CATALOG } from './shortcutCatalog'
 import { canonicalBinding, findConflicts, validateBinding } from './shortcutBindings'
 
@@ -19,7 +20,7 @@ export interface ShortcutPrefs {
 
 export type ParseResult =
   | { ok: true; prefs: ShortcutPrefs; ignored: number }
-  | { ok: false; error: string }
+  | { ok: false; error: MessageKey }
 
 const isRecord = (x: unknown): x is Record<string, unknown> =>
   typeof x === 'object' && x !== null && !Array.isArray(x)
@@ -33,12 +34,13 @@ export function parseShortcutPrefs(text: string, knownIds?: Set<string>): ParseR
   try {
     raw = JSON.parse(text)
   } catch {
-    return { ok: false, error: 'The file is not valid JSON' }
+    return { ok: false, error: 'shortcuts.error.notJson' }
   }
-  if (!isRecord(raw)) return { ok: false, error: 'Unexpected file contents' }
-  if (raw.v !== VERSION) return { ok: false, error: 'Unsupported version' }
-  if (typeof raw.enabled !== 'boolean') return { ok: false, error: 'Missing enabled flag' }
-  if (!isRecord(raw.bindings)) return { ok: false, error: 'Missing bindings' }
+  if (!isRecord(raw)) return { ok: false, error: 'shortcuts.error.unexpected' }
+  if (raw.v !== VERSION) return { ok: false, error: 'shortcuts.error.version' }
+  if (typeof raw.enabled !== 'boolean')
+    return { ok: false, error: 'shortcuts.error.missingEnabled' }
+  if (!isRecord(raw.bindings)) return { ok: false, error: 'shortcuts.error.missingBindings' }
   const bindings: BindingOverrides = {}
   let ignored = 0
   for (const [id, value] of Object.entries(raw.bindings)) {
@@ -47,16 +49,15 @@ export function parseShortcutPrefs(text: string, knownIds?: Set<string>): ParseR
       continue
     }
     if (value === null) {
-      if (id === PRIVACY_TOGGLE_ID)
-        return { ok: false, error: 'The privacy shortcut cannot be unbound' }
+      if (id === PRIVACY_TOGGLE_ID) return { ok: false, error: 'shortcuts.error.privacyUnbound' }
       bindings[id] = null
       continue
     }
     if (!Array.isArray(value) || value.length === 0 || value.some((k) => typeof k !== 'string')) {
-      return { ok: false, error: 'Invalid binding list' }
+      return { ok: false, error: 'shortcuts.error.badList' }
     }
     for (const k of value as string[]) {
-      if (validateBinding(k) !== null) return { ok: false, error: 'Invalid shortcut in the file' }
+      if (validateBinding(k) !== null) return { ok: false, error: 'shortcuts.error.badShortcut' }
     }
     bindings[id] = (value as string[]).map(canonicalBinding)
   }

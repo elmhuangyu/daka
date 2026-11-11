@@ -18,16 +18,13 @@ const router = useRouter()
 
 type TabKey = 'general' | 'categories' | 'integrations' | 'privacy' | 'data' | 'shortcuts'
 
-// Tabs without a message key use a plain English label until the strings are localized.
-const SHORTCUTS_TAB_LABEL = 'Shortcuts'
-
-const TABS: { id: TabKey; labelKey?: MessageKey; label?: string; icon: string }[] = [
+const TABS: { id: TabKey; labelKey: MessageKey; icon: string }[] = [
   { id: 'general', labelKey: 'settings.tabs.general', icon: 'lucide:sliders' },
   { id: 'categories', labelKey: 'settings.tabs.categories', icon: 'lucide:tags' },
   { id: 'integrations', labelKey: 'settings.tabs.integrations', icon: 'lucide:link-2' },
   { id: 'privacy', labelKey: 'settings.tabs.privacyAccount', icon: 'lucide:shield' },
   { id: 'data', labelKey: 'settings.tabs.data', icon: 'lucide:database' },
-  { id: 'shortcuts', label: SHORTCUTS_TAB_LABEL, icon: 'lucide:keyboard' },
+  { id: 'shortcuts', labelKey: 'shortcuts.tab', icon: 'lucide:keyboard' },
 ]
 
 const validTab = (k: string): k is TabKey => TABS.some((tab) => tab.id === k)
@@ -76,7 +73,7 @@ watch(
         @click="setTab(tb.id)"
       >
         <Icon :icon="tb.icon" class="size-4" aria-hidden="true" />
-        <span>{{ tb.labelKey ? t(tb.labelKey) : tb.label }}</span>
+        <span>{{ t(tb.labelKey) }}</span>
       </button>
     </nav>
 
@@ -101,7 +98,7 @@ watch(
             @click="setTab(tb.id)"
           >
             <Icon :icon="tb.icon" class="size-4.5 shrink-0" aria-hidden="true" />
-            <span class="truncate">{{ tb.labelKey ? t(tb.labelKey) : tb.label }}</span>
+            <span class="truncate">{{ t(tb.labelKey) }}</span>
           </button>
         </nav>
       </aside>

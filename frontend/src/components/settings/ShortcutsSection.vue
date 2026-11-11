@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
+import { useI18n, type MessageKey } from '../../i18n'
 import { Icon } from '@iconify/vue'
 import {
   PRIVACY_TOGGLE_ID,
@@ -28,38 +29,20 @@ import {
   type ShortcutScope,
 } from '../../composables/useShortcuts'
 
-// Static English text only; this section never reads item, project or category data.
-const TITLE = 'Keyboard shortcuts'
-const INTRO =
-  'Single-key shortcuts can be remapped or turned off entirely. These settings are stored in this browser only and are not part of your account export.'
-const ENABLE_LABEL = 'Enable keyboard shortcuts'
-const ENABLE_HINT =
-  'When off, every shortcut is disabled except the privacy toggle, which stays active so the mask cannot be lost by accident.'
-const SCOPE_TITLES: Record<ShortcutScope, string> = {
-  global: 'Global',
-  today: 'Today',
-  calendar: 'Calendar',
+// Static text only; this section never reads item, project or category data.
+const { t } = useI18n()
+const SCOPE_TITLES: Record<ShortcutScope, MessageKey> = {
+  global: 'shortcuts.scope.global',
+  today: 'shortcuts.scope.today',
+  calendar: 'shortcuts.scope.calendar',
 }
 const SCOPE_ORDER: ShortcutScope[] = ['global', 'today', 'calendar']
-const CHANGE = 'Change'
-const RESET = 'Reset'
-const UNBIND = 'Unbind'
-const RESET_ALL = 'Reset all'
-const EXPORT = 'Export JSON'
-const IMPORT = 'Import JSON'
-const CONFLICTS_WITH = 'conflicts with:'
-const SWAP = 'Swap'
-const CANCEL = 'Cancel'
-const UNBOUND = 'Unbound'
-const FIXED = 'Fixed'
-const PRESS = 'Press the new keys (Esc to cancel)...'
-const PRESS_MORE = 'Press a second key, or wait to keep one key'
 const EXPORT_FILE = 'daka-shortcuts.json'
 
 const groups = computed(() =>
   SCOPE_ORDER.map((scope) => ({
     scope,
-    title: SCOPE_TITLES[scope],
+    title: t(SCOPE_TITLES[scope]),
     rows: SHORTCUT_CATALOG.filter((e) => e.scope === scope),
   })).filter((g) => g.rows.length > 0),
 )
@@ -75,7 +58,10 @@ const keysOf = (id: string): string[][] =>
 const isOverridden = (id: string) => shortcutPrefs.bindings[id] !== undefined
 const canUnbind = (e: CatalogEntry) =>
   !e.displayOnly && e.id !== PRIVACY_TOGGLE_ID && (map.value[e.id] ?? []).length > 0
-const labelOf = (id: string) => catalogEntry(id)?.label ?? id
+const labelOf = (id: string) => {
+  const e = catalogEntry(id)
+  return e ? t(e.labelKey) : id
+}
 
 // --- record mode ---------------------------------------------------------
 const SEQUENCE_MS = 1000
@@ -145,7 +131,7 @@ function currentOverrides(): BindingOverrides {
 function propose(id: string, candidate: string) {
   const invalid = validateBinding(candidate)
   if (invalid) {
-    error.value = invalid
+    error.value = t(invalid)
     return
   }
   const binding = canonicalBinding(candidate)
@@ -177,7 +163,7 @@ function swap() {
   next[p.id] = [p.binding]
   for (const other of p.others) next[other] = previous.length > 0 ? previous : null
   if (next[PRIVACY_TOGGLE_ID] === null || catalogConflicts(next).length > 0) {
-    error.value = 'These shortcuts cannot be swapped without another conflict'
+    error.value = t('shortcuts.settings.swapFailed')
     pendingSwap.value = null
     return
   }
@@ -246,22 +232,24 @@ async function onImport(e: Event) {
   try {
     text = await readText(file)
   } catch {
-    error.value = 'The file could not be read'
+    error.value = t('shortcuts.settings.readFailed')
     return
   }
   const known = new Set(SHORTCUT_CATALOG.filter((c) => !c.displayOnly).map((c) => c.id))
   const parsed = parseShortcutPrefs(text, known)
   if (!parsed.ok) {
-    error.value = parsed.error
+    error.value = t(parsed.error)
     return
   }
   if (catalogConflicts(parsed.prefs.bindings).length > 0) {
-    error.value = 'The imported shortcuts conflict with each other'
+    error.value = t('shortcuts.settings.importConflict')
     return
   }
   applyPrefs(parsed.prefs)
   notice.value =
-    parsed.ignored > 0 ? `Imported (${parsed.ignored} unknown shortcuts ignored)` : 'Imported'
+    parsed.ignored > 0
+      ? t('shortcuts.settings.importedIgnored', { count: parsed.ignored })
+      : t('shortcuts.settings.imported')
 }
 
 onBeforeUnmount(() => {
@@ -280,8 +268,8 @@ onBeforeUnmount(() => {
           <Icon icon="lucide:keyboard" class="size-5" aria-hidden="true" />
         </div>
         <div>
-          <h2 class="text-lg font-bold leading-none">{{ TITLE }}</h2>
-          <p class="mt-1 text-xs opacity-70">{{ INTRO }}</p>
+          <h2 class="text-lg font-bold leading-none">{{ t('shortcuts.title') }}</h2>
+          <p class="mt-1 text-xs opacity-70">{{ t('shortcuts.settings.intro') }}</p>
         </div>
       </div>
 
@@ -289,8 +277,8 @@ onBeforeUnmount(() => {
         class="rounded-xl border border-base-300 bg-base-100/50 p-4 flex items-center justify-between gap-4 cursor-pointer"
       >
         <div class="flex flex-col gap-0.5">
-          <span class="text-sm font-medium">{{ ENABLE_LABEL }}</span>
-          <span class="text-[11px] opacity-60">{{ ENABLE_HINT }}</span>
+          <span class="text-sm font-medium">{{ t('shortcuts.settings.enable') }}</span>
+          <span class="text-[11px] opacity-60">{{ t('shortcuts.settings.enableHint') }}</span>
         </div>
         <input
           type="checkbox"
@@ -324,12 +312,13 @@ onBeforeUnmount(() => {
         data-testid="sc-conflict"
       >
         <span>
-          <kbd class="kbd kbd-sm">{{ pendingSwap.binding }}</kbd> {{ CONFLICTS_WITH }}
+          <kbd class="kbd kbd-sm">{{ pendingSwap.binding }}</kbd>
+          {{ t('shortcuts.settings.conflictsWith') }}
           {{ pendingSwap.others.map(labelOf).join(', ') }}
         </span>
         <div class="flex gap-2">
           <button type="button" class="btn btn-sm" data-testid="sc-swap" @click="swap">
-            {{ SWAP }}
+            {{ t('shortcuts.settings.swap') }}
           </button>
           <button
             type="button"
@@ -337,7 +326,7 @@ onBeforeUnmount(() => {
             data-testid="sc-swap-cancel"
             @click="cancelSwap"
           >
-            {{ CANCEL }}
+            {{ t('common.cancel') }}
           </button>
         </div>
       </div>
@@ -351,17 +340,21 @@ onBeforeUnmount(() => {
             class="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
             :data-testid="`sc-row-${r.id}`"
           >
-            <span>{{ r.label }}</span>
+            <span>{{ t(r.labelKey) }}</span>
             <span class="flex flex-wrap items-center gap-2">
               <template v-if="recordingId === r.id">
                 <span class="text-xs opacity-70" data-testid="sc-recording">
-                  {{ steps.length === 0 ? PRESS : PRESS_MORE }}
+                  {{
+                    steps.length === 0
+                      ? t('shortcuts.settings.press')
+                      : t('shortcuts.settings.pressMore')
+                  }}
                 </span>
                 <kbd v-for="(s, i) in steps" :key="i" class="kbd kbd-sm">{{ s }}</kbd>
               </template>
               <template v-else>
                 <span v-if="keysOf(r.id).length === 0" class="opacity-60" data-testid="sc-unbound">
-                  {{ UNBOUND }}
+                  {{ t('shortcuts.unbound') }}
                 </span>
                 <span
                   v-for="(seq, i) in keysOf(r.id)"
@@ -372,7 +365,9 @@ onBeforeUnmount(() => {
                   <kbd v-for="(k, j) in seq" :key="j" class="kbd kbd-sm">{{ k }}</kbd>
                 </span>
               </template>
-              <span v-if="r.displayOnly" class="text-xs opacity-60">{{ FIXED }}</span>
+              <span v-if="r.displayOnly" class="text-xs opacity-60">{{
+                t('shortcuts.fixed')
+              }}</span>
               <template v-else>
                 <button
                   type="button"
@@ -380,7 +375,7 @@ onBeforeUnmount(() => {
                   :data-testid="`sc-change-${r.id}`"
                   @click="startRecording(r.id)"
                 >
-                  {{ CHANGE }}
+                  {{ t('shortcuts.settings.change') }}
                 </button>
                 <button
                   type="button"
@@ -389,7 +384,7 @@ onBeforeUnmount(() => {
                   :data-testid="`sc-reset-${r.id}`"
                   @click="reset(r.id)"
                 >
-                  {{ RESET }}
+                  {{ t('shortcuts.settings.reset') }}
                 </button>
                 <button
                   v-if="r.id !== PRIVACY_TOGGLE_ID"
@@ -399,7 +394,7 @@ onBeforeUnmount(() => {
                   :data-testid="`sc-unbind-${r.id}`"
                   @click="unbind(r.id)"
                 >
-                  {{ UNBIND }}
+                  {{ t('shortcuts.settings.unbind') }}
                 </button>
               </template>
             </span>
@@ -409,10 +404,10 @@ onBeforeUnmount(() => {
 
       <div class="flex flex-wrap items-center gap-2 border-t border-base-300/80 pt-4">
         <button type="button" class="btn btn-sm" data-testid="sc-reset-all" @click="resetAll">
-          {{ RESET_ALL }}
+          {{ t('shortcuts.settings.resetAll') }}
         </button>
         <button type="button" class="btn btn-sm" data-testid="sc-export" @click="exportJson">
-          {{ EXPORT }}
+          {{ t('shortcuts.settings.export') }}
         </button>
         <button
           type="button"
@@ -420,7 +415,7 @@ onBeforeUnmount(() => {
           data-testid="sc-import"
           @click="fileInput?.click()"
         >
-          {{ IMPORT }}
+          {{ t('shortcuts.settings.import') }}
         </button>
         <input
           ref="fileInput"

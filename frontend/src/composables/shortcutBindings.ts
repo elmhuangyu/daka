@@ -1,3 +1,4 @@
+import type { MessageKey } from '../i18n'
 import type { ShortcutScope } from './useShortcuts'
 
 // Pure helpers for binding strings: parsing, validation and conflict detection.
@@ -114,39 +115,39 @@ export function canonicalBinding(binding: string): string {
   return parseBinding(binding).join(' ')
 }
 
-function validateStep(raw: string): string | null {
+function validateStep(raw: string): MessageKey | null {
   const s = raw.trim().toLowerCase()
   // Reject duplicated or unknown modifiers before canonicalizing hides them.
   const body =
     s === '+' ? '' : s.endsWith('++') ? s.slice(0, -2) : s.split('+').slice(0, -1).join('+')
   const given = body === '' ? [] : body.split('+')
   if (given.some((m) => !MODS.has(m)) || new Set(given).size !== given.length) {
-    return 'Unsupported modifier combination'
+    return 'shortcuts.error.modifierCombo'
   }
   const { mods, key } = parseStep(s)
-  if (key === '' || MODS.has(key)) return 'A modifier alone cannot be a shortcut'
-  if (FORBIDDEN_KEYS.has(key)) return 'Tab, Enter, Space and Escape cannot be used'
-  if (key.length > 1 && !NAMED_KEYS.has(key)) return 'Unsupported key'
-  if (RESERVED.has(stepToString({ mods, key }))) return 'Reserved by the browser'
+  if (key === '' || MODS.has(key)) return 'shortcuts.error.modifierAlone'
+  if (FORBIDDEN_KEYS.has(key)) return 'shortcuts.error.forbiddenKey'
+  if (key.length > 1 && !NAMED_KEYS.has(key)) return 'shortcuts.error.unsupportedKey'
+  if (RESERVED.has(stepToString({ mods, key }))) return 'shortcuts.error.reserved'
   return null
 }
 
 const isChord = (step: string) => parseStep(step).mods.some((m) => SEQUENCE_PREFIX_MODS.includes(m))
 
 /**
- * Returns an error message, or null when the binding is allowed: a single plain key,
+ * Returns an error message key, or null when the binding is allowed: a single plain key,
  * a ctrl/alt/meta chord, or a two-step sequence of plain keys.
  */
-export function validateBinding(binding: string): string | null {
+export function validateBinding(binding: string): MessageKey | null {
   const steps = binding.trim().split(/\s+/)
-  if (binding.trim() === '') return 'Empty shortcut'
-  if (steps.length > 2) return 'At most two steps are allowed'
+  if (binding.trim() === '') return 'shortcuts.error.empty'
+  if (steps.length > 2) return 'shortcuts.error.tooManySteps'
   for (const step of steps) {
     const err = validateStep(step)
     if (err) return err
   }
   if (steps.length === 2 && steps.some(isChord)) {
-    return 'Sequences can only use plain keys'
+    return 'shortcuts.error.sequencePlain'
   }
   return null
 }
