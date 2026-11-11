@@ -819,7 +819,7 @@ const zhCN: Record<MessageKey, string> = {
     '单键快捷键可以重新映射，也可以完全关闭。这些设置仅保存在此浏览器中，不包含在账户导出内。',
   'shortcuts.settings.enable': '启用键盘快捷键',
   'shortcuts.settings.enableHint':
-    '关闭后，除隐私切换外的所有快捷键都将停用；隐私切换始终有效，以免遮罩被意外丢失。',
+    '关闭后，除隐私切换外的所有快捷键都将停用；隐私切换始终有效，以免隐私保护被意外关闭。',
   'shortcuts.settings.change': '修改',
   'shortcuts.settings.reset': '重置',
   'shortcuts.settings.unbind': '解除绑定',

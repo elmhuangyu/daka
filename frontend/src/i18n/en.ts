@@ -847,7 +847,7 @@ export const en = {
     'Single-key shortcuts can be remapped or turned off entirely. These settings are stored in this browser only and are not part of your account export.',
   'shortcuts.settings.enable': 'Enable keyboard shortcuts',
   'shortcuts.settings.enableHint':
-    'When off, every shortcut is disabled except the privacy toggle, which stays active so the mask cannot be lost by accident.',
+    'When off, every shortcut is disabled except the privacy toggle, which stays active so the privacy guard cannot be lost by accident.',
   'shortcuts.settings.change': 'Change',
   'shortcuts.settings.reset': 'Reset',
   'shortcuts.settings.unbind': 'Unbind',

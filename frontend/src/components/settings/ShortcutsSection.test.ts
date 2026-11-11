@@ -151,7 +151,15 @@ describe('ShortcutsSection', () => {
     const file = new File([text], 'x.json', { type: 'application/json' })
     Object.defineProperty(input.element, 'files', { value: [file], configurable: true })
     await input.trigger('change')
-    await new Promise((r) => setTimeout(r, 20))
+    // FileReader completes on its own task; wait for the outcome to render.
+    await vi.waitFor(() => {
+      if (
+        !w.find('[data-testid="sc-error"]').exists() &&
+        !w.find('[data-testid="sc-notice"]').exists()
+      ) {
+        throw new Error('import not processed yet')
+      }
+    })
     await flushPromises()
   }
 
