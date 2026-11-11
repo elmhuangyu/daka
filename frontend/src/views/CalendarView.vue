@@ -21,6 +21,7 @@ const store = useCalendarStore()
 
 const gridEl = ref<HTMLElement | null>(null)
 const focusDate = ref(store.anchor)
+const panelRef = ref<{ $el: Node } | null>(null)
 const calDatePickerInput = ref<HTMLInputElement | null>(null)
 
 async function onCalDatePick(pickedDate: string) {
@@ -88,10 +89,37 @@ async function moveFocus(target: string) {
   await focusCell(target)
 }
 
+function panelRows(): HTMLElement[] {
+  const root = panelRef.value?.$el as Element | undefined
+  return Array.from(root?.querySelectorAll?.<HTMLElement>('[data-panel-item]') ?? [])
+}
+const inPanel = () =>
+  !!(panelRef.value?.$el as Element | undefined)?.contains?.(document.activeElement)
+
+/** With a day selected, Up/Down enter its item list (Down: first row, Up: last). */
+function enterPanel(last: boolean): boolean {
+  if (!store.selected) return false
+  const rows = panelRows()
+  const target = last ? rows[rows.length - 1] : rows[0]
+  if (!target) return false
+  target.focus()
+  return true
+}
+
+/** Esc inside the item list: back to the selected day's cell, selection kept. */
+function leavePanel() {
+  const d = store.selected
+  if (!d) return
+  focusDate.value = d
+  void focusCell(d)
+}
+
 function onGridKey(e: KeyboardEvent) {
   if (e.altKey || e.ctrlKey || e.metaKey) return
   const step: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }
-  if (e.key in step) {
+  if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && enterPanel(e.key === 'ArrowUp')) {
+    e.preventDefault()
+  } else if (e.key in step) {
     e.preventDefault()
     void moveFocus(addDays(focusDate.value, step[e.key]!))
   } else if (e.key === 'PageUp' || e.key === 'PageDown') {
@@ -108,7 +136,7 @@ function onGridKey(e: KeyboardEvent) {
 function fromOutside(fn: () => void) {
   return () => {
     // false = not handled, so the key keeps its default (page scroll) while the grid loads.
-    if (!store.view || gridEl.value?.contains(document.activeElement)) return false
+    if (!store.view || gridEl.value?.contains(document.activeElement) || inPanel()) return false
     fn()
   }
 }
@@ -122,7 +150,12 @@ useShortcut([
   ...ARROW_STEPS.map(([name, step]) =>
     catalogDef(
       `calendar.move${name}`,
-      fromOutside(() => void moveFocus(addDays(focusDate.value, step))),
+      fromOutside(() => {
+        if (name === 'Up' || name === 'Down') {
+          if (enterPanel(name === 'Up')) return
+        }
+        void moveFocus(addDays(focusDate.value, step))
+      }),
     ),
   ),
   catalogDef(
@@ -440,7 +473,12 @@ watch(
           </ul>
         </div>
       </div>
-      <DayPanel v-if="store.selected" @close="select(store.selected!)" />
+      <DayPanel
+        v-if="store.selected"
+        ref="panelRef"
+        @close="select(store.selected!)"
+        @back="leavePanel"
+      />
     </div>
   </section>
 </template>

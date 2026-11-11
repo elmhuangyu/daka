@@ -532,6 +532,8 @@ describe('CalendarView shortcuts', () => {
     document.body.innerHTML = ''
   })
   const press = (key: string, target: EventTarget = document.activeElement ?? document.body) => {
+    // Vue skips nested listeners when the frozen fake Date makes them look attached later.
+    vi.advanceTimersByTime(10)
     target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
     return flushPromises()
   }
@@ -689,6 +691,169 @@ describe('CalendarView shortcuts', () => {
     await flushPromises()
     expect(tabbable()).toHaveLength(1)
     w.unmount()
+  })
+
+  describe('day item list', () => {
+    const rowIds = (w: {
+      findAll: (s: string) => Array<{ attributes: (k: string) => string | undefined }>
+    }) => w.findAll('[data-panel-item]').map((r) => r.attributes('data-testid'))
+    const activeId = () => (document.activeElement as HTMLElement | null)?.dataset.testid
+    async function openDay(date = '2026-11-06', items = [item(1, 'Water'), item(3, 'Read')]) {
+      viewDays[date] = day(date, { status: 'incomplete', due_count: items.length, items })
+      const v = await mountView(`/calendar?date=${date}`)
+      await flushPromises()
+      const cell = () => document.querySelector<HTMLElement>(`[data-date="${date}"]`)!
+      cell().focus()
+      return { ...v, cell, store: useCalendarStore() }
+    }
+
+    it('Down from the cell focuses the first row, Up the last', async () => {
+      const { w, cell, store } = await openDay()
+      expect(rowIds(w)).toEqual(['panel-item-1', 'panel-item-3'])
+      await press('ArrowDown')
+      expect(activeId()).toBe('panel-item-1')
+      cell().focus()
+      await press('ArrowUp')
+      expect(activeId()).toBe('panel-item-3')
+      expect(store.selected).toBe('2026-11-06')
+      for (const r of w.findAll('[data-panel-item]')) expect(r.attributes('tabindex')).toBe('-1')
+      w.unmount()
+    })
+
+    it('also enters the list from body focus', async () => {
+      const { w } = await openDay()
+      ;(document.activeElement as HTMLElement).blur()
+      await press('ArrowDown')
+      expect(activeId()).toBe('panel-item-1')
+      w.unmount()
+    })
+
+    it('moves within the list, clamps, and leaves the day alone', async () => {
+      const { w, store } = await openDay()
+      await press('ArrowDown')
+      await press('ArrowDown')
+      expect(activeId()).toBe('panel-item-3')
+      await press('ArrowDown')
+      expect(activeId()).toBe('panel-item-3')
+      await press('ArrowUp')
+      expect(activeId()).toBe('panel-item-1')
+      await press('ArrowUp')
+      expect(activeId()).toBe('panel-item-1')
+      await press('End')
+      expect(activeId()).toBe('panel-item-3')
+      await press('Home')
+      expect(activeId()).toBe('panel-item-1')
+      expect(store.selected).toBe('2026-11-06')
+      expect(store.anchor).toBe('2026-11-06')
+      w.unmount()
+    })
+
+    it('Esc returns to the cell keeping the selection, a second Esc closes, then weeks navigate', async () => {
+      const { w, store } = await openDay()
+      await press('ArrowDown')
+      await press('Escape')
+      expect(focusedDate()).toBe('2026-11-06')
+      expect(store.selected).toBe('2026-11-06')
+      await press('Escape')
+      expect(store.selected).toBeNull()
+      expect(focusedDate()).toBe('2026-11-06')
+      await press('ArrowDown')
+      expect(focusedDate()).toBe('2026-11-13')
+      w.unmount()
+    })
+
+    it('Left and Right still move between days with a day selected', async () => {
+      const { w, store } = await openDay()
+      await press('ArrowRight')
+      expect(focusedDate()).toBe('2026-11-07')
+      await press('ArrowLeft')
+      expect(focusedDate()).toBe('2026-11-06')
+      expect(store.selected).toBe('2026-11-06')
+      w.unmount()
+    })
+
+    it('keeps week navigation for a selected day without rows', async () => {
+      const { w } = await openDay('2026-11-10', [])
+      expect(rowIds(w)).toEqual([])
+      await press('ArrowDown')
+      expect(focusedDate()).toBe('2026-11-17')
+      await press('ArrowUp')
+      expect(focusedDate()).toBe('2026-11-10')
+      w.unmount()
+    })
+
+    it('keeps week navigation with no day selected', async () => {
+      const { w } = await mountView()
+      expect(useCalendarStore().selected).toBeNull()
+      await press('ArrowDown')
+      expect(focusedDate()).toBe('2026-11-15')
+      w.unmount()
+    })
+
+    it('x toggles via the row check button', async () => {
+      const { w } = await openDay()
+      await press('ArrowDown')
+      await press('x')
+      const post = calls.filter((c) => c.method === 'POST' && c.url.startsWith('/api/checkins'))
+      expect(post).toHaveLength(1)
+      expect(post[0]!.body).toMatchObject({ item_id: 1 })
+      w.unmount()
+    })
+
+    it('Enter on a row opens details once; Enter on child buttons does not', async () => {
+      const { w } = await openDay()
+      await press('ArrowDown')
+      await press('Enter')
+      expect(document.querySelectorAll('[role="dialog"]').length).toBeGreaterThan(0)
+      w.unmount()
+      const again = await openDay()
+      const toggle = again.w.get('[data-testid="makeup-toggle-1"]').element as HTMLElement
+      toggle.focus()
+      await press('Enter', toggle)
+      expect(document.querySelector('[role="dialog"][open], dialog[open]')).toBeNull()
+      again.w.unmount()
+    })
+
+    it('leaves typing in the quick-add input untouched', async () => {
+      const { w, store } = await openDay()
+      const input = w.get('[data-testid="panel-quick-input"]').element as HTMLInputElement
+      input.focus()
+      const down = new KeyboardEvent('keydown', {
+        key: 'ArrowDown',
+        bubbles: true,
+        cancelable: true,
+      })
+      input.dispatchEvent(down)
+      const esc = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+      input.dispatchEvent(esc)
+      await flushPromises()
+      expect(down.defaultPrevented).toBe(false)
+      expect(esc.defaultPrevented).toBe(false)
+      expect(document.activeElement).toBe(input)
+      expect(store.selected).toBe('2026-11-06')
+      w.unmount()
+    })
+
+    it('registry arrows do not fire with focus in the panel', async () => {
+      const { w } = await openDay()
+      const close = w.get('[data-testid="panel-close"]').element as HTMLElement
+      close.focus()
+      await press('ArrowRight')
+      await press('ArrowDown')
+      expect(document.activeElement).toBe(close)
+      expect(focusedDate()).toBeUndefined()
+      w.unmount()
+    })
+  })
+
+  it('resolves the item list labels in both locales', async () => {
+    const { en } = await import('./i18n/en')
+    const { default: zh } = await import('./i18n/zh-CN')
+    for (const id of ['itemUp', 'itemDown', 'itemBack', 'itemToggle']) {
+      const k = `shortcuts.label.calendar.${id}`
+      expect((en as Record<string, string>)[k]).toBeTruthy()
+      expect((zh as Record<string, string>)[k]).toBeTruthy()
+    }
   })
 
   it('unregisters on unmount', async () => {

@@ -17,7 +17,7 @@ const { t } = useI18n()
 const store = useCalendarStore()
 const privacy = usePrivacyStore()
 const projectsStore = useProjectsStore()
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: []; back: [] }>()
 
 const day = computed(() => store.selectedDay)
 const date = computed(() => store.selected ?? '')
@@ -133,6 +133,46 @@ function projectOf(id: number) {
   return pid ? (projectsStore.projectById.get(pid) ?? null) : null
 }
 const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
+
+const EDITABLE = 'input, textarea, select, [contenteditable]'
+
+/**
+ * Keyboard model for the item rows: Up/Down/Home/End move between rows, `x` toggles the
+ * focused row's check button, Esc hands focus back to the day grid. Typing targets and the
+ * details dialog keep their native keys.
+ */
+function onPanelKey(e: KeyboardEvent) {
+  if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+  const target = e.target as HTMLElement | null
+  if (!target || target.closest('[role="dialog"]') || target.closest(EDITABLE)) return
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    e.stopPropagation()
+    emit('back')
+    return
+  }
+  const row = target.closest<HTMLElement>('[data-panel-item]')
+  if (!row) return
+  if (e.key === 'x') {
+    e.preventDefault()
+    const toggle = row.querySelector<HTMLButtonElement>('[data-testid^="makeup-toggle-"]')
+    if (toggle && !toggle.disabled) toggle.click()
+    return
+  }
+  const rows = Array.from(
+    (e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[data-panel-item]'),
+  )
+  const at = rows.indexOf(row)
+  const next: Record<string, number> = {
+    ArrowUp: Math.max(at - 1, 0),
+    ArrowDown: Math.min(at + 1, rows.length - 1),
+    Home: 0,
+    End: rows.length - 1,
+  }
+  if (!(e.key in next)) return
+  e.preventDefault()
+  rows[next[e.key]!]?.focus()
+}
 </script>
 
 <template>
@@ -141,6 +181,7 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
     class="space-y-4 card card-border bg-base-100 border-base-300 p-4 shadow-sm h-fit"
     aria-labelledby="day-panel-title"
     data-testid="day-panel"
+    @keydown="onPanelKey"
   >
     <header class="flex items-start justify-between gap-2">
       <div>
@@ -215,9 +256,12 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
         <li
           v-for="i in listed"
           :key="i.item_id"
-          class="rounded-box border border-base-300 p-2"
+          class="rounded-box border border-base-300 p-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           :style="indent(i.depth)"
+          tabindex="-1"
+          data-panel-item
           :data-testid="`panel-item-${i.item_id}`"
+          @keydown.enter.self.prevent="modalItemId = i.item_id"
         >
           <div class="flex flex-wrap items-center justify-between gap-2">
             <span class="flex min-w-0 items-center gap-2">
@@ -299,8 +343,11 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
         <li
           v-for="d in addedDetails"
           :key="`add-${d.id}`"
-          class="rounded-box border border-dashed border-base-300 p-2"
+          class="rounded-box border border-dashed border-base-300 p-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          tabindex="-1"
+          data-panel-item
           :data-testid="`panel-added-${d.id}`"
+          @keydown.enter.self.prevent="modalItemId = d.id"
         >
           <div class="flex flex-wrap items-center justify-between gap-2">
             <span class="flex min-w-0 items-center gap-2">

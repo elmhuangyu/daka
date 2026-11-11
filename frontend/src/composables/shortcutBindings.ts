@@ -151,6 +151,7 @@ const DISPLAY_NAMES: Record<string, string> = {
   home: 'Home',
   end: 'End',
   enter: 'Enter',
+  escape: 'Esc',
 }
 
 /** Pretty-cased key label: ArrowLeft, PageUp, F5. Single characters are unchanged. */
