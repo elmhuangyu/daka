@@ -44,6 +44,11 @@ export function useGlobalShortcuts(): void {
       if (active()) void router.push({ name: 'item-new' })
     }),
   ]
+  defs.push(
+    catalogDef('nav.shortcuts', () => {
+      if (active()) void router.push({ name: 'settings', query: { tab: 'shortcuts' } })
+    }),
+  )
   for (const nav of NAV_ITEMS) {
     const id = `nav.${nav.name}`
     if (!catalogEntry(id)) continue

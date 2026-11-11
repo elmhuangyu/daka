@@ -88,6 +88,25 @@ describe('global shortcuts', () => {
     expect(router.currentRoute.value.name).toBe(name)
   })
 
+  it('g k opens the shortcuts tab of settings', async () => {
+    const router = await setup('/items')
+    press('g')
+    press('k')
+    await tick()
+    expect(router.currentRoute.value.name).toBe('settings')
+    expect(router.currentRoute.value.query.tab).toBe('shortcuts')
+  })
+
+  it('g k does nothing inside an input', async () => {
+    const router = await setup('/items')
+    const input = w.get('[data-testid="other"]').element as HTMLElement
+    input.focus()
+    press('g', input)
+    press('k', input)
+    await tick()
+    expect(router.currentRoute.value.name).toBe('items')
+  })
+
   it('n opens the new item page', async () => {
     const router = await setup('/')
     press('n')
@@ -118,6 +137,8 @@ describe('global shortcuts', () => {
     press('n')
     press('g')
     press('t')
+    press('g')
+    press('k')
     press('?')
     await tick()
     expect(router.currentRoute.value.name).toBe('login')

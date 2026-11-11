@@ -889,6 +889,7 @@ export const en = {
   'shortcuts.label.nav.projects': 'Go to Projects',
   'shortcuts.label.nav.items': 'Go to Items',
   'shortcuts.label.nav.settings': 'Go to Settings',
+  'shortcuts.label.nav.shortcuts': 'Open keyboard shortcut settings',
   'shortcuts.label.privacy.toggle': 'Toggle privacy guard',
   'shortcuts.label.today.prevDay': 'Previous day',
   'shortcuts.label.today.nextDay': 'Next day',

@@ -861,6 +861,7 @@ const zhCN: Record<MessageKey, string> = {
   'shortcuts.label.nav.projects': '前往项目',
   'shortcuts.label.nav.items': '前往事项',
   'shortcuts.label.nav.settings': '前往设置',
+  'shortcuts.label.nav.shortcuts': '打开快捷键设置',
   'shortcuts.label.privacy.toggle': '切换隐私保护',
   'shortcuts.label.today.prevDay': '前一天',
   'shortcuts.label.today.nextDay': '后一天',

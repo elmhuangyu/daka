@@ -19,6 +19,12 @@ export const SHORTCUT_CATALOG: CatalogEntry[] = [
   { id: 'nav.items', keys: ['g i'], scope: 'global', labelKey: 'shortcuts.label.nav.items' },
   { id: 'nav.settings', keys: ['g s'], scope: 'global', labelKey: 'shortcuts.label.nav.settings' },
   {
+    id: 'nav.shortcuts',
+    keys: ['g k'],
+    scope: 'global',
+    labelKey: 'shortcuts.label.nav.shortcuts',
+  },
+  {
     id: PRIVACY_TOGGLE_ID,
     keys: ['ctrl+shift+h'],
     scope: 'global',
