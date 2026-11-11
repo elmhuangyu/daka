@@ -6,7 +6,7 @@ import { useOfflineStore } from '../stores/offline'
 import { usePrivacyStore } from '../stores/privacy'
 import { useProjectsStore } from '../stores/projects'
 import { useTodayStore } from '../stores/today'
-import { findCategory, type CardVM } from '../today/logic'
+import { findCategory, groupByTree, type CardVM } from '../today/logic'
 import CompletionRing from '../components/today/CompletionRing.vue'
 import CategoryFilter from '../components/today/CategoryFilter.vue'
 import ItemCard from '../components/today/ItemCard.vue'
@@ -224,6 +224,19 @@ async function submitQuickLog(target: { id?: number; name: string }) {
   }
 }
 
+/** Groups cards by project and nests sub-tasks under their ancestors (shared with Calendar). */
+function grouped(cards: CardVM[]) {
+  return groupByTree(
+    cards,
+    (c) => ({ id: c.detail.id, projectId: c.detail.project_id ?? null }),
+    (id) => store.detailById.get(id)?.parent_id ?? null,
+  )
+}
+const indent = (c: object) =>
+  'depth' in c && typeof c.depth === 'number' && c.depth > 0
+    ? { marginLeft: `${Math.min(c.depth, 6) * 1.25}rem` }
+    : {}
+
 const sections = computed(
   () =>
     [
@@ -232,17 +245,17 @@ const sections = computed(
         title: t('today.section.todo'),
         icon: 'lucide:list-checks',
         variant: 'todo',
-        cards: store.todoCards.filter((c) => c.detail.kind === 'event'),
+        cards: grouped(store.todoCards.filter((c) => c.detail.kind === 'event')),
       },
       {
         id: 'habits',
         title: t('today.section.habits'),
         icon: 'lucide:repeat',
         variant: 'todo',
-        cards: [
+        cards: grouped([
           ...store.todoCards.filter((c) => c.detail.kind !== 'event'),
           ...store.doneCards.filter((c) => c.detail.kind !== 'event'),
-        ],
+        ]),
       },
       {
         id: 'maintenance',
@@ -266,13 +279,16 @@ const visibleCount = computed(
 function cat(c: CardVM) {
   return findCategory(store.categories, c.detail.category_id)
 }
-const poolCards = computed(() => [
-  ...store.unscheduledTodoCards,
-  ...store.doneCards.filter((c) => c.detail.kind === 'event'),
-])
+const poolCards = computed(() =>
+  grouped([
+    ...store.unscheduledTodoCards,
+    ...store.doneCards.filter((c) => c.detail.kind === 'event'),
+  ]),
+)
+const overdueGrouped = computed(() => grouped(store.overdueCards))
 const doneIds = computed(() => new Set(store.doneCards.map((c) => c.detail.id)))
 
-/** Completed one-shot items stay in their section, dimmed with a strike-through. */
+/** Completed one-shot items stay in their section, dimmed. */
 function isDoneCard(c: CardVM) {
   if (doneIds.value.has(c.detail.id)) return true
   return (
@@ -834,7 +850,7 @@ watch(
           </h2>
         </div>
         <ul class="space-y-2" data-testid="overdue-list">
-          <li v-for="c in store.overdueCards" :key="c.detail.id">
+          <li v-for="c in overdueGrouped" :key="c.detail.id" :style="indent(c)">
             <ItemCard
               :vm="c"
               :category="cat(c)"
@@ -865,7 +881,7 @@ watch(
             {{ t('common.countSuffix', { title: s.title, count: s.cards.length }) }}
           </h2>
           <ul class="space-y-2" :data-testid="`${s.id}-list`">
-            <li v-for="c in s.cards" :key="c.detail.id">
+            <li v-for="c in s.cards" :key="c.detail.id" :style="indent(c)">
               <ItemCard
                 :vm="c"
                 :category="cat(c)"
@@ -909,7 +925,7 @@ watch(
         </summary>
         <div class="px-4 pb-4">
           <ul class="space-y-2" data-testid="unscheduled-todos-list">
-            <li v-for="c in poolCards" :key="c.detail.id">
+            <li v-for="c in poolCards" :key="c.detail.id" :style="indent(c)">
               <ItemCard
                 :vm="c"
                 :category="cat(c)"

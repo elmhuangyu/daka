@@ -8,6 +8,7 @@ import { useI18n, type MessageKey } from '../../i18n'
 import { useCalendarStore } from '../../stores/calendar'
 import { usePrivacyStore } from '../../stores/privacy'
 import MakeupControl from './MakeupControl.vue'
+import { groupByTree } from '../../today/logic'
 import ProjectBadges from '../ProjectBadges.vue'
 import { useProjectsStore } from '../../stores/projects'
 import OccurrenceDetailModal from '../today/OccurrenceDetailModal.vue'
@@ -43,7 +44,14 @@ watch(date, () => {
   modalItemId.value = null
 })
 
-const listed = computed(() => (day.value?.items ?? []).filter((i) => !i.forecast || i.overdue))
+const listed = computed(() =>
+  groupByTree(
+    (day.value?.items ?? []).filter((i) => !i.forecast || i.overdue),
+    (i) => ({ id: i.item_id, projectId: i.project_id ?? null }),
+    (id) => store.detailById.get(id)?.parent_id ?? null,
+  ),
+)
+const indent = (depth: number) => (depth ? { marginLeft: `${Math.min(depth, 6) * 1.25}rem` } : {})
 const forecast = computed(() => (day.value?.items ?? []).filter((i) => i.forecast && !i.overdue))
 const shownIds = computed(() => new Set([...listed.value.map((i) => i.item_id), ...added.value]))
 const addable = computed(() => store.items.filter((d) => !shownIds.value.has(d.id)))
@@ -208,6 +216,7 @@ const makeUp = (input: Omit<CheckinInput, 'date'>) => store.makeUp(input)
           v-for="i in listed"
           :key="i.item_id"
           class="rounded-box border border-base-300 p-2"
+          :style="indent(i.depth)"
           :data-testid="`panel-item-${i.item_id}`"
         >
           <div class="flex flex-wrap items-center justify-between gap-2">

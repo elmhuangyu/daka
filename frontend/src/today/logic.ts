@@ -168,3 +168,68 @@ export function quotaText(d: ItemDetail): string {
 export function findCategory(cats: Category[], id: number | null): Category | null {
   return id == null ? null : (cats.find((c) => c.id === id) ?? null)
 }
+
+export interface TreeInfo {
+  id: number
+  projectId: number | null
+}
+
+/**
+ * Orders a flat list so related tasks sit together: entries of the same project are adjacent
+ * (placed where the project first appears), and every sub-task follows its nearest ancestor that
+ * is also in the list, at any depth. Relative order is otherwise kept and nothing is dropped.
+ * `depth` counts the hops to that ancestor chain. `parentOf` resolves any item's parent id,
+ * listed or not, so a grandchild still finds its grandparent when the parent is absent.
+ */
+export function groupByTree<T>(
+  entries: T[],
+  info: (e: T) => TreeInfo,
+  parentOf: (id: number) => number | null,
+): Array<T & { depth: number }> {
+  const ids = new Set(entries.map((e) => info(e).id))
+  const anchorOf = (id: number): number | null => {
+    const seen = new Set<number>([id])
+    let p = parentOf(id)
+    while (p !== null && !seen.has(p)) {
+      if (ids.has(p)) return p
+      seen.add(p)
+      p = parentOf(p)
+    }
+    return null
+  }
+  const children = new Map<number, T[]>()
+  const roots: T[] = []
+  for (const e of entries) {
+    const a = anchorOf(info(e).id)
+    if (a === null) roots.push(e)
+    else children.set(a, [...(children.get(a) ?? []), e])
+  }
+  const buckets: T[][] = []
+  const slot = new Map<number, T[]>()
+  for (const r of roots) {
+    const pid = info(r).projectId
+    if (pid === null) {
+      buckets.push([r])
+      continue
+    }
+    let b = slot.get(pid)
+    if (!b) {
+      b = []
+      slot.set(pid, b)
+      buckets.push(b)
+    }
+    b.push(r)
+  }
+  const out: Array<T & { depth: number }> = []
+  const visited = new Set<number>()
+  const visit = (e: T, depth: number) => {
+    const id = info(e).id
+    if (visited.has(id)) return
+    visited.add(id)
+    out.push({ ...e, depth })
+    for (const c of children.get(id) ?? []) visit(c, depth + 1)
+  }
+  for (const b of buckets) for (const r of b) visit(r, 0)
+  for (const e of entries) visit(e, 0) // safety net for parent cycles
+  return out
+}

@@ -95,6 +95,7 @@ let calls: Call[]
 let extResponses: Record<string, () => Response | Promise<Response>>
 let viewDays: Record<string, object>
 let viewStatus: number
+let extraDetails: object[]
 let checkinLogs: Array<{
   id: number
   item_id: number
@@ -113,6 +114,7 @@ beforeEach(() => {
   extResponses = {}
   checkinLogs = []
   viewStatus = 200
+  extraDetails = []
   viewDays = {
     '2026-11-06': day('2026-11-06', {
       status: 'incomplete',
@@ -187,7 +189,7 @@ beforeEach(() => {
       return extResponses[id]?.() ?? jsonRes({ sources: [{ id, name: id, ok: true, events: [] }] })
     }
     if (url.startsWith('/api/items'))
-      return jsonRes({ items: [detail(1, 'Water'), detail(3, 'Read')] })
+      return jsonRes({ items: [detail(1, 'Water'), detail(3, 'Read'), ...extraDetails] })
     if (url.startsWith('/api/checkins') && method === 'GET')
       return jsonRes({ checkins: checkinLogs, next_cursor: null })
     if (url.startsWith('/api/checkins/') && method === 'PATCH') {
@@ -312,6 +314,44 @@ describe('CalendarView', () => {
     const post = calls.find((c) => c.method === 'POST' && c.url === '/api/checkins')!
     expect(post.body).toEqual({ item_id: 1, mode: 'set', date: '2026-11-06' })
     expect(post.headers['Idempotency-Key']).toBeTruthy()
+    w.unmount()
+  })
+
+  it('groups the day panel by project and nests sub-tasks under their ancestors', async () => {
+    const d = (id: number, name: string, o: object) => ({
+      id,
+      name,
+      tracker_type: 'boolean',
+      kind: 'event',
+      polarity: 'positive',
+      category_id: null,
+      effective_sensitive: false,
+      options: [],
+      current_rule: { schedule_type: 'none', option_targets: {} },
+      ...o,
+    })
+    extraDetails = [
+      d(5, 'Open', { project_id: 1 }),
+      d(6, 'ChildA', { project_id: 1, parent_id: 5 }),
+      d(7, 'Grandchild', { project_id: 1, parent_id: 6 }),
+      d(10, 'Sub3', { project_id: 1 }),
+    ]
+    viewDays['2026-11-06'] = day('2026-11-06', {
+      items: [
+        item(1, 'Water'),
+        item(7, 'Grandchild', { project_id: 1 }),
+        item(3, 'Read'),
+        item(10, 'Sub3', { project_id: 1 }),
+      ],
+    })
+    const { w } = await mountView()
+    await w.get('[data-testid=day-2026-11-06]').trigger('click')
+    await flushPromises()
+    const order = w
+      .findAll('[data-testid^=panel-item-]')
+      .map((e) => e.attributes('data-testid'))
+      .filter((id) => /^panel-item-\d+$/.test(id ?? ''))
+    expect(order).toEqual(['panel-item-1', 'panel-item-7', 'panel-item-10', 'panel-item-3'])
     w.unmount()
   })
 

@@ -316,6 +316,7 @@ export const useTodayStore = defineStore('today', () => {
   return {
     view,
     items,
+    detailById,
     categories,
     logs,
     loading,
