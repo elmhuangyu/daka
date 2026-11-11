@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
+import { useRoute, useRouter } from 'vue-router'
 import { addDays, periodTitle, weekdayHeaders, type CalendarMode } from '../calendar/logic'
 import { useOfflineStore } from '../stores/offline'
 import { usePrivacyStore } from '../stores/privacy'
@@ -91,13 +92,62 @@ function setMode(m: CalendarMode) {
   void store.setMode(m)
 }
 
+// URL state: `?date=YYYY-MM-DD` is the selected day (or the shown period when none is
+// selected) and `?mode=week` switches to week view. No parameters means today, month view.
+const route = useRoute()
+const router = useRouter()
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+function queryOf() {
+  const one = (v: unknown) => (Array.isArray(v) ? v[0] : v)
+  const d = one(route.query.date)
+  const m = one(route.query.mode)
+  return {
+    date: typeof d === 'string' && DATE_RE.test(d) ? d : '',
+    mode: (m === 'week' ? 'week' : 'month') as CalendarMode,
+  }
+}
+let synced = false
+const wanted = computed(() => {
+  const today = store.view?.today ?? ''
+  return {
+    date: store.selected ?? (store.anchor !== today ? store.anchor : ''),
+    mode: store.mode,
+  }
+})
+async function applyQuery() {
+  synced = false // URL -> store: do not echo the intermediate state back into the URL
+  const q = queryOf()
+  store.mode = q.mode
+  store.anchor = q.date || store.view?.today || store.anchor
+  await store.refresh()
+  store.anchor = q.date || store.view?.today || store.anchor
+  focusDate.value = q.date || store.view?.today || store.anchor
+  await store.select(q.date || null)
+  synced = true
+}
+watch(wanted, (w) => {
+  if (!synced || route.name !== 'calendar') return
+  const q = queryOf()
+  if (w.date === q.date && w.mode === q.mode) return
+  const query: Record<string, string> = {}
+  if (w.date) query.date = w.date
+  if (w.mode === 'week') query.mode = 'week'
+  void router.push({ query })
+})
+// Back/forward and edited URLs.
+watch(
+  () => route.query,
+  () => {
+    if (!synced || route.name !== 'calendar') return
+    const q = queryOf()
+    if (q.date === wanted.value.date && q.mode === wanted.value.mode) return
+    void applyQuery()
+  },
+)
+
 onMounted(() => {
-  void store.refresh().then(() => {
-    focusDate.value =
-      store.view?.today && inRange(store.view.today)
-        ? store.view.today
-        : (store.range.dates[0] ?? store.anchor)
-  })
+  // The URL is the source of truth: no parameters means today (nothing selected), month view.
+  void applyQuery()
 })
 // The store drops all plaintext synchronously when redact turns on; refetch afterwards.
 watch(

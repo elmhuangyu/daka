@@ -130,19 +130,42 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-async function mountApp() {
+async function mountApp(path = '/', withRouter = false) {
   const pinia = createPinia()
   setActivePinia(pinia)
   const router = makeRouter(createMemoryHistory())
-  await router.push('/')
+  await router.push(path)
   await router.isReady()
   const w = mount(App, { global: { plugins: [pinia, router] }, attachTo: document.body })
   await flushPromises()
-  return w
+  return withRouter ? Object.assign(w, { router }) : w
 }
 const writes = () =>
   fetchMock.mock.calls.filter((c) => c[1]?.method === 'POST' && String(c[0]) === '/api/checkins')
 const lastBody = () => JSON.parse(writes().at(-1)![1].body)
+
+describe('Today URL', () => {
+  it('?date loads that day, navigating updates the URL, and no parameter means today', async () => {
+    const w = (await mountApp('/?date=2026-11-03', true)) as Awaited<
+      ReturnType<typeof mountApp>
+    > & {
+      router: ReturnType<typeof makeRouter>
+    }
+    const todayUrls = () =>
+      fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.startsWith('/api/view/today'))
+    expect(todayUrls().at(-1)).toContain('date=2026-11-03')
+    await w.get('[data-testid="next-day"]').trigger('click')
+    await flushPromises()
+    expect(w.router.currentRoute.value.query.date).toBe('2026-11-04')
+    await w.router.back()
+    await flushPromises()
+    expect(todayUrls().at(-1)).toContain('date=2026-11-03')
+    await w.router.push('/')
+    await flushPromises()
+    expect(todayUrls().at(-1)).not.toContain('date=')
+    w.unmount()
+  })
+})
 
 describe('logic', () => {
   it('formats and filters', () => {

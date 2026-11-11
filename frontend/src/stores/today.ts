@@ -77,6 +77,12 @@ export const useTodayStore = defineStore('today', () => {
     }
     if (!view.value) loading.value = true
     try {
+      // A deep link (?date=) arrives before the server's "today" is known: learn it first.
+      if (selectedDate.value && !actualToday.value) {
+        const t0 = await api.getToday(redact)
+        if (my !== seq) return
+        actualToday.value = t0.date
+      }
       const qDate =
         selectedDate.value && actualToday.value && selectedDate.value !== actualToday.value
           ? selectedDate.value

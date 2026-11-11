@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { useOfflineStore } from '../stores/offline'
 import { usePrivacyStore } from '../stores/privacy'
@@ -317,8 +317,39 @@ const detailCard = computed(() =>
     : null,
 )
 
+// The viewed day lives in the URL (`?date=YYYY-MM-DD`); no parameter means today.
+const route = useRoute()
+const router = useRouter()
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+function queryDate(): string {
+  const q = route.query.date
+  const v = Array.isArray(q) ? q[0] : q
+  return typeof v === 'string' && DATE_RE.test(v) ? v : ''
+}
+watch(
+  () => store.selectedDate,
+  (d) => {
+    if (route.name !== 'today' || d === queryDate()) return
+    const { date: _drop, ...rest } = route.query
+    const to = { query: d ? { ...rest, date: d } : rest }
+    // Normalising ?date=<today> to no parameter must not add a history entry.
+    if (!d && queryDate() === store.actualToday) void router.replace(to)
+    else void router.push(to)
+  },
+)
+// Back/forward and edited URLs.
+watch(
+  () => route.query.date,
+  () => {
+    if (route.name !== 'today') return
+    const q = queryDate()
+    if (q === store.selectedDate || (q === store.actualToday && !store.selectedDate)) return
+    void store.refresh(q)
+  },
+)
+
 onMounted(() => {
-  store.refresh()
+  void store.refresh(queryDate())
   projectsStore.fetchProjects()
   document.addEventListener('click', onDocClick)
   document.addEventListener('keydown', onKey)

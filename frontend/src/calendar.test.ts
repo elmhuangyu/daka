@@ -213,15 +213,15 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-async function mountView() {
+async function mountView(path = '/calendar') {
   const pinia = createPinia()
   setActivePinia(pinia)
   const router = makeRouter(createMemoryHistory())
-  await router.push('/calendar')
+  await router.push(path)
   await router.isReady()
   const w = mount(CalendarView, { global: { plugins: [pinia, router] }, attachTo: document.body })
   await flushPromises()
-  return { w, pinia }
+  return { w, pinia, router }
 }
 const viewCalls = () =>
   calls.filter((c) => c.url.startsWith('/api/view/calendar')).map((c) => c.url)
@@ -352,6 +352,23 @@ describe('CalendarView', () => {
       .map((e) => e.attributes('data-testid'))
       .filter((id) => /^panel-item-\d+$/.test(id ?? ''))
     expect(order).toEqual(['panel-item-1', 'panel-item-7', 'panel-item-10', 'panel-item-3'])
+    w.unmount()
+  })
+
+  it('URL: ?date selects that day, selecting updates the URL, no params means today', async () => {
+    const { w, router } = await mountView('/calendar?date=2026-11-06&mode=week')
+    expect(w.find('[data-testid=day-panel]').exists()).toBe(true)
+    expect(w.get('[data-testid=day-panel]').text()).toContain('Water')
+    expect(w.findAll('[role=gridcell]')).toHaveLength(7)
+    await w.get('[data-testid=day-2026-11-08]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ date: '2026-11-08', mode: 'week' })
+    await router.back()
+    await flushPromises()
+    expect(w.get('[data-testid=day-panel]').text()).toContain('Water')
+    await router.push('/calendar')
+    await flushPromises()
+    expect(w.find('[data-testid=day-panel]').exists()).toBe(false)
     w.unmount()
   })
 
