@@ -3,6 +3,7 @@ package e2e
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -65,6 +66,7 @@ func leakSurface(id uint) []string {
 		"/api/items", fmt.Sprintf("/api/items/%d", id), "/api/checkins", "/api/view/today",
 		"/api/view/calendar?start=2025-09-01&end=2025-09-30", fmt.Sprintf("/api/items/%d/stats", id),
 		fmt.Sprintf("/api/items?q=%s", "SECRETNAME"), fmt.Sprintf("/api/items?include=stats&redact=%d", 1),
+		"/api/projects", "/api/checkins?q=" + url.QueryEscape(secNote),
 	}
 }
 
@@ -106,7 +108,7 @@ func assertProtected(t *testing.T, s *stack, c *client, id uint) {
 	r := rc.doHdr("GET", "/api/items", nil, bearer(rt))
 	require.Equal(t, 200, r.Status)
 	require.Contains(t, r.Body, pubName, "the control item stays visible")
-	for _, p := range []string{"/api/categories", "/api/projects", "/api/export", "/api/tokens", "/api/settings/calendar"} {
+	for _, p := range []string{"/api/categories", "/api/export", "/api/tokens", "/api/settings/calendar"} {
 		r := rc.doHdr("GET", p, nil, bearer(rt))
 		require.Equal(t, 401, r.Status, "read token must not reach %s", p)
 		noLeak(t, "read token "+p, r.Body)

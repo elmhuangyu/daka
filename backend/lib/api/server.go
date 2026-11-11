@@ -221,8 +221,11 @@ func (s *server) tokenGate(mux, authed http.Handler) http.Handler {
 // options, freezes) is refused.
 func readAllowed(path string) bool {
 	switch path {
-	case "/api/items", "/api/checkins", "/api/view/today", "/api/view/calendar", "/api/calendar/holidays":
+	case "/api/items", "/api/projects", "/api/checkins", "/api/view/today", "/api/view/calendar", "/api/calendar/holidays":
 		return true
+	}
+	if id, ok := strings.CutPrefix(path, "/api/projects/"); ok {
+		return id != "" && !strings.Contains(id, "/")
 	}
 	rest, ok := strings.CutPrefix(path, "/api/items/")
 	if !ok {

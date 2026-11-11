@@ -59,7 +59,7 @@ func TestReadTokenAllowlist(t *testing.T) {
 	for _, p := range []string{
 		"/api/items", "/api/items?q=wat&include=stats", fmt.Sprintf("/api/items/%d", id), fmt.Sprintf("/api/items/%d/stats", id),
 		"/api/checkins?item_id=" + fmt.Sprint(id), "/api/view/today", "/api/view/calendar?start=2026-11-01&end=2026-11-07",
-		"/api/calendar/holidays?year=2026",
+		"/api/calendar/holidays?year=2026", "/api/projects", "/api/projects?status=active", "/api/checkins?q=water",
 	} {
 		w := e.bearer(nil, "GET", p, tok)
 		require.Equal(t, 200, w.Code, "%s %s", p, w.Body.String())
@@ -67,7 +67,7 @@ func TestReadTokenAllowlist(t *testing.T) {
 	}
 	for _, p := range []string{
 		"/api/tokens", "/api/telegram", "/api/settings/calendar", "/api/calendar/external", "/api/categories", "/api/freezes",
-		fmt.Sprintf("/api/items/%d/options", id), "/api/nope", "/api/items/1/stats/x",
+		fmt.Sprintf("/api/items/%d/options", id), "/api/nope", "/api/items/1/stats/x", "/api/projects/1/x", "/api/projects/",
 	} {
 		require.Equal(t, 401, e.bearer(nil, "GET", p, tok).Code, p)
 	}
@@ -147,6 +147,47 @@ func TestReadTokenExcludesSensitive(t *testing.T) {
 	require.Nil(t, page.NextCursor)
 	// A session user still sees everything.
 	require.Contains(t, e.do("GET", "/api/items?q=zeta", "", "", nil).Body.String(), "Zeta Own")
+}
+
+func TestReadTokenProjectsAndNoteSearch(t *testing.T) {
+	e := newEnv(t)
+	cid := e.category("u1", true)
+	pubP := e.createProject("u1", map[string]any{"name": "Pub Project", "target_date": "2026-12-31"})
+	ownP := e.createProject("u1", map[string]any{"name": "Own Secret Project", "is_sensitive": true})
+	catP := e.createProject("u1", map[string]any{"name": "Cat Secret Project", "category_id": cid})
+	pub := e.dailyItem("u1", func(it *dbmodels.Item) { it.Name = "Pub Task"; it.ProjectID = &pubP.ID })
+	hidden := e.dailyItem("u1", func(it *dbmodels.Item) { it.Name = "Hidden Task"; it.ProjectID = &ownP.ID })
+	for id, note := range map[uint]string{pub: "pubnote findme", hidden: "hiddennote findme"} {
+		e.checkin(id, "2026-11-05")
+		require.NoError(t, e.db.Write().Model(&dbmodels.CheckinLog{}).Where("item_id = ?", id).UpdateColumn("note", note).Error)
+	}
+	tok := e.readToken()
+	get := func(p string) *httptest.ResponseRecorder { return e.bearer(nil, "GET", p, tok) }
+
+	w := get("/api/projects")
+	require.Equal(t, 200, w.Code)
+	require.Contains(t, w.Body.String(), "Pub Project")
+	require.Contains(t, w.Body.String(), "2026-12-31")
+	for _, p := range []string{"/api/projects", "/api/projects?redact=0", "/api/projects?status=active"} {
+		b := get(p).Body.String()
+		require.NotContains(t, b, "Secret Project", p)
+	}
+	require.Equal(t, 200, get(fmt.Sprintf("/api/projects/%d", pubP.ID)).Code)
+	for _, id := range []uint{ownP.ID, catP.ID} {
+		require.Equal(t, 404, get(fmt.Sprintf("/api/projects/%d", id)).Code)
+	}
+	require.Equal(t, 404, get("/api/projects/99999").Code)
+	for _, p := range []string{fmt.Sprintf("/api/items?project_id=%d", ownP.ID), "/api/checkins?q=findme"} {
+		require.NotContains(t, get(p).Body.String(), "hidden", p)
+	}
+	require.Contains(t, get(fmt.Sprintf("/api/items?project_id=%d", pubP.ID)).Body.String(), "Pub Task")
+	// Note search: all terms must match, case-insensitively, wildcards are literal.
+	require.Contains(t, get("/api/checkins?q=PUBNOTE+Findme").Body.String(), "pubnote findme")
+	require.NotContains(t, get("/api/checkins?q=pubnote+absent").Body.String(), "pubnote")
+	require.NotContains(t, get("/api/checkins?q=%25").Body.String(), "pubnote")
+	require.Equal(t, 400, get("/api/checkins?q=a+b+c+d+e+f+g+h+i").Code)
+	// A session user still sees sensitive projects.
+	require.Contains(t, e.do("GET", "/api/projects", "", "", nil).Body.String(), "Own Secret Project")
 }
 
 func TestReadTokenExpiryAndRevocation(t *testing.T) {

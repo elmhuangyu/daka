@@ -31,13 +31,19 @@ The machine-readable spec is at `GET {base}/api/openapi.json` (no token needed).
 - `GET /api/items?q=water filter` finds items by name. Every
   whitespace-separated term must appear in the name (case-insensitive). Add
   `include=stats` to get the stats of every match in one call.
+  Add `project_id=` to list the items of one project. Items carry `project_id`
+  and `parent_id` (a sub-task of another item).
+- `GET /api/projects` lists projects (goals or to-do lists that group items):
+  `name`, `description`, `status` (`active`, `completed`, `archived`),
+  `target_date`. Filter with `status=`. `GET /api/projects/{id}` is one project.
 - `GET /api/items/{id}` is one item with its rule and options.
 - `GET /api/items/{id}/stats` returns the last time (`last_at`,
   `days_since_last`), counts per period, quota remaining and a one-line
   `summary`. Start here for "when was the last time" questions.
 - `GET /api/checkins?item_id=&from=YYYY-MM-DD&to=YYYY-MM-DD&limit=` lists logs
   newest first; follow `next_cursor` via `cursor=` for more pages. Use it to
-  count occurrences in a range.
+  count occurrences in a range. Add `q=` to search the check-in notes
+  (quick jots and one-off records live there).
 - `GET /api/view/today` shows what is due today and what is done.
 - `GET /api/view/calendar?start=&end=` shows per-day status (max 93 days).
 - `GET /api/calendar/holidays?year=` lists statutory holidays and make-up
@@ -53,9 +59,14 @@ Dates are in the user's own timezone (returned as `timezone` in the views).
   through `next_cursor`), or use the `counts` in the stats response.
 - Remaining quota: `quota` in the stats response.
 
+- Quick jot or one-off record: search `checkins?q=` for the note text, then
+  read the item through `items/{id}`.
+- Project progress: `projects?status=active`, then `items?project_id=` and
+  `items/{id}/stats` for each item.
+
 ## Privacy rules
 
-- Items marked sensitive (directly or through their category) are excluded
+- Items and projects marked sensitive (directly or through their category) are excluded
   from every response to a read token. They do not appear in lists, today or
   calendar views, or check-in logs, and `GET /api/items/{id}` answers `404`
   for them. You cannot unlock them with query parameters.

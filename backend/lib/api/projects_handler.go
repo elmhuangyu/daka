@@ -126,13 +126,24 @@ func (s *server) listProjects(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var isSens func(dbmodels.Project) bool
-	if redact {
+	hide := isReadToken(r)
+	if redact || hide {
 		var err error
 		isSens, err = projectSensitiveFn(s.db.Read(), userID)
 		if err != nil {
 			internalError(w, err, "list projects failed")
 			return
 		}
+	}
+	if hide {
+		// Read tokens never see sensitive projects: dropped, not masked.
+		kept := projs[:0]
+		for _, p := range projs {
+			if !isSens(p) {
+				kept = append(kept, p)
+			}
+		}
+		projs = kept
 	}
 
 	out := make([]projectResponse, len(projs))
@@ -295,13 +306,17 @@ func (s *server) getProject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := newProjectResponse(p)
-	if redact {
+	if redact || isReadToken(r) {
 		isSens, err := projectSensitiveFn(s.db.Read(), userID)
 		if err != nil {
 			internalError(w, err, "get project failed")
 			return
 		}
 		if isSens(p) {
+			if isReadToken(r) { // indistinguishable from a missing project
+				errResult(http.StatusNotFound, "project not found").write(w)
+				return
+			}
 			redactProject(&resp)
 		}
 	}

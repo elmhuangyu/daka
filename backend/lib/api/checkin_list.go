@@ -105,6 +105,16 @@ func (s *server) listCheckins(w http.ResponseWriter, r *http.Request) {
 		}
 		tx = tx.Where("item_id = ?", id)
 	}
+	if v := q.Get("q"); v != "" {
+		terms, ok := searchTerms(v)
+		if !ok {
+			bad("q has too many terms or is too long")
+			return
+		}
+		for _, term := range terms {
+			tx = tx.Where(`LOWER(note) LIKE ? ESCAPE '\'`, "%"+escapeLike(term)+"%")
+		}
+	}
 	from, to := q.Get("from"), q.Get("to")
 	if from != "" {
 		if _, ok := strictDate(from); !ok {
