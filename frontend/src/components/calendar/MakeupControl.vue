@@ -62,22 +62,32 @@ function setValue(r: ValueRow) {
 
 <template>
   <div class="space-y-2" :aria-busy="busy" :data-testid="`makeup-${d.id}`">
-    <div v-if="isOccurrence" class="flex flex-wrap items-center gap-2">
-      <button type="button" class="btn btn-sm btn-primary" :disabled="busy" @click="occurrence">
-        {{ t('calendar.makeup.addOccurrence') }}
-      </button>
+    <div v-if="isOccurrence" class="flex flex-wrap items-center gap-x-3 gap-y-1">
       <span class="text-sm opacity-70">{{
         t('calendar.makeup.recorded', { count: logs.length })
       }}</span>
-      <button
-        v-if="checked"
-        type="button"
-        class="btn btn-sm btn-ghost"
-        :disabled="busy"
-        @click="emit('remove', lastLogId)"
-      >
-        {{ t('calendar.makeup.removeLast') }}
-      </button>
+      <div class="ml-auto flex items-center gap-1.5">
+        <button
+          type="button"
+          class="btn btn-sm"
+          :disabled="busy || !checked"
+          :aria-label="t('calendar.makeup.removeLast')"
+          :title="t('calendar.makeup.removeLast')"
+          @click="emit('remove', lastLogId)"
+        >
+          −1
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-primary"
+          :disabled="busy"
+          :aria-label="t('calendar.makeup.addOccurrence')"
+          :title="t('calendar.makeup.addOccurrence')"
+          @click="occurrence"
+        >
+          +1
+        </button>
+      </div>
     </div>
 
     <template v-else>
@@ -114,7 +124,7 @@ function setValue(r: ValueRow) {
               :data-testid="`makeup-dec-${d.id}-${r.key}`"
               @click="bump(r, -1)"
             >
-              − {{ fmt(r.step) }} {{ r.unit }}
+              −{{ fmt(r.step) }}
             </button>
             <button
               type="button"
@@ -123,7 +133,7 @@ function setValue(r: ValueRow) {
               :data-testid="`makeup-inc-${d.id}-${r.key}`"
               @click="bump(r, 1)"
             >
-              + {{ fmt(r.step) }} {{ r.unit }}
+              +{{ fmt(r.step) }}
             </button>
           </div>
         </template>

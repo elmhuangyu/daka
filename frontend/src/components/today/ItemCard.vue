@@ -255,29 +255,34 @@ function record(r: ValueRow) {
       </div>
 
       <!-- negative boolean: one log per occurrence -->
-      <div v-if="isOccurrence" class="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          class="btn btn-primary"
-          :disabled="busy"
-          data-testid="occurrence"
-          @click="occurrence"
-        >
-          <Icon icon="lucide:plus" aria-hidden="true" /> {{ t('today.card.logOccurrence') }}
-        </button>
+      <div v-if="isOccurrence" class="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span class="text-sm" data-testid="occurrence-count">{{
           t('today.card.occurrenceCount', { count: logs.length })
         }}</span>
-        <button
-          v-if="logs.length"
-          type="button"
-          class="btn btn-ghost btn-sm"
-          :disabled="busy"
-          data-testid="undo-last"
-          @click="emit('remove', lastLogId)"
-        >
-          <Icon icon="lucide:undo-2" aria-hidden="true" /> {{ t('today.card.undoLast') }}
-        </button>
+        <div class="ml-auto flex items-center gap-1.5">
+          <button
+            type="button"
+            class="btn btn-sm"
+            :disabled="busy || !logs.length"
+            data-testid="undo-last"
+            :aria-label="t('today.card.undoLast')"
+            :title="t('today.card.undoLast')"
+            @click="emit('remove', lastLogId)"
+          >
+            −1
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary"
+            :disabled="busy"
+            data-testid="occurrence"
+            :aria-label="t('today.card.logOccurrence')"
+            :title="t('today.card.logOccurrence')"
+            @click="occurrence"
+          >
+            +1
+          </button>
+        </div>
       </div>
 
       <!-- counter / metric rows -->
@@ -349,7 +354,7 @@ function record(r: ValueRow) {
             "
             @click="bump(r, -1)"
           >
-            <Icon icon="lucide:minus" aria-hidden="true" /> {{ fmt(r.step) }} {{ r.unit }}
+            −{{ fmt(r.step) }}
           </button>
           <button
             type="button"
@@ -368,7 +373,7 @@ function record(r: ValueRow) {
             "
             @click="bump(r, 1)"
           >
-            <Icon icon="lucide:plus" aria-hidden="true" /> {{ fmt(r.step) }} {{ r.unit }}
+            +{{ fmt(r.step) }}
           </button>
         </div>
 

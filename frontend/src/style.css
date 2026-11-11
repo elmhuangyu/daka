@@ -31,10 +31,6 @@ summary::-webkit-details-marker {
 [data-privacy='on'] .name.sensitive:hover {
   filter: blur(2px);
 }
-.done .name {
-  text-decoration: line-through;
-  opacity: 0.6;
-}
 
 /*
  * Replacement for daisyUI's join utility. Its upstream CSS (`@scope(&) { &>:where(...) }`)
