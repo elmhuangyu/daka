@@ -8,6 +8,7 @@ import { usePrivacyStore } from '../stores/privacy'
 import { useCalendarStore } from '../stores/calendar'
 import DayCell from '../components/calendar/DayCell.vue'
 import DayPanel from '../components/calendar/DayPanel.vue'
+import { useShortcut } from '../composables/useShortcuts'
 import { useI18n } from '../i18n'
 import { extCalErrorKey } from '../i18n/errors'
 
@@ -48,9 +49,32 @@ async function focusCell(date: string) {
   gridEl.value?.querySelector<HTMLElement>(`[data-date="${date}"]`)?.focus()
 }
 
-async function navigate(n: number) {
+/** Page the period. Only keyboard-triggered paging moves focus; header buttons keep theirs. */
+async function navigate(n: number, focus = false) {
   await store.page(n)
-  if (!inRange(focusDate.value)) focusDate.value = store.range.dates[0] ?? store.anchor
+  if (focus) await focusCell(focusDate.value)
+}
+
+// Keep the roving tabindex valid whenever the visible range changes (paging, Today, mode
+// switch), without moving focus.
+watch(
+  () => [store.range.start, store.range.end],
+  () => {
+    if (inRange(focusDate.value)) return
+    const today = store.view?.today ?? ''
+    focusDate.value =
+      today && inRange(today)
+        ? today
+        : inRange(store.anchor)
+          ? store.anchor
+          : (store.range.dates[0] ?? store.anchor)
+  },
+)
+
+async function goToday() {
+  await store.goToday()
+  focusDate.value = store.view?.today ?? store.anchor
+  await focusCell(focusDate.value)
 }
 
 async function moveFocus(target: string) {
@@ -70,18 +94,94 @@ function onGridKey(e: KeyboardEvent) {
     void moveFocus(addDays(focusDate.value, step[e.key]!))
   } else if (e.key === 'PageUp' || e.key === 'PageDown') {
     e.preventDefault()
-    const n = e.key === 'PageUp' ? -1 : 1
-    void store.page(n).then(() => {
-      focusDate.value = store.range.dates.includes(focusDate.value)
-        ? focusDate.value
-        : (store.range.dates[0] ?? store.anchor)
-    })
+    void navigate(e.key === 'PageUp' ? -1 : 1, true)
   } else if (e.key === 'Escape' && store.selected) {
     const d = store.selected
     void store.select(null)
     void focusCell(d)
   }
 }
+
+/** Shortcut entry: act only once the grid exists and focus is not already inside it. */
+function fromOutside(fn: () => void) {
+  return () => {
+    if (!store.view || gridEl.value?.contains(document.activeElement)) return
+    fn()
+  }
+}
+const ARROW_STEPS = [
+  ['Left', -1],
+  ['Right', 1],
+  ['Up', -7],
+  ['Down', 7],
+] as const
+useShortcut([
+  ...ARROW_STEPS.map(([name, step]) => ({
+    id: `calendar.move${name}`,
+    keys: [`Arrow${name}`],
+    scope: 'calendar' as const,
+    label: `Move focus ${name === 'Left' || name === 'Up' ? 'back' : 'forward'} (${
+      Math.abs(step) === 1 ? 'one day' : 'one week'
+    })`,
+    handler: fromOutside(() => void moveFocus(addDays(focusDate.value, step))),
+  })),
+  {
+    id: 'calendar.pageUp',
+    keys: ['PageUp'],
+    scope: 'calendar',
+    label: 'Previous period',
+    handler: fromOutside(() => void navigate(-1, true)),
+  },
+  {
+    id: 'calendar.pageDown',
+    keys: ['PageDown'],
+    scope: 'calendar',
+    label: 'Next period',
+    handler: fromOutside(() => void navigate(1, true)),
+  },
+  {
+    id: 'calendar.select',
+    keys: ['Enter'],
+    scope: 'calendar',
+    label: 'Select the focused day',
+    displayOnly: true,
+  },
+  {
+    id: 'calendar.month',
+    keys: ['m'],
+    scope: 'calendar',
+    label: 'Month view',
+    handler: () => setMode('month'),
+  },
+  {
+    id: 'calendar.week',
+    keys: ['w'],
+    scope: 'calendar',
+    label: 'Week view',
+    handler: () => setMode('week'),
+  },
+  {
+    id: 'calendar.today',
+    keys: ['t'],
+    scope: 'calendar',
+    label: 'Jump to today',
+    handler: () => void goToday(),
+  },
+  {
+    id: 'calendar.prev',
+    keys: ['['],
+    scope: 'calendar',
+    label: 'Previous period',
+    handler: () => void navigate(-1, true),
+  },
+  {
+    id: 'calendar.next',
+    keys: [']'],
+    scope: 'calendar',
+    label: 'Next period',
+    handler: () => void navigate(1, true),
+  },
+])
 
 function select(date: string) {
   focusDate.value = date
@@ -124,6 +224,10 @@ async function applyQuery() {
   focusDate.value = q.date || store.view?.today || store.anchor
   await store.select(q.date || null)
   synced = true
+  // Give keyboard users an entry point, but never steal focus the user already placed.
+  await nextTick()
+  const active = document.activeElement
+  if (!active || active === document.body) await focusCell(focusDate.value)
 }
 watch(wanted, (w) => {
   if (!synced || route.name !== 'calendar') return

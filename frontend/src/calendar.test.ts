@@ -5,6 +5,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { makeRouter } from './router'
 import CalendarView from './views/CalendarView.vue'
 import { usePrivacyStore } from './stores/privacy'
+import { useCalendarStore } from './stores/calendar'
+import { installShortcutListener, useShortcutList } from './composables/useShortcuts'
 import {
   addDays,
   addMonths,
@@ -213,6 +215,12 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+const mountedViews: Array<{ unmount: () => void }> = []
+afterEach(() => {
+  // Leaked views would keep their shortcut registrations alive across tests.
+  for (const w of mountedViews.splice(0)) w.unmount()
+})
+
 async function mountView(path = '/calendar') {
   const pinia = createPinia()
   setActivePinia(pinia)
@@ -220,6 +228,7 @@ async function mountView(path = '/calendar') {
   await router.push(path)
   await router.isReady()
   const w = mount(CalendarView, { global: { plugins: [pinia, router] }, attachTo: document.body })
+  mountedViews.push(w)
   await flushPromises()
   return { w, pinia, router }
 }
@@ -510,5 +519,142 @@ describe('CalendarView', () => {
     expect(patch).toBeTruthy()
     expect(patch!.body).toEqual({ note: 'Drank 2 glasses' })
     w.unmount()
+  })
+})
+
+describe('CalendarView shortcuts', () => {
+  let uninstall: () => void
+  beforeEach(() => {
+    uninstall = installShortcutListener()
+  })
+  afterEach(() => {
+    uninstall()
+    document.body.innerHTML = ''
+  })
+  const press = (key: string, target: EventTarget = document.activeElement ?? document.body) => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+    return flushPromises()
+  }
+  const focusedDate = () => (document.activeElement as HTMLElement | null)?.dataset.date
+
+  it('focuses today on entry and ArrowRight moves from there', async () => {
+    const { w } = await mountView()
+    expect(focusedDate()).toBe('2026-11-08')
+    ;(document.activeElement as HTMLElement).blur()
+    expect(document.activeElement).toBe(document.body)
+    await press('ArrowRight')
+    expect(focusedDate()).toBe('2026-11-09')
+    await press('ArrowDown')
+    expect(focusedDate()).toBe('2026-11-16')
+    w.unmount()
+  })
+
+  it('does not steal focus on entry or while typing', async () => {
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    input.focus()
+    const { w } = await mountView()
+    expect(document.activeElement).toBe(input)
+    await press('ArrowRight', input)
+    await press('m', input)
+    expect(document.activeElement).toBe(input)
+    expect(useCalendarStore().mode).toBe('month')
+    await press('w', input)
+    expect(useCalendarStore().mode).toBe('month')
+    w.unmount()
+  })
+
+  it('Enter on the focused cell selects it once', async () => {
+    const { w } = await mountView()
+    const cell = document.activeElement as HTMLButtonElement
+    cell.click() // native Enter on a button fires a single click
+    await flushPromises()
+    expect(useCalendarStore().selected).toBe('2026-11-08')
+    await press('Enter', cell)
+    expect(useCalendarStore().selected).toBe('2026-11-08')
+    w.unmount()
+  })
+
+  it('m, w, t and PageDown behave', async () => {
+    const { w } = await mountView()
+    const store = useCalendarStore()
+    await press('w')
+    expect(store.mode).toBe('week')
+    await press('m')
+    expect(store.mode).toBe('month')
+    await press('PageDown')
+    expect(store.anchor.startsWith('2026-12')).toBe(true)
+    expect(focusedDate()).toBeTruthy()
+    expect(store.range.dates).toContain(focusedDate())
+    await press(']')
+    await press('[')
+    await press('t')
+    expect(store.anchor).toBe('2026-11-08')
+    expect(focusedDate()).toBe('2026-11-08')
+    w.unmount()
+  })
+
+  it('ignores keys while a modal is open and in a DayPanel input', async () => {
+    const { w } = await mountView()
+    const store = useCalendarStore()
+    const dlg = document.createElement('div')
+    dlg.setAttribute('role', 'dialog')
+    dlg.setAttribute('aria-modal', 'true')
+    document.body.appendChild(dlg)
+    await press('w')
+    expect(store.mode).toBe('month')
+    dlg.remove()
+    const ta = document.createElement('textarea')
+    document.body.appendChild(ta)
+    ta.focus()
+    await press('w', ta)
+    await press('ArrowRight', ta)
+    expect(store.mode).toBe('month')
+    expect(document.activeElement).toBe(ta)
+    w.unmount()
+  })
+
+  it('header buttons keep focus on themselves', async () => {
+    const { w } = await mountView()
+    for (const id of ['prev', 'next', 'go-today']) {
+      const btn = w.get(`[data-testid="${id}"]`).element as HTMLButtonElement
+      btn.focus()
+      btn.click()
+      await flushPromises()
+      expect(document.activeElement).toBe(btn)
+    }
+    w.unmount()
+  })
+
+  it('keeps exactly one tabbable cell after Today and mode switches', async () => {
+    const { w } = await mountView()
+    const tabbable = () => w.findAll('[data-date][tabindex="0"]')
+    await w.get('[data-testid="next"]').trigger('click')
+    await w.get('[data-testid="next"]').trigger('click')
+    await flushPromises()
+    expect(tabbable()).toHaveLength(1)
+    await w.get('[data-testid="go-today"]').trigger('click')
+    await flushPromises()
+    expect(tabbable()).toHaveLength(1)
+    expect(tabbable()[0]!.attributes('data-date')).toBe('2026-11-08')
+    ;(document.activeElement as HTMLElement).blur()
+    await press('ArrowRight')
+    expect(focusedDate()).toBe('2026-11-09')
+    await w.get('[data-testid="mode-week"]').trigger('click')
+    await flushPromises()
+    expect(tabbable()).toHaveLength(1)
+    await w.get('[data-testid="next"]').trigger('click')
+    await w.get('[data-testid="mode-month"]').trigger('click')
+    await flushPromises()
+    expect(tabbable()).toHaveLength(1)
+    w.unmount()
+  })
+
+  it('unregisters on unmount', async () => {
+    const { w } = await mountView()
+    const ids = () => useShortcutList().value.map((d) => d.id)
+    expect(ids()).toContain('calendar.today')
+    w.unmount()
+    expect(ids().filter((i) => i.startsWith('calendar.'))).toEqual([])
   })
 })
