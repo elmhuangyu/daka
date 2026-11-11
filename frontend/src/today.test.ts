@@ -681,9 +681,11 @@ describe('Today page', () => {
     await useTodayStore().refresh('2026-11-07')
     await flushPromises()
 
-    // Unscheduled todos section is now gone, card is in done section
-    expect(w.find('[data-testid="section-unscheduled-todos"]').exists()).toBe(false)
-    expect(w.find('[data-testid="section-done"]').exists()).toBe(true)
+    // The completed todo stays in the pool, at the end
+    expect(w.find('[data-testid="section-done"]').exists()).toBe(false)
+    expect(
+      w.find('[data-testid="section-unscheduled-todos"] [data-testid="card-99"]').exists(),
+    ).toBe(true)
   })
 
   it('creates a dated Todo with quick-todo-date + quick-todo-submit', async () => {

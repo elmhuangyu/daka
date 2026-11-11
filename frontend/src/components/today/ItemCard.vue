@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { Icon } from '@iconify/vue'
-import { RouterLink } from 'vue-router'
+import ProjectBadges from '../ProjectBadges.vue'
 import type { Category, CheckinInput, Project } from '../../api'
 import { formatCustomDate } from '../../i18n/format'
 import { useI18n } from '../../i18n'
@@ -20,8 +20,6 @@ const props = defineProps<{
   vm: CardVM
   category: Category | null
   project?: Project | null
-  /** Parent to-do (sub-tasks only). */
-  parent?: { id: number; name: string } | null
   variant: 'todo' | 'done' | 'maintenance' | 'quota'
   busy: boolean
   /** An offline check-in for this item is queued and not yet confirmed. */
@@ -164,7 +162,6 @@ function record(r: ValueRow) {
             class="name text-base font-semibold flex items-center gap-2 cursor-pointer hover:text-primary transition-colors"
             :class="{
               sensitive: d.effective_sensitive,
-              'line-through text-base-content/60': variant === 'done',
             }"
             @click="emit('openDetails')"
           >
@@ -201,29 +198,7 @@ function record(r: ValueRow) {
           <span v-if="pending" class="badge badge-warning badge-sm" data-testid="pending-badge">
             <Icon icon="lucide:cloud-off" aria-hidden="true" /> {{ t('today.card.pendingSync') }}
           </span>
-          <RouterLink
-            v-if="parent && project"
-            :to="`/projects/${project.id}`"
-            class="badge badge-ghost gap-1 max-w-40 hover:badge-primary"
-            data-testid="parent-badge"
-            :title="t('today.card.openProject')"
-          >
-            <Icon icon="lucide:corner-down-right" class="size-3 shrink-0" aria-hidden="true" />
-            <span class="truncate" :class="{ sensitive: d.effective_sensitive }">{{
-              parent.name
-            }}</span>
-          </RouterLink>
-          <RouterLink
-            v-if="project"
-            :to="`/projects/${project.id}`"
-            class="badge badge-outline gap-1 hover:badge-primary"
-            :title="t('today.card.openProject')"
-            :style="project.color ? { borderColor: project.color } : {}"
-            data-testid="project-badge"
-          >
-            <Icon icon="lucide:folder" class="size-3" aria-hidden="true" />
-            {{ project.name }}
-          </RouterLink>
+          <ProjectBadges :item-id="d.id" :project="project ?? null" />
           <span
             v-if="category"
             class="badge badge-outline"

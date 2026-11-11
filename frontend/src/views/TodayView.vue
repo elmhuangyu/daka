@@ -239,7 +239,10 @@ const sections = computed(
         title: t('today.section.habits'),
         icon: 'lucide:repeat',
         variant: 'todo',
-        cards: store.todoCards.filter((c) => c.detail.kind !== 'event'),
+        cards: [
+          ...store.todoCards.filter((c) => c.detail.kind !== 'event'),
+          ...store.doneCards.filter((c) => c.detail.kind !== 'event'),
+        ],
       },
       {
         id: 'maintenance',
@@ -263,17 +266,18 @@ const visibleCount = computed(
 function cat(c: CardVM) {
   return findCategory(store.categories, c.detail.category_id)
 }
+const poolCards = computed(() => [
+  ...store.unscheduledTodoCards,
+  ...store.doneCards.filter((c) => c.detail.kind === 'event'),
+])
+const doneIds = computed(() => new Set(store.doneCards.map((c) => c.detail.id)))
+
 /** Completed one-shot items stay in their section, dimmed with a strike-through. */
 function isDoneCard(c: CardVM) {
+  if (doneIds.value.has(c.detail.id)) return true
   return (
     !!c.today?.done && c.detail.tracker_type !== 'counter' && c.detail.tracker_type !== 'metric'
   )
-}
-function parentFor(c: CardVM) {
-  const pid = c.detail.parent_id
-  if (!pid) return null
-  const p = store.items.find((it) => it.id === pid)
-  return p ? { id: p.id, name: p.name } : null
 }
 function projectFor(c: CardVM) {
   const pid = c.detail.project_id
@@ -835,7 +839,6 @@ watch(
               :vm="c"
               :category="cat(c)"
               :project="projectFor(c)"
-              :parent="parentFor(c)"
               variant="todo"
               :busy="store.busy.includes(c.detail.id)"
               :pending="offline.pendingItems.includes(c.detail.id)"
@@ -867,7 +870,6 @@ watch(
                 :vm="c"
                 :category="cat(c)"
                 :project="projectFor(c)"
-                :parent="parentFor(c)"
                 :variant="isDoneCard(c) ? 'done' : s.variant"
                 :busy="store.busy.includes(c.detail.id)"
                 :pending="offline.pendingItems.includes(c.detail.id)"
@@ -880,36 +882,49 @@ watch(
         </section>
       </template>
 
-      <!-- Unscheduled Todos / 待办池 -->
-      <section
-        v-if="store.unscheduledTodoCards.length"
-        class="card card-border bg-base-100 border-base-300 p-4 shadow-xs space-y-3"
+      <!-- Unscheduled Todos / 待办池: collapsible; completed ones stay at the end -->
+      <details
+        v-if="poolCards.length"
+        open
+        class="card card-border bg-base-100 border-base-300 shadow-xs group"
         data-testid="section-unscheduled-todos"
       >
-        <div class="flex items-center justify-between">
+        <summary
+          class="p-4 cursor-pointer flex items-center justify-between gap-2 select-none list-none"
+        >
           <h2 class="text-sm font-bold text-base-content/90 flex items-center gap-2">
             <Icon icon="lucide:inbox" class="size-4 text-primary" />
-            {{ t('today.section.unscheduledTodos') }} ({{ store.unscheduledTodoCards.length }})
+            {{ t('today.section.unscheduledTodos') }} ({{ poolCards.length }})
           </h2>
-          <span class="text-xs text-base-content/60">{{ t('today.unscheduledTodosHint') }}</span>
-        </div>
-        <ul class="space-y-2" data-testid="unscheduled-todos-list">
-          <li v-for="c in store.unscheduledTodoCards" :key="c.detail.id">
-            <ItemCard
-              :vm="c"
-              :category="cat(c)"
-              :project="projectFor(c)"
-              :parent="parentFor(c)"
-              variant="todo"
-              :busy="store.busy.includes(c.detail.id)"
-              :pending="offline.pendingItems.includes(c.detail.id)"
-              @log="log"
-              @remove="store.remove(c.detail.id, $event)"
-              @open-details="detailItemId = c.detail.id"
+          <span class="flex items-center gap-2">
+            <span class="hidden sm:inline text-xs text-base-content/60">{{
+              t('today.unscheduledTodosHint')
+            }}</span>
+            <Icon
+              icon="lucide:chevron-down"
+              class="size-4 opacity-60 transition-transform duration-200 group-open:rotate-180"
+              aria-hidden="true"
             />
-          </li>
-        </ul>
-      </section>
+          </span>
+        </summary>
+        <div class="px-4 pb-4">
+          <ul class="space-y-2" data-testid="unscheduled-todos-list">
+            <li v-for="c in poolCards" :key="c.detail.id">
+              <ItemCard
+                :vm="c"
+                :category="cat(c)"
+                :project="projectFor(c)"
+                :variant="isDoneCard(c) ? 'done' : 'todo'"
+                :busy="store.busy.includes(c.detail.id)"
+                :pending="offline.pendingItems.includes(c.detail.id)"
+                @log="log"
+                @remove="store.remove(c.detail.id, $event)"
+                @open-details="detailItemId = c.detail.id"
+              />
+            </li>
+          </ul>
+        </div>
+      </details>
 
       <!-- Quota: collapsed by default so it does not nag; open it to log or check progress -->
       <details
@@ -943,49 +958,6 @@ watch(
                 :category="cat(c)"
                 :project="projectFor(c)"
                 variant="quota"
-                :busy="store.busy.includes(c.detail.id)"
-                :pending="offline.pendingItems.includes(c.detail.id)"
-                @log="log"
-                @remove="store.remove(c.detail.id, $event)"
-                @open-details="detailItemId = c.detail.id"
-              />
-            </li>
-          </ul>
-        </div>
-      </details>
-
-      <details
-        v-if="store.doneCards.length"
-        class="card card-border bg-base-100/60 border-base-300/80 shadow-xs group"
-        data-testid="section-done"
-      >
-        <summary
-          class="p-3.5 cursor-pointer font-semibold text-base flex items-center justify-between select-none list-none"
-        >
-          <span class="flex items-center gap-2">
-            <Icon icon="lucide:check-circle-2" class="size-4 text-success" aria-hidden="true" />
-            {{
-              t('common.countSuffix', {
-                title: t('today.section.done'),
-                count: store.doneCards.length,
-              })
-            }}
-          </span>
-          <Icon
-            icon="lucide:chevron-down"
-            class="size-4 opacity-60 transition-transform duration-200 group-open:rotate-180"
-            aria-hidden="true"
-          />
-        </summary>
-        <div class="p-3 pt-0">
-          <ul class="space-y-2" data-testid="done-list">
-            <li v-for="c in store.doneCards" :key="c.detail.id">
-              <ItemCard
-                :vm="c"
-                :category="cat(c)"
-                :project="projectFor(c)"
-                :parent="parentFor(c)"
-                variant="done"
                 :busy="store.busy.includes(c.detail.id)"
                 :pending="offline.pendingItems.includes(c.detail.id)"
                 @log="log"

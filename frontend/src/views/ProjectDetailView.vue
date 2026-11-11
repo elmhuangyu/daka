@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import * as api from '../api'
@@ -172,9 +172,24 @@ async function loadProject() {
   }
 }
 
-onMounted(() => {
-  loadProject()
+/** `#task-<id>` scrolls to that task and highlights it. */
+const highlightId = ref<number | null>(null)
+async function focusHash() {
+  const m = /^#task-(\d+)$/.exec(route.hash)
+  if (!m) {
+    highlightId.value = null
+    return
+  }
+  highlightId.value = Number(m[1])
+  await nextTick()
+  document.getElementById(`task-${m[1]}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
+
+onMounted(async () => {
+  await loadProject()
+  await focusHash()
 })
+watch(() => route.hash, focusHash)
 
 watch(
   () => privacy.redact,
@@ -714,7 +729,9 @@ function taskDueDate(task: ItemDetail): string | null {
             <div
               v-if="row.kind === 'task'"
               class="group rounded-xl border border-base-300 bg-base-100 p-3 sm:px-4 flex flex-wrap items-center gap-x-3 gap-y-2 transition-colors hover:bg-base-200/40"
+              :id="`task-${row.task.id}`"
               :style="indentStyle(row.depth)"
+              :class="{ 'ring-2 ring-primary/60': highlightId === row.task.id }"
               :data-testid="`task-item-${row.task.id}`"
             >
               <div class="flex items-center gap-3 min-w-0 flex-1 basis-48">
