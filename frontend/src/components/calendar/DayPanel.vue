@@ -37,11 +37,18 @@ const modalDetail = computed(() =>
 )
 const modalLogs = computed(() => (modalItemId.value ? logsOf(modalItemId.value) : []))
 
+const quickIndex = ref(-1)
+
 watch(date, () => {
   added.value = []
   quickQuery.value = ''
   quickOpen.value = false
+  quickIndex.value = -1
   modalItemId.value = null
+})
+
+watch(quickQuery, () => {
+  quickIndex.value = -1
 })
 
 const listed = computed(() =>
@@ -62,10 +69,77 @@ const matchingAddable = computed(() => {
 })
 const addedDetails = computed(() => added.value.flatMap((id) => store.detailById.get(id) ?? []))
 
+const quickOptions = computed(() => {
+  const opts: Array<{ key: string; label: string; target: { id?: number; name: string } }> = []
+  const q = quickQuery.value.trim()
+  if (q) {
+    opts.push({
+      key: 'create',
+      label: t('today.createFutureEvent', { name: q }),
+      target: { name: quickQuery.value },
+    })
+  }
+  if (!isFuture.value) {
+    for (const u of matchingAddable.value) {
+      opts.push({
+        key: `item-${u.id}`,
+        label: u.name,
+        target: u,
+      })
+    }
+  }
+  return opts
+})
+
 function onBlur() {
   setTimeout(() => {
     quickOpen.value = false
+    quickIndex.value = -1
   }, 200)
+}
+
+function onQuickKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    if (quickOpen.value && quickQuery.value.trim()) {
+      e.preventDefault()
+      quickOpen.value = false
+      quickIndex.value = -1
+      return
+    }
+    e.preventDefault()
+    e.stopPropagation()
+    quickOpen.value = false
+    quickIndex.value = -1
+    const panel = (e.currentTarget as HTMLElement | null)?.closest('[data-testid="day-panel"]')
+    const rows = Array.from(panel?.querySelectorAll<HTMLElement>('[data-panel-item]') ?? [])
+    if (rows.length) {
+      rows[rows.length - 1]!.focus()
+    } else {
+      emit('back')
+    }
+    return
+  }
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && quickQuery.value.trim()) {
+    const len = quickOptions.value.length
+    if (!len) return
+    e.preventDefault()
+    quickOpen.value = true
+    if (e.key === 'ArrowDown') {
+      quickIndex.value = quickIndex.value < len - 1 ? quickIndex.value + 1 : 0
+    } else {
+      quickIndex.value = quickIndex.value > 0 ? quickIndex.value - 1 : len - 1
+    }
+    return
+  }
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    const picked = quickIndex.value >= 0 ? quickOptions.value[quickIndex.value] : undefined
+    if (picked) {
+      void submitQuick(picked.target)
+    } else {
+      void submitQuick({ name: quickQuery.value })
+    }
+  }
 }
 
 async function submitQuick(target: { id?: number; name: string }) {
@@ -142,10 +216,10 @@ const EDITABLE = 'input, textarea, select, [contenteditable]'
  * details dialog keep their native keys.
  */
 function onPanelKey(e: KeyboardEvent) {
-  if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+  if (e.altKey || e.ctrlKey || e.metaKey) return
   const target = e.target as HTMLElement | null
   if (!target || target.closest('[role="dialog"]') || target.closest(EDITABLE)) return
-  if (e.key === 'Escape') {
+  if (e.key === 'Escape' && !e.shiftKey) {
     e.preventDefault()
     e.stopPropagation()
     emit('back')
@@ -153,12 +227,29 @@ function onPanelKey(e: KeyboardEvent) {
   }
   const row = target.closest<HTMLElement>('[data-panel-item]')
   if (!row) return
-  if (e.key === 'x') {
+  if (e.key === 'x' && !e.shiftKey) {
     e.preventDefault()
     const toggle = row.querySelector<HTMLButtonElement>('[data-testid^="makeup-toggle-"]')
     if (toggle && !toggle.disabled) toggle.click()
     return
   }
+  if (e.key === '+' || e.key === '=') {
+    const inc = row.querySelector<HTMLButtonElement>('[data-testid^="makeup-inc-"]:not(:disabled)')
+    if (inc) {
+      e.preventDefault()
+      inc.click()
+    }
+    return
+  }
+  if (e.key === '-' && !e.shiftKey) {
+    const dec = row.querySelector<HTMLButtonElement>('[data-testid^="makeup-dec-"]:not(:disabled)')
+    if (dec) {
+      e.preventDefault()
+      dec.click()
+    }
+    return
+  }
+  if (e.shiftKey) return
   const rows = Array.from(
     (e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[data-panel-item]'),
   )
@@ -434,8 +525,7 @@ function onPanelKey(e: KeyboardEvent) {
                 data-testid="panel-quick-input"
                 @focus="quickOpen = true"
                 @blur="onBlur"
-                @keydown.escape="quickOpen = false"
-                @keydown.enter.prevent="submitQuick({ name: quickQuery })"
+                @keydown="onQuickKeydown"
               />
               <button
                 v-if="quickQuery"
@@ -469,6 +559,7 @@ function onPanelKey(e: KeyboardEvent) {
               v-if="quickQuery.trim()"
               type="button"
               class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-primary/10 text-primary font-medium flex items-center gap-2 cursor-pointer"
+              :class="{ 'bg-primary/10': quickIndex === 0 }"
               @mousedown.prevent="submitQuick({ name: quickQuery })"
             >
               <Icon icon="lucide:sparkles" class="size-4 shrink-0" />
@@ -478,10 +569,13 @@ function onPanelKey(e: KeyboardEvent) {
             <!-- Matching items (for today/past dates) -->
             <template v-if="!isFuture">
               <button
-                v-for="u in matchingAddable"
+                v-for="(u, idx) in matchingAddable"
                 :key="u.id"
                 type="button"
                 class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-base-200 flex items-center justify-between cursor-pointer"
+                :class="{
+                  'bg-base-200': quickIndex === (quickQuery.trim() ? idx + 1 : idx),
+                }"
                 @mousedown.prevent="submitQuick(u)"
               >
                 <span class="font-medium text-base-content/90">{{ u.name }}</span>

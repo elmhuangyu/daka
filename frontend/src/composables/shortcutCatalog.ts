@@ -41,6 +41,18 @@ export const SHORTCUT_CATALOG: CatalogEntry[] = [
     labelKey: 'shortcuts.label.today.toggleCard',
   },
   {
+    id: 'today.incCard',
+    keys: ['+', '='],
+    scope: 'today',
+    labelKey: 'shortcuts.label.today.incCard',
+  },
+  {
+    id: 'today.decCard',
+    keys: ['-'],
+    scope: 'today',
+    labelKey: 'shortcuts.label.today.decCard',
+  },
+  {
     id: 'today.cardUp',
     keys: ['ArrowUp'],
     scope: 'today',
@@ -121,6 +133,20 @@ export const SHORTCUT_CATALOG: CatalogEntry[] = [
     keys: ['x'],
     scope: 'calendar',
     labelKey: 'shortcuts.label.calendar.itemToggle',
+    displayOnly: true,
+  },
+  {
+    id: 'calendar.itemInc',
+    keys: ['+', '='],
+    scope: 'calendar',
+    labelKey: 'shortcuts.label.calendar.itemInc',
+    displayOnly: true,
+  },
+  {
+    id: 'calendar.itemDec',
+    keys: ['-'],
+    scope: 'calendar',
+    labelKey: 'shortcuts.label.calendar.itemDec',
     displayOnly: true,
   },
   {

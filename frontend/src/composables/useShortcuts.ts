@@ -148,6 +148,20 @@ function onKeydown(e: KeyboardEvent) {
   if (recording || e.defaultPrevented || e.isComposing) return
   if (MODIFIER_KEYS.has(e.key.toLowerCase())) return
 
+  if (
+    e.key === 'Escape' &&
+    !e.ctrlKey &&
+    !e.altKey &&
+    !e.metaKey &&
+    !e.shiftKey &&
+    isTypingTarget(e.target) &&
+    !isModalOpen()
+  ) {
+    resetSequence()
+    ;(e.target as HTMLElement).blur()
+    return
+  }
+
   const chord = normalizeEvent(e)
   const blocked = isTypingTarget(e.target) || isModalOpen()
   const blockedPlain = (def: ShortcutDef) => blocked && !def.allowInInput

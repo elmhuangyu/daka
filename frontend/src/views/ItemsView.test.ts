@@ -208,6 +208,35 @@ describe('items panel', () => {
     expect((w.get('[data-testid=search]').element as HTMLInputElement).disabled).toBe(true)
     w.unmount()
   })
+
+  it('moves focus between habit rows with ArrowDown and ArrowUp', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = makeRouter(createMemoryHistory())
+    await router.push('/items')
+    await router.isReady()
+    const w = mount(App, { global: { plugins: [pinia, router] }, attachTo: document.body })
+    await flushPromises()
+    ;(document.activeElement as HTMLElement | null)?.blur?.()
+
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
+    )
+    expect((document.activeElement as HTMLElement | null)?.dataset.testid).toBe('row-2')
+
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
+    )
+    expect((document.activeElement as HTMLElement | null)?.dataset.testid).toBe('row-1')
+
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }),
+    )
+    expect((document.activeElement as HTMLElement | null)?.dataset.testid).toBe('row-2')
+
+    w.unmount()
+    document.body.innerHTML = ''
+  })
 })
 
 describe('item detail', () => {

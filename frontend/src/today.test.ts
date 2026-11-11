@@ -987,7 +987,35 @@ describe('Today keyboard shortcuts', () => {
     focusCard(1)
     press('x', document.activeElement!)
     await flushPromises()
+    expect(writes()).toHaveLength(1)
     expect(lastBody()).toEqual({ item_id: 1, mode: 'set' })
+    w.unmount()
+  })
+
+  it('+ / = and - step a focused counter card', async () => {
+    world.today = [tItem(2, 'Water', { tracker_type: 'counter', current_value: 2 })]
+    world.items = [detail({ id: 2, name: 'Water', tracker_type: 'counter', step: 1 })]
+    world.logs = [
+      {
+        id: 10,
+        item_id: 2,
+        option_id: null,
+        date: '2026-11-07',
+        time: '10:00:00',
+        value: 2,
+        note: '',
+        source: 'web',
+        is_supplement: false,
+      },
+    ]
+    const w = await mountApp()
+    focusCard(2)
+    press('+', document.activeElement!)
+    await flushPromises()
+    expect(lastBody()).toEqual({ item_id: 2, mode: 'delta', value: 1 })
+    press('-', document.activeElement!)
+    await flushPromises()
+    expect(lastBody()).toEqual({ item_id: 2, mode: 'delta', value: -1 })
     w.unmount()
   })
 

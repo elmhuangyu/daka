@@ -73,6 +73,7 @@ function setValue(r: ValueRow) {
           :disabled="busy || !checked"
           :aria-label="t('calendar.makeup.removeLast')"
           :title="t('calendar.makeup.removeLast')"
+          :data-testid="`makeup-dec-${d.id}-occ`"
           @click="emit('remove', lastLogId)"
         >
           −1
@@ -83,6 +84,7 @@ function setValue(r: ValueRow) {
           :disabled="busy"
           :aria-label="t('calendar.makeup.addOccurrence')"
           :title="t('calendar.makeup.addOccurrence')"
+          :data-testid="`makeup-inc-${d.id}-occ`"
           @click="occurrence"
         >
           +1

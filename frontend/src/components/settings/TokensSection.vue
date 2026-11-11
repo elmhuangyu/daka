@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Icon } from '@iconify/vue'
 import {
   createToken,
@@ -73,6 +73,7 @@ async function create() {
     const tk = await createToken(payload)
     created.value = { name: tk.name, feed_path: tk.feed_path ?? '' }
     name.value = ''
+    void nextTick(() => document.querySelector<HTMLElement>('[data-testid="tok-copy"]')?.focus())
     await load()
   } catch (e) {
     error.value = describeError(e)
@@ -275,7 +276,9 @@ const usedText = (tk: TokenDto) =>
       class="modal modal-open"
       role="dialog"
       aria-modal="true"
+      tabindex="-1"
       data-testid="tok-dialog"
+      @keydown.esc.prevent="closeDialog"
     >
       <div class="modal-box">
         <h3 class="text-lg font-bold">

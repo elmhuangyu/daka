@@ -10,12 +10,29 @@ const model = defineModel<string>({ default: '' })
 const props = defineProps<{ testid?: string }>()
 
 const open = ref(false)
+const root = ref<HTMLElement | null>(null)
+const toggleBtn = ref<HTMLButtonElement | null>(null)
 const host = ref<HTMLElement | null>(null)
 const loadError = ref(false)
 const id = computed(() => props.testid ?? 'emoji-picker')
 
 let picker: HTMLElement | null = null
 let onClick: ((e: Event) => void) | null = null
+
+function onDocMouseDown(e: MouseEvent) {
+  if (!open.value || !root.value) return
+  if (!root.value.contains(e.target as Node)) {
+    open.value = false
+  }
+}
+
+function onDocKeydown(e: KeyboardEvent) {
+  if (!open.value || e.key !== 'Escape') return
+  e.preventDefault()
+  e.stopPropagation()
+  open.value = false
+  void nextTick(() => toggleBtn.value?.focus())
+}
 
 /**
  * The full Unicode set (search, skin tones, recents) comes from emoji-picker-element. Both the
@@ -56,17 +73,27 @@ async function ensurePicker() {
 async function toggle() {
   open.value = !open.value
   if (open.value) {
+    document.addEventListener('mousedown', onDocMouseDown)
+    document.addEventListener('keydown', onDocKeydown, true)
     await nextTick()
     await ensurePicker()
+  } else {
+    document.removeEventListener('mousedown', onDocMouseDown)
+    document.removeEventListener('keydown', onDocKeydown, true)
   }
 }
 
 function pick(e: string) {
   model.value = e
   open.value = false
+  document.removeEventListener('mousedown', onDocMouseDown)
+  document.removeEventListener('keydown', onDocKeydown, true)
+  void nextTick(() => toggleBtn.value?.focus())
 }
 
 onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', onDocMouseDown)
+  document.removeEventListener('keydown', onDocKeydown, true)
   if (picker && onClick) picker.removeEventListener('emoji-click', onClick)
   picker = null
 })
@@ -90,9 +117,10 @@ function onInput(e: Event) {
 </script>
 
 <template>
-  <div class="relative inline-block" :data-testid="id">
+  <div ref="root" class="relative inline-block" :data-testid="id">
     <div class="flex items-center gap-2">
       <button
+        ref="toggleBtn"
         type="button"
         class="btn btn-sm btn-outline min-w-12 text-lg leading-none"
         :aria-expanded="open"

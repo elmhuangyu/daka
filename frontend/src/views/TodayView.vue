@@ -41,6 +41,7 @@ const quickLogQuery = ref('')
 const quickTodoDate = ref('')
 const quickTodoProjectId = ref<number | null>(null)
 const quickLogOpen = ref(false)
+const quickLogIndex = ref(-1)
 const quickLogBusy = ref(false)
 const dateDropdownOpen = ref(false)
 const dateChipRef = ref<HTMLElement | null>(null)
@@ -145,10 +146,77 @@ function todayCount(it: { id: number; tracker_type?: string }): number | null {
   return itemLogs.length
 }
 
+watch(quickLogQuery, () => {
+  quickLogIndex.value = -1
+})
+
+const quickLogOptions = computed(() => {
+  const opts: Array<{ key: string; action: () => void }> = []
+  const q = quickLogQuery.value.trim()
+  if (q) {
+    opts.push({
+      key: 'create-todo',
+      action: () =>
+        void submitQuickTodo({
+          name: quickLogQuery.value,
+          dueDate: quickTodoDate.value || (store.isFuture ? (store.view?.date ?? null) : null),
+        }),
+    })
+    if (
+      store.isFuture ||
+      !matchingUnscheduled.value.some((it) => it.name.toLowerCase() === q.toLowerCase())
+    ) {
+      opts.push({
+        key: 'create-log',
+        action: () => void submitQuickLog({ name: quickLogQuery.value }),
+      })
+    }
+  }
+  if (!store.isFuture) {
+    for (const u of matchingUnscheduled.value) {
+      opts.push({
+        key: `item-${u.id}`,
+        action: () => void submitQuickLog(u),
+      })
+    }
+  }
+  return opts
+})
+
 function onBlurQuickLog() {
   setTimeout(() => {
     quickLogOpen.value = false
+    quickLogIndex.value = -1
   }, 200)
+}
+
+function onQuickLogKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    quickLogOpen.value = false
+    quickLogIndex.value = -1
+    return
+  }
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && quickLogQuery.value.trim()) {
+    const len = quickLogOptions.value.length
+    if (!len) return
+    e.preventDefault()
+    quickLogOpen.value = true
+    if (e.key === 'ArrowDown') {
+      quickLogIndex.value = quickLogIndex.value < len - 1 ? quickLogIndex.value + 1 : 0
+    } else {
+      quickLogIndex.value = quickLogIndex.value > 0 ? quickLogIndex.value - 1 : len - 1
+    }
+    return
+  }
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    const picked = quickLogIndex.value >= 0 ? quickLogOptions.value[quickLogIndex.value] : undefined
+    if (picked) {
+      picked.action()
+    } else {
+      onEnterQuickAdd()
+    }
+  }
 }
 
 function onEnterQuickAdd() {
@@ -356,6 +424,19 @@ function toggleFocusedCard() {
   card?.querySelector<HTMLButtonElement>('[data-testid="toggle"]:not(:disabled)')?.click()
 }
 
+function stepFocusedCard(dir: 1 | -1): boolean {
+  const card = document.activeElement?.closest('[data-card]')
+  if (!card) return false
+  const sel =
+    dir === 1
+      ? '[data-testid="inc"]:not(:disabled), [data-testid="occurrence"]:not(:disabled)'
+      : '[data-testid="dec"]:not(:disabled), [data-testid="undo-last"]:not(:disabled)'
+  const btn = card.querySelector<HTMLButtonElement>(sel)
+  if (!btn) return false
+  btn.click()
+  return true
+}
+
 const rootEl = ref<HTMLElement | null>(null)
 
 /**
@@ -387,6 +468,8 @@ useShortcut([
   catalogDef('today.nextDay', () => store.goToNextDay()),
   catalogDef('today.goToday', () => store.goToToday()),
   catalogDef('today.toggleCard', toggleFocusedCard),
+  catalogDef('today.incCard', () => stepFocusedCard(1)),
+  catalogDef('today.decCard', () => stepFocusedCard(-1)),
 ])
 
 onMounted(() => {
@@ -544,8 +627,7 @@ watch(
                 data-shortcut-search
                 @focus="quickLogOpen = true"
                 @blur="onBlurQuickLog"
-                @keydown.escape="quickLogOpen = false"
-                @keydown.enter.prevent="onEnterQuickAdd"
+                @keydown="onQuickLogKeydown"
               />
               <button
                 v-if="quickLogQuery"
@@ -784,6 +866,7 @@ watch(
               v-if="quickLogQuery.trim()"
               type="button"
               class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-primary/10 text-primary font-medium flex items-center gap-2 cursor-pointer"
+              :class="{ 'bg-primary/10': quickLogIndex === 0 }"
               data-testid="quick-create-todo"
               @mousedown.prevent="
                 submitQuickTodo({
@@ -807,6 +890,7 @@ watch(
               "
               type="button"
               class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-base-200 text-base-content/80 font-medium flex items-center gap-2 cursor-pointer"
+              :class="{ 'bg-base-200': quickLogIndex === 1 }"
               @mousedown.prevent="submitQuickLog({ name: quickLogQuery })"
             >
               <Icon icon="lucide:sparkles" class="size-4 shrink-0" />
@@ -824,6 +908,9 @@ watch(
                 :key="u.id"
                 type="button"
                 class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-base-200 flex items-center justify-between cursor-pointer"
+                :class="{
+                  'bg-base-200': quickLogOptions[quickLogIndex]?.key === `item-${u.id}`,
+                }"
                 @mousedown.prevent="submitQuickLog(u)"
               >
                 <div class="flex items-center gap-2 min-w-0">

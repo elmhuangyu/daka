@@ -129,6 +129,15 @@ describe('dispatch', () => {
     expect(isTypingTarget(cb)).toBe(false)
   })
 
+  it('blurs a typing target on Escape when no modal is open', () => {
+    const input = document.createElement('input')
+    document.body.append(input)
+    input.focus()
+    expect(document.activeElement).toBe(input)
+    press('Escape', {}, input)
+    expect(document.activeElement).toBe(document.body)
+  })
+
   it('allowInInput works in inputs and modals', () => {
     const handler = vi.fn<() => void>()
     reg({ id: 'a', keys: ['x'], handler, allowInInput: true })

@@ -1,5 +1,5 @@
 import { nextTick } from 'vue'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
@@ -125,6 +125,12 @@ beforeEach(() => {
   })
 })
 
+const mountedViews: Array<{ unmount: () => void }> = []
+afterEach(() => {
+  for (const w of mountedViews.splice(0)) w.unmount()
+  document.body.innerHTML = ''
+})
+
 async function mountView() {
   const pinia = createPinia()
   setActivePinia(pinia)
@@ -133,7 +139,9 @@ async function mountView() {
   await router.isReady()
   const w = mount(ProjectsView, {
     global: { plugins: [pinia, router] },
+    attachTo: document.body,
   })
+  mountedViews.push(w)
   await flushPromises()
   return { w, router }
 }
@@ -265,6 +273,7 @@ describe('ProjectsView', () => {
     const w = mount(ProjectsView, {
       global: { plugins: [pinia, router] },
     })
+    mountedViews.push(w)
 
     // While categories fetch is in flight, toggle privacy mode on
     const privacy = usePrivacyStore()
@@ -321,5 +330,48 @@ describe('ProjectsView', () => {
 
     expect(w.text()).not.toContain('Secret Strategy')
     expect(w.text()).toContain('Private category')
+  })
+
+  it('supports keyboard navigation across project cards and closes modal on Escape', async () => {
+    const { installShortcutListener } = await import('../composables/useShortcuts')
+    const off = installShortcutListener()
+    try {
+      projectList.push(sampleProject({ id: 5, name: 'Second Active', status: 'active' }))
+      const { w, router } = await mountView()
+      const pushSpy = vi.spyOn(router, 'push')
+
+      document.body.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
+      )
+      expect((document.activeElement as HTMLElement | null)?.dataset.testid).toBe('project-card-1')
+
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
+      )
+      expect((document.activeElement as HTMLElement | null)?.dataset.testid).toBe('project-card-5')
+
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }),
+      )
+      expect((document.activeElement as HTMLElement | null)?.dataset.testid).toBe('project-card-1')
+
+      // Open New Project modal and close via Escape
+      await w.get('[data-testid="btn-new-project"]').trigger('click')
+      await nextTick()
+      expect(w.find('[data-testid="modal-new-project"]').exists()).toBe(true)
+      await w.get('[data-testid="modal-new-project"]').trigger('keydown.esc')
+      expect(w.find('[data-testid="modal-new-project"]').exists()).toBe(false)
+
+      // Enter on focused project card navigates to project detail
+      const card1 = w.get('[data-testid="project-card-1"]').element as HTMLElement
+      card1.focus()
+      card1.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+      )
+      await flushPromises()
+      expect(pushSpy).toHaveBeenCalledWith('/projects/1')
+    } finally {
+      off()
+    }
   })
 })

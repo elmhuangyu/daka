@@ -607,14 +607,12 @@ describe('CalendarView shortcuts', () => {
     w.unmount()
   })
 
-  it('Enter on the focused cell selects it once', async () => {
+  it('Enter on the focused cell selects it and enters the panel immediately', async () => {
     const { w } = await mountView()
     const cell = document.activeElement as HTMLButtonElement
-    cell.click() // native Enter on a button fires a single click
-    await flushPromises()
-    expect(useCalendarStore().selected).toBe('2026-11-08')
     await press('Enter', cell)
     expect(useCalendarStore().selected).toBe('2026-11-08')
+    expect((document.activeElement as HTMLElement | null)?.dataset.testid).toBe('panel-item-2')
     w.unmount()
   })
 
@@ -707,30 +705,31 @@ describe('CalendarView shortcuts', () => {
       return { ...v, cell, store: useCalendarStore() }
     }
 
-    it('Down from the cell focuses the first row, Up the last', async () => {
-      const { w, cell, store } = await openDay()
+    it('Enter on the selected cell focuses the first row; arrows navigate the grid', async () => {
+      const { w, store } = await openDay()
       expect(rowIds(w)).toEqual(['panel-item-1', 'panel-item-3'])
       await press('ArrowDown')
-      expect(activeId()).toBe('panel-item-1')
-      cell().focus()
+      expect(focusedDate()).toBe('2026-11-13')
       await press('ArrowUp')
-      expect(activeId()).toBe('panel-item-3')
+      expect(focusedDate()).toBe('2026-11-06')
+      await press('Enter')
+      expect(activeId()).toBe('panel-item-1')
       expect(store.selected).toBe('2026-11-06')
       for (const r of w.findAll('[data-panel-item]')) expect(r.attributes('tabindex')).toBe('-1')
       w.unmount()
     })
 
-    it('also enters the list from body focus', async () => {
+    it('navigates the grid from body focus even with a day selected', async () => {
       const { w } = await openDay()
       ;(document.activeElement as HTMLElement).blur()
       await press('ArrowDown')
-      expect(activeId()).toBe('panel-item-1')
+      expect(focusedDate()).toBe('2026-11-13')
       w.unmount()
     })
 
     it('moves within the list, clamps, and leaves the day alone', async () => {
       const { w, store } = await openDay()
-      await press('ArrowDown')
+      await press('Enter')
       await press('ArrowDown')
       expect(activeId()).toBe('panel-item-3')
       await press('ArrowDown')
@@ -750,7 +749,7 @@ describe('CalendarView shortcuts', () => {
 
     it('Esc returns to the cell keeping the selection, a second Esc closes, then weeks navigate', async () => {
       const { w, store } = await openDay()
-      await press('ArrowDown')
+      await press('Enter')
       await press('Escape')
       expect(focusedDate()).toBe('2026-11-06')
       expect(store.selected).toBe('2026-11-06')
@@ -772,13 +771,15 @@ describe('CalendarView shortcuts', () => {
       w.unmount()
     })
 
-    it('keeps week navigation for a selected day without rows', async () => {
+    it('keeps week navigation for a selected day without rows and Enter focuses quick-add input', async () => {
       const { w } = await openDay('2026-11-10', [])
       expect(rowIds(w)).toEqual([])
       await press('ArrowDown')
       expect(focusedDate()).toBe('2026-11-17')
       await press('ArrowUp')
       expect(focusedDate()).toBe('2026-11-10')
+      await press('Enter')
+      expect(activeId()).toBe('panel-quick-input')
       w.unmount()
     })
 
@@ -792,7 +793,7 @@ describe('CalendarView shortcuts', () => {
 
     it('x toggles via the row check button', async () => {
       const { w } = await openDay()
-      await press('ArrowDown')
+      await press('Enter')
       await press('x')
       const post = calls.filter((c) => c.method === 'POST' && c.url.startsWith('/api/checkins'))
       expect(post).toHaveLength(1)
@@ -800,9 +801,51 @@ describe('CalendarView shortcuts', () => {
       w.unmount()
     })
 
+    it('+ / = and - step a counter row in the panel', async () => {
+      extraDetails = [
+        {
+          id: 4,
+          name: 'Drink water',
+          tracker_type: 'counter',
+          kind: 'habit',
+          polarity: 'positive',
+          category_id: null,
+          effective_sensitive: false,
+          step: 1,
+          options: [],
+          current_rule: { schedule_type: 'fixed_rrule', target_value: 8, option_targets: {} },
+        },
+      ]
+      checkinLogs = [
+        {
+          id: 99,
+          item_id: 4,
+          option_id: null,
+          date: '2026-11-06',
+          time: '10:00:00',
+          value: 2,
+          note: '',
+          source: 'web',
+          is_supplement: false,
+        },
+      ]
+      const { w } = await openDay('2026-11-06', [
+        item(4, 'Drink water', { tracker_type: 'counter' }),
+      ])
+      await press('Enter')
+      expect(activeId()).toBe('panel-item-4')
+      await press('+')
+      await press('-')
+      const posts = calls.filter((c) => c.method === 'POST' && c.url.startsWith('/api/checkins'))
+      expect(posts).toHaveLength(2)
+      expect(posts[0]!.body).toMatchObject({ item_id: 4, mode: 'delta', value: 1 })
+      expect(posts[1]!.body).toMatchObject({ item_id: 4, mode: 'delta', value: -1 })
+      w.unmount()
+    })
+
     it('Enter on a row opens details once; Enter on child buttons does not', async () => {
       const { w } = await openDay()
-      await press('ArrowDown')
+      await press('Enter')
       await press('Enter')
       expect(document.querySelectorAll('[role="dialog"]').length).toBeGreaterThan(0)
       w.unmount()
@@ -814,7 +857,7 @@ describe('CalendarView shortcuts', () => {
       again.w.unmount()
     })
 
-    it('leaves typing in the quick-add input untouched', async () => {
+    it('leaves typing in the quick-add input untouched and exits on Escape', async () => {
       const { w, store } = await openDay()
       const input = w.get('[data-testid="panel-quick-input"]').element as HTMLInputElement
       input.focus()
@@ -824,12 +867,13 @@ describe('CalendarView shortcuts', () => {
         cancelable: true,
       })
       input.dispatchEvent(down)
+      expect(down.defaultPrevented).toBe(false)
+      expect(document.activeElement).toBe(input)
       const esc = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
       input.dispatchEvent(esc)
       await flushPromises()
-      expect(down.defaultPrevented).toBe(false)
-      expect(esc.defaultPrevented).toBe(false)
-      expect(document.activeElement).toBe(input)
+      expect(esc.defaultPrevented).toBe(true)
+      expect(activeId()).toBe('panel-item-3')
       expect(store.selected).toBe('2026-11-06')
       w.unmount()
     })

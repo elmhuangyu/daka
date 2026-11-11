@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import EmojiPicker from '../components/EmojiPicker.vue'
 import * as api from '../api'
 import type { Category, CreateProjectRequest, Project, ProjectStatus } from '../api'
 import DateInput from '../components/DateInput.vue'
+import { catalogDef } from '../composables/shortcutCatalog'
+import { useShortcut } from '../composables/useShortcuts'
 import { useI18n } from '../i18n'
 import { formatCustomDate } from '../i18n/format'
 import { usePrivacyStore } from '../stores/privacy'
@@ -139,11 +141,17 @@ function openNewModal() {
   form.is_sensitive = false
   modalError.value = ''
   showNewModal.value = true
+  void nextTick(() =>
+    document.querySelector<HTMLInputElement>('[data-testid="input-project-name"]')?.focus(),
+  )
 }
 
 function closeNewModal() {
   showNewModal.value = false
   modalError.value = ''
+  void nextTick(() =>
+    document.querySelector<HTMLButtonElement>('[data-testid="btn-new-project"]')?.focus(),
+  )
 }
 
 async function handleCreateProject() {
@@ -194,6 +202,28 @@ function getProjectStats(projectId: number) {
   const percent = s.total > 0 ? Math.round((s.completed / s.total) * 100) : 0
   return { ...s, percent }
 }
+
+const gridEl = ref<HTMLElement | null>(null)
+
+function moveProjectFocus(dir: 1 | -1): boolean {
+  const cards = [...(gridEl.value?.querySelectorAll<HTMLElement>('[data-project-card]') ?? [])]
+  if (!cards.length) return false
+  const cur = document.activeElement?.closest<HTMLElement>('[data-project-card]') ?? null
+  const i = cur ? cards.indexOf(cur) : -1
+  const next =
+    i < 0 ? (dir === 1 ? 0 : cards.length - 1) : Math.min(cards.length - 1, Math.max(0, i + dir))
+  const el = cards[next]!
+  if (el !== document.activeElement) {
+    el.focus()
+    el.scrollIntoView?.({ block: 'nearest' })
+  }
+  return true
+}
+
+useShortcut([
+  catalogDef('project.rowUp', () => moveProjectFocus(-1)),
+  catalogDef('project.rowDown', () => moveProjectFocus(1)),
+])
 </script>
 
 <template>
@@ -293,14 +323,23 @@ function getProjectStats(projectId: number) {
     </div>
 
     <!-- Projects Grid -->
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4" data-testid="projects-grid">
+    <div
+      v-else
+      ref="gridEl"
+      class="grid grid-cols-1 md:grid-cols-2 gap-4"
+      data-testid="projects-grid"
+    >
       <div
         v-for="p in currentProjects"
         :key="p.id"
-        class="card bg-base-100 border border-base-300 hover:border-primary/40 hover:shadow-md transition-all cursor-pointer overflow-hidden flex flex-col justify-between"
+        tabindex="0"
+        data-project-card
+        class="card bg-base-100 border border-base-300 hover:border-primary/40 hover:shadow-md transition-all cursor-pointer overflow-hidden flex flex-col justify-between focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         :style="p.color ? { borderLeftColor: p.color, borderLeftWidth: '4px' } : {}"
         :data-testid="`project-card-${p.id}`"
         @click="navigateToProject(p.id)"
+        @keydown.enter.self.prevent="navigateToProject(p.id)"
+        @keydown.space.self.prevent="navigateToProject(p.id)"
       >
         <div class="card-body p-5 space-y-3">
           <!-- Card Title & Status Badge -->
@@ -456,7 +495,14 @@ function getProjectStats(projectId: number) {
     </div>
 
     <!-- New Project Modal -->
-    <div v-if="showNewModal" class="modal modal-open" role="dialog" data-testid="modal-new-project">
+    <div
+      v-if="showNewModal"
+      class="modal modal-open"
+      role="dialog"
+      aria-modal="true"
+      data-testid="modal-new-project"
+      @keydown.esc.prevent="closeNewModal"
+    >
       <div class="modal-box max-w-lg p-6 space-y-4">
         <div class="flex items-center justify-between pb-2 border-b border-base-200">
           <h3 class="text-lg font-bold flex items-center gap-2">

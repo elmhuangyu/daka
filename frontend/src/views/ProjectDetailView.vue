@@ -257,11 +257,17 @@ function openEditModal() {
   editForm.is_sensitive = project.value.is_sensitive
   editError.value = ''
   showEditModal.value = true
+  void nextTick(() =>
+    document.querySelector<HTMLInputElement>('[data-testid="input-edit-project-name"]')?.focus(),
+  )
 }
 
 function closeEditModal() {
   showEditModal.value = false
   editError.value = ''
+  void nextTick(() =>
+    document.querySelector<HTMLButtonElement>('[data-testid="btn-edit-project"]')?.focus(),
+  )
 }
 
 async function handleSaveEdit() {
@@ -302,11 +308,21 @@ function openDeleteModal() {
   deleteMode.value = 'unlink'
   deleteError.value = ''
   showDeleteModal.value = true
+  void nextTick(() =>
+    document
+      .querySelector<HTMLElement>(
+        '[data-testid="modal-delete-project"] [data-testid="radio-delete-unlink"], [data-testid="modal-delete-project"] .modal-action button',
+      )
+      ?.focus(),
+  )
 }
 
 function closeDeleteModal() {
   showDeleteModal.value = false
   deleteError.value = ''
+  void nextTick(() =>
+    document.querySelector<HTMLButtonElement>('[data-testid="btn-delete-project"]')?.focus(),
+  )
 }
 
 async function handleConfirmDelete() {
@@ -1196,7 +1212,9 @@ function taskDueDate(task: ItemDetail): string | null {
         v-if="showEditModal"
         class="modal modal-open"
         role="dialog"
+        aria-modal="true"
         data-testid="modal-edit-project"
+        @keydown.esc.prevent="closeEditModal"
       >
         <div class="modal-box max-w-lg p-6 space-y-4">
           <div class="flex items-center justify-between pb-2 border-b border-base-200">
@@ -1351,7 +1369,9 @@ function taskDueDate(task: ItemDetail): string | null {
         v-if="showDeleteModal"
         class="modal modal-open"
         role="dialog"
+        aria-modal="true"
         data-testid="modal-delete-project"
+        @keydown.esc.prevent="closeDeleteModal"
       >
         <div class="modal-box max-w-md p-6 space-y-4">
           <div class="flex items-center justify-between pb-2 border-b border-base-200">

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { usePrivacyStore } from '../stores/privacy'
 import { useItemsStore } from '../stores/items'
 import { badgesOf, groupItems } from '../items/logic'
+import { isModalOpen, isTypingTarget } from '../composables/useShortcuts'
 import { useI18n } from '../i18n'
 
 const { t } = useI18n()
@@ -12,6 +13,27 @@ const { t } = useI18n()
 const privacy = usePrivacyStore()
 const store = useItemsStore()
 const route = useRoute()
+const panelEl = ref<HTMLElement | null>(null)
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.defaultPrevented || e.isComposing || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey)
+    return
+  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+  if (isTypingTarget(e.target) || isModalOpen()) return
+  const rows = [...(panelEl.value?.querySelectorAll<HTMLElement>('[data-testid^="row-"]') ?? [])]
+  if (!rows.length) return
+  e.preventDefault()
+  const dir = e.key === 'ArrowDown' ? 1 : -1
+  const cur = document.activeElement?.closest<HTMLElement>('[data-testid^="row-"]') ?? null
+  const i = cur ? rows.indexOf(cur) : -1
+  const next =
+    i < 0 ? (dir === 1 ? 0 : rows.length - 1) : Math.min(rows.length - 1, Math.max(0, i + dir))
+  const el = rows[next]!
+  if (el !== document.activeElement) {
+    el.focus()
+    el.scrollIntoView?.({ block: 'nearest' })
+  }
+}
 
 const groups = computed(() => groupItems(store.items, store.categories, store.filter))
 const selectedId = computed(() => (route.params.id ? Number(route.params.id) : 0))
@@ -22,9 +44,15 @@ function onSearch() {
   clearTimeout(timer)
   timer = setTimeout(() => store.refresh(), 250)
 }
-onBeforeUnmount(() => clearTimeout(timer))
+onBeforeUnmount(() => {
+  clearTimeout(timer)
+  window.removeEventListener('keydown', onKeydown)
+})
 
-onMounted(store.refresh)
+onMounted(() => {
+  void store.refresh()
+  window.addEventListener('keydown', onKeydown)
+})
 // The store drops plaintext synchronously when the guard turns on; refetch masked data.
 watch(
   () => privacy.redact,
@@ -39,6 +67,7 @@ watch(
 <template>
   <div class="mx-auto flex max-w-6xl flex-col gap-6 p-4 lg:flex-row">
     <aside
+      ref="panelEl"
       class="w-full shrink-0 lg:w-80"
       :class="{ 'hidden lg:block': selectedId }"
       data-testid="panel"

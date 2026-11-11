@@ -96,13 +96,24 @@ function panelRows(): HTMLElement[] {
 const inPanel = () =>
   !!(panelRef.value?.$el as Element | undefined)?.contains?.(document.activeElement)
 
-/** With a day selected, Up/Down enter its item list (Down: first row, Up: last). */
-function enterPanel(last: boolean): boolean {
-  if (!store.selected) return false
+/** Select the focused day if needed and focus its DayPanel item list (or quick-add input). */
+async function enterPanel(last = false): Promise<boolean> {
+  if (store.selected !== focusDate.value) {
+    await store.select(focusDate.value)
+  }
+  await nextTick()
   const rows = panelRows()
   const target = last ? rows[rows.length - 1] : rows[0]
-  if (!target) return false
-  target.focus()
+  if (target) {
+    target.focus()
+    return true
+  }
+  const root = panelRef.value?.$el as Element | undefined
+  const fallback =
+    root?.querySelector?.<HTMLElement>('[data-testid="panel-quick-input"]') ??
+    root?.querySelector?.<HTMLElement>('[data-testid="panel-close"]')
+  if (!fallback) return false
+  fallback.focus()
   return true
 }
 
@@ -117,11 +128,12 @@ function leavePanel() {
 function onGridKey(e: KeyboardEvent) {
   if (e.altKey || e.ctrlKey || e.metaKey) return
   const step: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }
-  if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && enterPanel(e.key === 'ArrowUp')) {
-    e.preventDefault()
-  } else if (e.key in step) {
+  if (e.key in step) {
     e.preventDefault()
     void moveFocus(addDays(focusDate.value, step[e.key]!))
+  } else if (e.key === 'Enter') {
+    e.preventDefault()
+    void enterPanel(false)
   } else if (e.key === 'PageUp' || e.key === 'PageDown') {
     e.preventDefault()
     void navigate(e.key === 'PageUp' ? -1 : 1, true)
@@ -151,9 +163,6 @@ useShortcut([
     catalogDef(
       `calendar.move${name}`,
       fromOutside(() => {
-        if (name === 'Up' || name === 'Down') {
-          if (enterPanel(name === 'Up')) return
-        }
         void moveFocus(addDays(focusDate.value, step))
       }),
     ),

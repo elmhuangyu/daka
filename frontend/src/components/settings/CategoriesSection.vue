@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import { Icon } from '@iconify/vue'
 import {
   createCategory,
@@ -74,6 +74,7 @@ function toggleSensitive(c: CategoryDto) {
   if (c.is_sensitive) {
     expose.value = false
     unmarking.value = c
+    void nextTick(() => document.querySelector<HTMLElement>('[data-testid="cat-freeze"]')?.focus())
   } else {
     void run(async () => void (await updateCategory(c.id, { is_sensitive: true })))
   }
@@ -97,6 +98,9 @@ function startDelete(c: CategoryDto) {
   expose.value = false
   target.value = 'uncategorize'
   deleting.value = c
+  void nextTick(() =>
+    document.querySelector<HTMLElement>('[data-testid="cat-delete-target"]')?.focus(),
+  )
 }
 
 const confirmDelete = () => {
@@ -257,7 +261,9 @@ const confirmDelete = () => {
       class="modal modal-open"
       role="dialog"
       aria-modal="true"
+      tabindex="-1"
       data-testid="cat-unmark-dialog"
+      @keydown.esc.prevent="unmarking = null"
     >
       <div class="modal-box">
         <h3 class="text-lg font-bold">{{ t('settings.categories.unmarkTitle') }}</h3>
@@ -306,7 +312,9 @@ const confirmDelete = () => {
       class="modal modal-open"
       role="dialog"
       aria-modal="true"
+      tabindex="-1"
       data-testid="cat-delete-dialog"
+      @keydown.esc.prevent="deleting = null"
     >
       <div class="modal-box">
         <h3 class="text-lg font-bold">

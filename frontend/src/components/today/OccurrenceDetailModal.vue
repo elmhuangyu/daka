@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import type { CheckinInput, CheckinLog, ItemDetail } from '../../api'
@@ -65,6 +65,29 @@ function syncState() {
     logNotes[l.id] = l.note ?? ''
   }
 }
+
+const modalEl = ref<HTMLElement | null>(null)
+let prevFocus: HTMLElement | null = null
+
+watch(
+  () => props.open,
+  async (isOpen) => {
+    if (isOpen) {
+      prevFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      await nextTick()
+      const target =
+        modalEl.value?.querySelector<HTMLElement>(
+          '[data-testid="occurrence-note-input"], [data-testid="modal-close"]',
+        ) ?? modalEl.value
+      target?.focus()
+    } else if (prevFocus) {
+      const toRestore = prevFocus
+      prevFocus = null
+      await nextTick()
+      if (document.contains(toRestore)) toRestore.focus()
+    }
+  },
+)
 
 watch(
   () => [props.open, props.detail?.id, props.date, props.logs],
@@ -177,11 +200,13 @@ function logUnit(l: CheckinLog): string {
 <template>
   <div
     v-if="open && detail"
+    ref="modalEl"
     class="modal modal-open"
     role="dialog"
     aria-modal="true"
+    tabindex="-1"
     data-testid="occurrence-modal"
-    @keydown.escape="emit('close')"
+    @keydown.escape.stop="emit('close')"
   >
     <div class="modal-box relative max-w-lg space-y-4">
       <!-- Header -->
@@ -458,7 +483,12 @@ function logUnit(l: CheckinLog): string {
       <p v-if="localError" class="error text-sm text-error" role="alert">{{ localError }}</p>
     </div>
     <div class="modal-backdrop" @click="emit('close')">
-      <button type="button" class="cursor-default" :aria-label="t('common.close')"></button>
+      <button
+        type="button"
+        tabindex="-1"
+        class="cursor-default"
+        :aria-label="t('common.close')"
+      ></button>
     </div>
   </div>
 </template>
