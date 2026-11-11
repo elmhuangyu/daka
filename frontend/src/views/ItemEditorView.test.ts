@@ -206,9 +206,8 @@ describe('ItemEditorView', () => {
 
   it('redirects to / when attempting to edit an event', async () => {
     const { router } = await mountAt('/items/5/edit')
-    await flushPromises()
-    await flushPromises()
-    expect(router.currentRoute.value.path).toBe('/')
+    // The target route is lazy-loaded, so wait for the navigation instead of a fixed number of ticks.
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/'))
   })
 
   it('renders project selector, updates form when project is selected, and includes project_id on submit', async () => {
