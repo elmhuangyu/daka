@@ -151,6 +151,7 @@ const DISPLAY_NAMES: Record<string, string> = {
   home: 'Home',
   end: 'End',
   enter: 'Enter',
+  tab: 'Tab',
   escape: 'Esc',
 }
 

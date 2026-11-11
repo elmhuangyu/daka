@@ -49,6 +49,9 @@ const zhCN: Record<MessageKey, string> = {
   'errors.invalidRequest': '请求无效',
   'errors.invalidId': '请求引用的对象不存在',
   'errors.invalidCategory': '该分类已不存在',
+  'errors.itemTooDeep': '子任务最多嵌套 5 层',
+  'errors.invalidMove': '无法将该任务移动到此处',
+  'errors.treeConflict': '任务列表已发生变化，请重试',
   'errors.nameRequired': '请填写名称',
   'errors.nameTooLong': '名称过长',
   'errors.noteTooLong': '备注过长',
@@ -895,6 +898,8 @@ const zhCN: Record<MessageKey, string> = {
   'shortcuts.label.project.toggleRow': '打卡或取消打卡当前任务',
   'shortcuts.label.project.deleteRow': '删除当前任务',
   'shortcuts.label.project.newSibling': '在当前任务下方添加任务',
+  'shortcuts.label.project.indent': '将当前任务设为上方任务的子任务',
+  'shortcuts.label.project.outdent': '将当前子任务上移一级',
   'shortcuts.label.calendar.next': '下一个周期',
 }
 

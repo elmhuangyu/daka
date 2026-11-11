@@ -6,6 +6,7 @@ import {
   getMe,
   getProject,
   listProjects,
+  moveItem,
   patchCheckin,
   resetCsrf,
   setCheckin,
@@ -36,6 +37,19 @@ afterEach(() => {
 
 const writes = () => fetchMock.mock.calls.filter((c) => c[0] !== '/api/auth/me')
 const meCalls = () => fetchMock.mock.calls.filter((c) => c[0] === '/api/auth/me')
+
+describe('moveItem', () => {
+  it('posts the body with the CSRF header and no confirm flag by default', async () => {
+    await moveItem(7, { parent_id: null, after_id: 3 })
+    await moveItem(8, { parent_id: 2 }, { confirmExposure: true })
+    const [first, second] = writes()
+    expect(first[0]).toBe('/api/items/7/move')
+    expect(first[1].method).toBe('POST')
+    expect(JSON.parse(first[1].body)).toEqual({ parent_id: null, after_id: 3 })
+    expect(first[1].headers['X-Daka-CSRF']).toBe('tok-1')
+    expect(second[0]).toBe('/api/items/8/move?confirm_exposure=1')
+  })
+})
 
 describe('CSRF header', () => {
   it('is sent on writes with the token from /api/auth/me, fetched once', async () => {

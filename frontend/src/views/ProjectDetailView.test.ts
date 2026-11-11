@@ -899,6 +899,238 @@ describe('ProjectDetailView keyboard', () => {
     w.unmount()
   })
 
+  describe('indent and outdent', () => {
+    const moves = () => calls.filter((c) => c.url.endsWith('/move'))
+    const tab = (target: EventTarget, shiftKey = false, extra: KeyboardEventInit = {}) => {
+      const e = new KeyboardEvent('keydown', {
+        key: 'Tab',
+        shiftKey,
+        bubbles: true,
+        cancelable: true,
+        ...extra,
+      })
+      target.dispatchEvent(e)
+      return e
+    }
+    const row = (id: number) =>
+      document.querySelector<HTMLElement>(`[data-task-row][data-task-id="${id}"]`)!
+    const banner = () => document.querySelector('[data-testid="project-error"]')
+
+    // Server stand-in that applies a move to the task list.
+    function serverMoves(respond?: () => Response | Promise<Response>) {
+      const inner = globalThis.fetch
+      vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+        if (url.endsWith('/move') && init?.method === 'POST') {
+          calls.push({ url, method: 'POST', body: JSON.parse(String(init.body)) })
+          if (respond) return respond()
+          const id = Number(url.split('/')[3])
+          const b = JSON.parse(String(init.body)) as { parent_id?: number | null }
+          const t = currentTasks.find((x) => x.id === id)!
+          t.parent_id = b.parent_id ?? undefined
+          return jsonRes(t)
+        }
+        return inner(url, init)
+      })
+    }
+
+    it('indents under the previous sibling and keeps focus on the moved row', async () => {
+      const w = await mountTree()
+      serverMoves()
+      row(204).focus()
+      const e = tab(row(204))
+      expect(e.defaultPrevented).toBe(true)
+      await flushPromises()
+      expect(moves()).toEqual([
+        { url: '/api/items/204/move', method: 'POST', body: { parent_id: 201 } },
+      ])
+      expect(row(204).style.marginLeft).toBe('1.5rem')
+      expect(active()).toBe('204')
+      w.unmount()
+    })
+
+    it('does nothing and leaves native Tab alone without a previous sibling', async () => {
+      const w = await mountTree()
+      for (const id of [201, 202]) {
+        row(id).focus()
+        expect(tab(row(id)).defaultPrevented).toBe(false)
+      }
+      expect(moves()).toHaveLength(0)
+      w.unmount()
+    })
+
+    it('outdents after the former parent', async () => {
+      const w = await mountTree()
+      serverMoves()
+      row(203).focus()
+      expect(tab(row(203), true).defaultPrevented).toBe(true)
+      await flushPromises()
+      expect(moves().map((m) => [m.url, m.body])).toEqual([
+        ['/api/items/203/move', { parent_id: 201, after_id: 202 }],
+      ])
+      expect(active()).toBe('203')
+      w.unmount()
+    })
+
+    it('outdents a depth-2 row to the top level with parent_id null', async () => {
+      const w = await mountTree()
+      serverMoves()
+      row(202).focus()
+      tab(row(202), true)
+      await flushPromises()
+      expect(moves().at(-1)?.body).toEqual({ parent_id: null, after_id: 201 })
+      w.unmount()
+    })
+
+    it('leaves Shift+Tab alone on a top-level row', async () => {
+      const w = await mountTree()
+      row(204).focus()
+      expect(tab(row(204), true).defaultPrevented).toBe(false)
+      expect(moves()).toHaveLength(0)
+      w.unmount()
+    })
+
+    it('ignores Tab with Ctrl, Alt or Meta', async () => {
+      const w = await mountTree()
+      row(204).focus()
+      for (const mod of ['ctrlKey', 'altKey', 'metaKey']) {
+        expect(tab(row(204), false, { [mod]: true }).defaultPrevented).toBe(false)
+      }
+      expect(moves()).toHaveLength(0)
+      w.unmount()
+    })
+
+    it('blocks a move beyond 5 levels without a request, and allows exactly 5', async () => {
+      // 1 > 2 > 3 > 4 > (5, 6): indenting 6 under 5 would make level 6.
+      const w = await mountWith([
+        task(1, 'L1'),
+        task(2, 'L2', 1),
+        task(3, 'L3', 2),
+        task(4, 'L4', 3),
+        task(5, 'L5', 4),
+        task(6, 'L5b', 4),
+      ])
+      row(6).focus()
+      expect(tab(row(6)).defaultPrevented).toBe(true)
+      await flushPromises()
+      expect(moves()).toHaveLength(0)
+      expect(banner()!.textContent).toContain('at most 5 levels')
+
+      // Outdenting is always within the limit.
+      serverMoves()
+      row(4).focus()
+      tab(row(4), true) // outdent 4 to level 3: allowed
+      await flushPromises()
+      expect(moves()).toHaveLength(1)
+      w.unmount()
+    })
+
+    it('counts the height of the moved subtree against the limit', async () => {
+      // 7 > 8 > 9 > 10 has height 4; indenting 7 under 2 (level 2) would reach level 6.
+      const w = await mountWith([
+        task(1, 'A'),
+        task(2, 'B', 1),
+        task(7, 'C', 1),
+        task(8, 'D', 7),
+        task(9, 'E', 8),
+        task(10, 'F', 9),
+      ])
+      row(7).focus()
+      tab(row(7))
+      await flushPromises()
+      expect(moves()).toHaveLength(0)
+      expect(banner()).not.toBeNull()
+      w.unmount()
+    })
+
+    it('shows the server error on 409 and refreshes the tree', async () => {
+      const w = await mountTree()
+      serverMoves(() => jsonRes({ error: 'the item tree changed concurrently, retry' }, 409))
+      const lists = () => calls.filter((c) => c.url.startsWith('/api/items?')).length
+      const before = lists()
+      row(204).focus()
+      tab(row(204))
+      await flushPromises()
+      expect(banner()!.textContent).toContain('changed in the meantime')
+      expect(banner()!.textContent).not.toContain('Astronaut')
+      expect(lists()).toBe(before + 1)
+      expect(rowIds()).toEqual(['201', '202', '203', '204'])
+      expect(active()).toBe('204')
+      w.unmount()
+    })
+
+    it('shows the server 400 depth error via the banner', async () => {
+      const w = await mountTree()
+      serverMoves(() => jsonRes({ error: 'sub-tasks can nest at most 5 levels' }, 400))
+      row(204).focus()
+      tab(row(204))
+      await flushPromises()
+      expect(banner()!.textContent).toContain('at most 5 levels')
+      w.unmount()
+    })
+
+    it('shows the banner on a network failure without refreshing', async () => {
+      const w = await mountTree()
+      serverMoves(() => {
+        throw new TypeError('offline')
+      })
+      const lists = () => calls.filter((c) => c.url.startsWith('/api/items?')).length
+      const before = lists()
+      row(204).focus()
+      tab(row(204))
+      await flushPromises()
+      expect(banner()).not.toBeNull()
+      expect(lists()).toBe(before)
+      expect(moves()).toHaveLength(1)
+      w.unmount()
+    })
+
+    it('does not intercept Tab on controls inside the row', async () => {
+      const w = await mountTree()
+      const btn = document.querySelector<HTMLElement>('[data-testid="btn-delete-task-204"]')!
+      btn.focus()
+      expect(tab(btn).defaultPrevented).toBe(false)
+      expect(tab(btn, true).defaultPrevented).toBe(false)
+      const input = document.createElement('input')
+      row(204).appendChild(input)
+      input.focus()
+      expect(tab(input).defaultPrevented).toBe(false)
+      expect(moves()).toHaveLength(0)
+      w.unmount()
+    })
+
+    it('ignores a second Tab while a move is in flight', async () => {
+      const w = await mountTree()
+      let release!: () => void
+      const gate = new Promise<void>((r) => (release = r))
+      serverMoves(async () => {
+        await gate
+        return jsonRes({})
+      })
+      row(204).focus()
+      tab(row(204))
+      await flushPromises()
+      const second = tab(row(204))
+      expect(second.defaultPrevented).toBe(true)
+      await flushPromises()
+      expect(moves()).toHaveLength(1)
+      release()
+      await flushPromises()
+      expect(moves()).toHaveLength(1)
+      w.unmount()
+    })
+
+    it('is ignored while the delete dialog is open', async () => {
+      const w = await mountTree()
+      row(204).focus()
+      press('d', row(204))
+      await flushPromises()
+      expect(document.querySelector('[data-testid="modal-delete-task"]')).not.toBeNull()
+      expect(tab(row(204)).defaultPrevented).toBe(false)
+      expect(moves()).toHaveLength(0)
+      w.unmount()
+    })
+  })
+
   it('registers its shortcuts and cleans up on unmount', async () => {
     const list = useShortcutList()
     const ids = () => list.value.filter((d) => d.scope === 'projects').map((d) => d.id)
@@ -906,7 +1138,9 @@ describe('ProjectDetailView keyboard', () => {
     expect(ids().sort()).toEqual(
       [
         'project.deleteRow',
+        'project.indent',
         'project.newSibling',
+        'project.outdent',
         'project.rowDown',
         'project.rowUp',
         'project.toggleRow',
@@ -920,7 +1154,15 @@ describe('ProjectDetailView keyboard', () => {
     const msgs: Record<string, string>[] = [en, zhCN]
     for (const m of msgs) {
       expect(m['shortcuts.scope.projects']).toBeTruthy()
-      for (const id of ['rowUp', 'rowDown', 'toggleRow', 'deleteRow', 'newSibling']) {
+      for (const id of [
+        'rowUp',
+        'rowDown',
+        'toggleRow',
+        'deleteRow',
+        'newSibling',
+        'indent',
+        'outdent',
+      ]) {
         expect(m[catalogEntry(`project.${id}`)!.labelKey]).toBeTruthy()
       }
     }
@@ -931,6 +1173,9 @@ describe('ProjectDetailView keyboard', () => {
     expect(help.text()).toContain('Projects')
     expect(help.text()).toContain('Delete the focused task')
     expect(help.text()).toContain('Add a task below the focused task')
+    expect(help.text()).toContain('Make the focused task a sub-task of the task above')
+    expect(help.text()).toContain('Move the focused sub-task up one level')
+    expect(help.text()).toContain('Tab')
     helpOpen.value = false
     help.unmount()
     w.unmount()

@@ -718,6 +718,29 @@ export function getExternalCalendar(
 
 export const updateItem = patchItem
 
+/** Deepest allowed sub-task nesting, a top-level item being level 1. Mirrors the server. */
+export const MAX_ITEM_DEPTH = 5
+
+export interface MoveItemBody {
+  /** Absent keeps the current parent; null moves to top level. */
+  parent_id?: number | null
+  before_id?: number
+  after_id?: number
+}
+
+/**
+ * Reparents and/or positions an item among its siblings in one request. Online
+ * only. Sensitivity stays frozen unless `confirmExposure` is set.
+ */
+export function moveItem(
+  id: number,
+  body: MoveItemBody,
+  opts: { confirmExposure?: boolean } = {},
+): Promise<ItemDto> {
+  const q = opts.confirmExposure ? '?confirm_exposure=1' : ''
+  return request<ItemDto>(`/api/items/${id}/move${q}`, jsonInit('POST', body))
+}
+
 export function createAdHocEvent(
   name: string,
   projectId?: number | null,

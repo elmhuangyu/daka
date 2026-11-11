@@ -184,6 +184,20 @@ export const SHORTCUT_CATALOG: CatalogEntry[] = [
     labelKey: 'shortcuts.label.project.newSibling',
     displayOnly: true,
   },
+  {
+    id: 'project.indent',
+    keys: ['Tab'],
+    scope: 'projects',
+    labelKey: 'shortcuts.label.project.indent',
+    displayOnly: true,
+  },
+  {
+    id: 'project.outdent',
+    keys: ['Shift+Tab'],
+    scope: 'projects',
+    labelKey: 'shortcuts.label.project.outdent',
+    displayOnly: true,
+  },
 ]
 
 const BY_ID = new Map(SHORTCUT_CATALOG.map((e) => [e.id, e]))

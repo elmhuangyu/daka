@@ -54,6 +54,9 @@ export const en = {
   'errors.invalidRequest': 'The request was not valid',
   'errors.invalidId': 'The request refers to something that does not exist',
   'errors.invalidCategory': 'That category no longer exists',
+  'errors.itemTooDeep': 'Sub-tasks can nest at most 5 levels',
+  'errors.invalidMove': 'The task cannot be moved there',
+  'errors.treeConflict': 'The task list changed in the meantime, please try again',
   'errors.nameRequired': 'Name is required',
   'errors.nameTooLong': 'Name is too long',
   'errors.noteTooLong': 'Note is too long',
@@ -925,6 +928,8 @@ export const en = {
   'shortcuts.label.project.toggleRow': 'Check or uncheck the focused task',
   'shortcuts.label.project.deleteRow': 'Delete the focused task',
   'shortcuts.label.project.newSibling': 'Add a task below the focused task',
+  'shortcuts.label.project.indent': 'Make the focused task a sub-task of the task above',
+  'shortcuts.label.project.outdent': 'Move the focused sub-task up one level',
 } as const
 
 export type MessageKey = keyof typeof en

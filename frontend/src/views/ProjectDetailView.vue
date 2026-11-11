@@ -576,6 +576,86 @@ function moveRowFocus(dir: 1 | -1): boolean {
   return true
 }
 
+// Indent / outdent (Tab / Shift+Tab). These are local handlers on the row, not registry
+// shortcuts, because Tab cannot be rebound.
+//
+// Accessibility trade-off: Tab is only intercepted when the row itself has focus (reached
+// with the arrow keys or a click), never when focus is on a control inside the row, so the
+// inner buttons keep their native Tab order. A keyboard user can always get out: whenever the
+// move is not possible (no previous sibling to indent under, already top level to outdent) the
+// event is left alone, so native Tab enters the row's controls and native Shift+Tab leaves
+// the list. Combinations with Ctrl/Alt/Meta are never intercepted. The row's own actions have
+// dedicated keys (x, d, Enter), so the inner controls are rarely needed from the keyboard.
+const moving = ref(false)
+
+/** Number of levels in the subtree rooted at id (a leaf is 1). */
+function subtreeHeight(id: number): number {
+  let h = 1
+  for (const c of childrenByParent.value.get(id) ?? []) h = Math.max(h, 1 + subtreeHeight(c.id))
+  return h
+}
+
+/** The nearest previous task with the same parent in tree order, with its 0-based depth. */
+function previousSibling(task: ItemDetail): { task: ItemDetail; depth: number } | null {
+  const parent = parentOf(task)
+  let found: { task: ItemDetail; depth: number } | null = null
+  for (const r of treeRows.value) {
+    if (r.kind !== 'task') continue
+    if (r.task.id === task.id) return found
+    if (parentOf(r.task) === parent) found = { task: r.task, depth: r.depth }
+  }
+  return null
+}
+
+async function moveTask(task: ItemDetail, body: api.MoveItemBody) {
+  moving.value = true
+  error.value = ''
+  try {
+    await api.moveItem(task.id, body)
+  } catch (e) {
+    error.value = api.describeError(e)
+    // The server answered: our tree may be stale (409 concurrent change, 400 stale anchor).
+    if (!(e instanceof api.ApiError) || e.status === 0) {
+      moving.value = false
+      return
+    }
+  }
+  try {
+    await refreshTasks()
+  } catch (e) {
+    error.value = api.describeError(e)
+  } finally {
+    moving.value = false
+  }
+  await nextTick()
+  focusTaskRow(task.id)
+}
+
+function onTabKey(e: KeyboardEvent, task: ItemDetail) {
+  if (e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return
+  if (confirmTask.value || showEditModal.value || showDeleteModal.value || form.value) return
+  if (moving.value) {
+    e.preventDefault()
+    return
+  }
+  if (e.shiftKey) {
+    const parent = tasks.value.find((x) => x.id === parentOf(task))
+    if (!parent) return
+    e.preventDefault()
+    void moveTask(task, { parent_id: parentOf(parent), after_id: parent.id })
+    return
+  }
+  const prev = previousSibling(task)
+  if (!prev) return
+  e.preventDefault()
+  // Levels: the new parent sits at prev.depth + 1 (top level is 1), the moved root one below.
+  if (prev.depth + 1 + subtreeHeight(task.id) > api.MAX_ITEM_DEPTH) {
+    error.value = t('errors.itemTooDeep')
+    return
+  }
+  void moveTask(task, { parent_id: prev.task.id })
+}
+
 useShortcut([
   catalogDef('project.rowUp', () => moveRowFocus(-1)),
   catalogDef('project.rowDown', () => moveRowFocus(1)),
@@ -588,6 +668,8 @@ useShortcut([
     if (task) openDeleteTask(task)
   }),
   catalogDef('project.newSibling'),
+  catalogDef('project.indent'),
+  catalogDef('project.outdent'),
 ])
 
 function taskDueDate(task: ItemDetail): string | null {
@@ -904,6 +986,7 @@ function taskDueDate(task: ItemDetail): string | null {
               :class="{ 'ring-2 ring-primary/60': highlightId === row.task.id }"
               :data-testid="`task-item-${row.task.id}`"
               @keydown.enter.self.prevent="openForm(row.task, true)"
+              @keydown.tab.self="onTabKey($event, row.task)"
             >
               <div class="flex items-center gap-3 min-w-0 flex-1 basis-48">
                 <input
