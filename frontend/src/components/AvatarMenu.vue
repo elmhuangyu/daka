@@ -56,7 +56,7 @@ async function signOut() {
 </script>
 
 <template>
-  <div ref="root" class="relative">
+  <div ref="root" class="relative" data-nav>
     <button
       ref="trigger"
       type="button"

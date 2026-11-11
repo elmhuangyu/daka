@@ -577,6 +577,34 @@ describe('CalendarView shortcuts', () => {
     w.unmount()
   })
 
+  it('claims focus from a focused nav link', async () => {
+    const nav = document.createElement('nav')
+    nav.setAttribute('data-nav', '')
+    const a = document.createElement('a')
+    a.href = '#side'
+    nav.appendChild(a)
+    document.body.appendChild(nav)
+    a.focus()
+    expect(document.activeElement).toBe(a)
+    const { w } = await mountView()
+    expect(focusedDate()).toBe('2026-11-08')
+    w.unmount()
+  })
+
+  it('leaves focus alone while a modal is open', async () => {
+    const dlg = document.createElement('div')
+    dlg.setAttribute('role', 'dialog')
+    dlg.setAttribute('aria-modal', 'true')
+    const nav = document.createElement('a')
+    nav.setAttribute('data-nav', '')
+    nav.href = '#x'
+    document.body.append(dlg, nav)
+    nav.focus()
+    const { w } = await mountView()
+    expect(document.activeElement).toBe(nav)
+    w.unmount()
+  })
+
   it('Enter on the focused cell selects it once', async () => {
     const { w } = await mountView()
     const cell = document.activeElement as HTMLButtonElement

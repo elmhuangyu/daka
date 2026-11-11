@@ -10,6 +10,7 @@ import DayCell from '../components/calendar/DayCell.vue'
 import DayPanel from '../components/calendar/DayPanel.vue'
 import { catalogDef } from '../composables/shortcutCatalog'
 import { useShortcut } from '../composables/useShortcuts'
+import { shouldClaimFocus } from '../composables/focusEntry'
 import { useI18n } from '../i18n'
 import { extCalErrorKey } from '../i18n/errors'
 
@@ -183,8 +184,7 @@ async function applyQuery() {
   synced = true
   // Give keyboard users an entry point, but never steal focus the user already placed.
   await nextTick()
-  const active = document.activeElement
-  if (!active || active === document.body) await focusCell(focusDate.value)
+  if (shouldClaimFocus()) await focusCell(focusDate.value)
 }
 watch(wanted, (w) => {
   if (!synced || route.name !== 'calendar') return

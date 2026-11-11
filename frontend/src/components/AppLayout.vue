@@ -97,7 +97,7 @@ function isNavActive(path: string) {
             </button>
           </template>
         </div>
-        <nav :aria-label="t('nav.main')">
+        <nav data-nav :aria-label="t('nav.main')">
           <ul class="menu w-full gap-1 p-0">
             <li v-for="n in NAV_ITEMS" :key="n.name">
               <RouterLink
@@ -139,7 +139,7 @@ function isNavActive(path: string) {
     </div>
 
     <!-- Mobile bottom bar -->
-    <nav class="dock md:hidden" :aria-label="t('nav.main')">
+    <nav data-nav class="dock md:hidden" :aria-label="t('nav.main')">
       <RouterLink
         v-for="n in NAV_ITEMS"
         :key="n.name"
