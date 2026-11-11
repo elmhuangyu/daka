@@ -23,6 +23,7 @@ var (
 	ErrInvalidCode      = errors.New("notify: link code invalid or expired")
 	ErrChatTaken        = errors.New("notify: chat already linked to another user")
 	ErrInvalidTime      = errors.New("notify: digest time must be HH:MM or empty")
+	ErrInvalidLang      = errors.New("notify: unsupported language")
 	ErrInvalidToken     = errors.New("notify: invalid bot token")
 	ErrBotTokenRequired = errors.New("notify: bot token is required")
 	ErrNotConfigured    = errors.New("notify: telegram not configured")
@@ -166,6 +167,8 @@ type SettingsPatch struct {
 	RemindSensitive *bool
 	// DigestTime is "HH:MM", or "" to disable the digest.
 	DigestTime *string
+	// Lang is the message language ("en", "zh-CN", or "" for English).
+	Lang *string
 }
 
 // ValidClock reports whether s is a 24-hour "HH:MM" time.
@@ -183,9 +186,15 @@ func UpdateSettings(g *gorm.DB, userID string, p SettingsPatch) (*dbmodels.Teleg
 	if p.DigestTime != nil && *p.DigestTime != "" && !ValidClock(*p.DigestTime) {
 		return nil, ErrInvalidTime
 	}
+	if p.Lang != nil && !ValidLang(*p.Lang) {
+		return nil, ErrInvalidLang
+	}
 	var l dbmodels.TelegramLink
 	if err := g.Where("user_id = ?", userID).Take(&l).Error; err != nil {
 		return nil, err
+	}
+	if p.Lang != nil {
+		l.Lang = *p.Lang
 	}
 	if p.Enabled != nil {
 		l.Enabled = *p.Enabled

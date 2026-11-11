@@ -789,6 +789,7 @@ const zhCN: Record<MessageKey, string> = {
   'settings.telegram.enabled': '发送提醒和每日摘要',
   'settings.telegram.remindSensitive': '提醒敏感事项',
   'settings.telegram.digestTime': '每日摘要时间',
+  'settings.telegram.digestTimezone': '按你的时区（{tz}）的当地时间',
   'settings.telegram.save': '保存',
   'settings.telegram.unlink': '取消关联',
   'settings.telegram.notLinked': '未关联。',

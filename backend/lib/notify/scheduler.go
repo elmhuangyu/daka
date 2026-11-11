@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -155,7 +154,7 @@ func (s *Scheduler) processUser(ctx context.Context, l dbmodels.TelegramLink) er
 	}
 
 	if digestDue {
-		s.deliver(ctx, l, 0, date, digestText(local, visible))
+		s.deliver(ctx, l, 0, date, msgsFor(l.Lang).digestText(local, visible))
 	}
 	for _, e := range visible {
 		if e.RemindTime == "" || hm < e.RemindTime || s.sent(l.UserID, e.ID, date) {
@@ -167,7 +166,7 @@ func (s *Scheduler) processUser(ctx context.Context, l dbmodels.TelegramLink) er
 		if ctx.Err() != nil || s.blocked() {
 			return nil
 		}
-		s.deliver(ctx, l, e.ID, date, itemText(e))
+		s.deliver(ctx, l, e.ID, date, msgsFor(l.Lang).itemText(e))
 	}
 	return nil
 }
@@ -280,57 +279,4 @@ func (s *Scheduler) deliver(ctx context.Context, l dbmodels.TelegramLink, itemID
 	s.retry[key] = rs
 	s.mu.Unlock()
 	log.Warn().Err(err).Str("user_id", l.UserID).Int("fails", rs.fails).Msg("notify: send failed")
-}
-
-func itemName(e entry) string {
-	if e.Sensitive {
-		return PrivateItemText
-	}
-	return e.Name
-}
-
-func itemText(e entry) string {
-	if e.OverdueDays > 0 {
-		return fmt.Sprintf("Reminder: %s is overdue by %d day(s).", itemName(e), e.OverdueDays)
-	}
-	return "Reminder: " + itemName(e)
-}
-
-func digestText(local time.Time, pending []entry) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "Daka - %s\n", local.Format("Monday 2006-01-02"))
-	var due, overdue []entry
-	for _, e := range pending {
-		if e.OverdueDays > 0 {
-			overdue = append(overdue, e)
-		} else {
-			due = append(due, e)
-		}
-	}
-	if len(pending) == 0 {
-		b.WriteString("Nothing due today.")
-		return b.String()
-	}
-	listed := 0
-	section := func(title string, es []entry) {
-		if len(es) == 0 {
-			return
-		}
-		fmt.Fprintf(&b, "\n%s (%d):\n", title, len(es))
-		for _, e := range es {
-			if listed >= maxListed || b.Len() > 3500 {
-				b.WriteString("- ...and more\n")
-				return
-			}
-			listed++
-			if e.OverdueDays > 0 {
-				fmt.Fprintf(&b, "- %s (%d day(s) overdue)\n", itemName(e), e.OverdueDays)
-			} else {
-				fmt.Fprintf(&b, "- %s\n", itemName(e))
-			}
-		}
-	}
-	section("Due today", due)
-	section("Maintenance overdue", overdue)
-	return strings.TrimRight(b.String(), "\n")
 }

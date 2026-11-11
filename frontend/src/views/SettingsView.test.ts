@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
+import { setLocale } from './../i18n'
 import { createPinia, setActivePinia } from 'pinia'
 import { makeRouter } from '../router'
 import SettingsView from './SettingsView.vue'
@@ -69,6 +70,8 @@ beforeEach(() => {
         enabled: false,
         remind_sensitive: true,
         digest_time: '08:00',
+        timezone: 'Asia/Shanghai',
+        lang: '',
         linked_at: telegramLinked ? '2026-11-08T00:00:00Z' : null,
         bot_username: telegramBotUsername,
       })
@@ -84,6 +87,19 @@ beforeEach(() => {
         digest_time: '08:00',
         linked_at: '2026-11-08T00:00:00Z',
         bot_username: 'my_new_bot',
+      })
+    }
+    if (url === '/api/telegram/settings' && method === 'PATCH') {
+      return jsonRes({
+        configured: true,
+        linked: true,
+        enabled: true,
+        remind_sensitive: true,
+        digest_time: '08:00',
+        timezone: 'Asia/Shanghai',
+        lang: JSON.parse(String(init?.body)).lang ?? '',
+        linked_at: '2026-11-08T00:00:00Z',
+        bot_username: 'dakabot',
       })
     }
     if (url === '/api/telegram/test' && method === 'POST') {
@@ -218,6 +234,17 @@ describe('SettingsView', () => {
     expect(putCall).toBeDefined()
     expect(putCall?.body).toEqual({ bot_token: '123:abc', chat_id: 999 })
     expect(w.find('[data-testid=tg-linked]').exists()).toBe(true)
+  })
+
+  it('shows the digest time zone and stores the UI language for bot messages', async () => {
+    telegramLinked = true
+    await setLocale('zh-CN', { persist: false })
+    const w = await mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=tg-digest-tz]').text()).toContain('Asia/Shanghai')
+    const p = calls.find((c) => c.url === '/api/telegram/settings' && c.method === 'PATCH')
+    expect(p?.body).toEqual({ lang: 'zh-CN' })
+    await setLocale('en', { persist: false })
   })
 
   it('sends test notification when linked', async () => {

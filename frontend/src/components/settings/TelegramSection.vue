@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
 import {
   ApiError,
@@ -42,7 +42,26 @@ function apply(s: TelegramStatus) {
   st.value = s
   digest.value = s.digest_time
   if (s.linked) link.value = null
+  void syncLang(s)
 }
+
+// Bot messages follow the UI language: the server stores the last language the user used here.
+let syncing = false
+async function syncLang(s: TelegramStatus) {
+  const want = locale.value
+  if (!s.linked || syncing || (s.lang ?? '') === want || (!s.lang && want === 'en')) return
+  syncing = true
+  try {
+    st.value = await patchTelegram({ lang: want })
+  } catch {
+    // Not critical: messages fall back to the stored language.
+  } finally {
+    syncing = false
+  }
+}
+watch(locale, () => {
+  if (st.value) void syncLang(st.value)
+})
 
 onMounted(async () => {
   try {
@@ -142,6 +161,7 @@ async function patch(body: {
   enabled?: boolean
   remind_sensitive?: boolean
   digest_time?: string
+  lang?: string
 }) {
   error.value = ''
   try {
@@ -268,9 +288,12 @@ async function patch(body: {
             class="rounded-xl border border-base-300 bg-base-100/40 p-4 flex flex-col sm:flex-row sm:items-end gap-3"
             @submit.prevent="patch({ digest_time: digest })"
           >
-            <label class="form-control gap-1 flex-1">
+            <label class="form-control flex flex-1 flex-col gap-1.5">
               <span class="label-text text-xs font-medium">{{
                 t('settings.telegram.digestTime')
+              }}</span>
+              <span class="text-xs opacity-60" data-testid="tg-digest-tz">{{
+                t('settings.telegram.digestTimezone', { tz: st.timezone || 'UTC' })
               }}</span>
               <input
                 v-model="digest"
@@ -302,29 +325,29 @@ async function patch(body: {
               <p class="text-xs opacity-70">{{ t('settings.telegram.botTokenHint') }}</p>
             </div>
 
-            <form class="space-y-3" @submit.prevent="saveBot">
-              <label class="form-control gap-1">
+            <form class="space-y-4" @submit.prevent="saveBot">
+              <label class="form-control flex flex-col gap-1.5">
                 <span class="label-text text-xs font-medium">{{
                   t('settings.telegram.botToken')
                 }}</span>
                 <input
                   v-model="botToken"
                   type="password"
-                  class="input input-bordered input-sm font-mono"
+                  class="input input-bordered input-sm w-full font-mono"
                   :placeholder="t('settings.telegram.botTokenPlaceholder')"
                   data-testid="tg-bot-token"
                   :required="!st?.has_token"
                 />
               </label>
 
-              <label class="form-control gap-1">
+              <label class="form-control flex flex-col gap-1.5">
                 <span class="label-text text-xs font-medium">{{
                   t('settings.telegram.chatID')
                 }}</span>
                 <input
                   v-model="chatID"
                   type="text"
-                  class="input input-bordered input-sm font-mono max-w-xs"
+                  class="input input-bordered input-sm w-full font-mono"
                   :placeholder="t('settings.telegram.chatIDPlaceholder')"
                   data-testid="tg-chat-id"
                 />

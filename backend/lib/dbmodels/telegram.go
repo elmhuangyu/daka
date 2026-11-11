@@ -21,7 +21,9 @@ type TelegramLink struct {
 	// DigestTime is the local "HH:MM" of the daily digest in
 	// UserSettings.timezone; empty disables the digest.
 	DigestTime string `gorm:"size:5"`
-	LinkedAt   time.Time
+	// Lang is the language of bot messages ("en", "zh-CN"); empty means English.
+	Lang     string `gorm:"size:8"`
+	LinkedAt time.Time
 }
 
 // TelegramLinkCode is a one-time link code; only its hash is stored.

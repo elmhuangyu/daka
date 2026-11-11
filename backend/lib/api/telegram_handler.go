@@ -164,6 +164,7 @@ type telegramPatch struct {
 	Enabled         *bool   `json:"enabled"`
 	RemindSensitive *bool   `json:"remind_sensitive"`
 	DigestTime      *string `json:"digest_time"`
+	Lang            *string `json:"lang"`
 }
 
 // PATCH /api/telegram/settings: enabled, remind_sensitive, digest_time ("HH:MM"
@@ -178,7 +179,7 @@ func (s *server) patchTelegramSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	patch := notify.SettingsPatch{
-		Enabled: req.Enabled, RemindSensitive: req.RemindSensitive, DigestTime: req.DigestTime,
+		Enabled: req.Enabled, RemindSensitive: req.RemindSensitive, DigestTime: req.DigestTime, Lang: req.Lang,
 	}
 	var err error
 	if s.telegram != nil {
@@ -189,6 +190,8 @@ func (s *server) patchTelegramSettings(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, notify.ErrInvalidTime):
 		errResult(http.StatusBadRequest, "digest_time must be HH:MM or empty").write(w)
+	case errors.Is(err, notify.ErrInvalidLang):
+		errResult(http.StatusBadRequest, "unsupported lang").write(w)
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		errResult(http.StatusNotFound, "telegram is not linked").write(w)
 	case err != nil:

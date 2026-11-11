@@ -730,3 +730,18 @@ func TestPerUserBotSetupAndDelivery(t *testing.T) {
 	require.False(t, st.Linked)
 	require.False(t, st.HasToken)
 }
+
+func TestDigestLanguage(t *testing.T) {
+	// 2026-11-08 08:00 in Asia/Shanghai is 00:00Z; the digest follows the user's language.
+	e := newEnv(t, "Asia/Shanghai", mustTime(t, "2026-11-08T00:00:00Z"))
+	e.item("浇花", nil, dbmodels.ItemRuleVersion{})
+	_, err := UpdateSettings(e.g, "u1", SettingsPatch{Lang: ptr(LangZhCN)})
+	require.NoError(t, err)
+	e.tick()
+	msgs := e.tg.messages()
+	require.Len(t, msgs, 1)
+	require.Equal(t, "Daka - 2026-11-08 星期日\n\n今日待办（1）：\n- 浇花", msgs[0].Text)
+
+	_, err = UpdateSettings(e.g, "u1", SettingsPatch{Lang: ptr("fr")})
+	require.ErrorIs(t, err, ErrInvalidLang)
+}

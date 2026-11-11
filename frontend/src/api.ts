@@ -884,6 +884,10 @@ export interface TelegramStatus {
   enabled: boolean
   remind_sensitive: boolean
   digest_time: string
+  /** IANA zone digest_time is interpreted in (the user's Daka time zone). */
+  timezone?: string
+  /** Language of bot messages. */
+  lang?: string
   linked_at: string | null
   bot_username?: string
 }
@@ -919,6 +923,7 @@ export function patchTelegram(body: {
   enabled?: boolean
   remind_sensitive?: boolean
   digest_time?: string
+  lang?: string
 }): Promise<TelegramStatus> {
   return request<TelegramStatus>('/api/telegram/settings', jsonInit('PATCH', body))
 }

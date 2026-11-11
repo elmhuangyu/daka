@@ -4,6 +4,10 @@ default:
 
 module := "github.com/elmhuangyu/daka/backend"
 
+# Local-development only key so per-user Telegram bot tokens can be stored. Never use it for real
+# data; set DAKA_SECRET_KEY in the environment to override it.
+dev_secret_key := "daka-dev-only-key-not-for-production"
+
 # Format backend (goimports) and frontend (oxfmt)
 fmt:
     cd backend && goimports -w -local "{{module}}" .
@@ -49,7 +53,7 @@ update-deps: update-go-deps update-pnpm-deps
 
 # Run the backend (127.0.0.1:8080, single-user mode)
 run:
-    cd backend && go run ./cmd/daka
+    cd backend && DAKA_SECRET_KEY="${DAKA_SECRET_KEY:-{{dev_secret_key}}}" go run ./cmd/daka
 
 # Install frontend dependencies
 fe-install:
@@ -62,4 +66,4 @@ fe-dev:
 # Build the frontend, then run the backend serving it
 run-full:
     cd frontend && pnpm run build
-    cd backend && DAKA_STATIC_DIR="{{justfile_directory()}}/frontend/dist" go run ./cmd/daka
+    cd backend && DAKA_SECRET_KEY="${DAKA_SECRET_KEY:-{{dev_secret_key}}}" DAKA_STATIC_DIR="{{justfile_directory()}}/frontend/dist" go run ./cmd/daka

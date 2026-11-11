@@ -816,6 +816,7 @@ export const en = {
   'settings.telegram.enabled': 'Send reminders and the daily digest',
   'settings.telegram.remindSensitive': 'Remind sensitive items',
   'settings.telegram.digestTime': 'Daily digest time',
+  'settings.telegram.digestTimezone': 'Local time in your time zone ({tz})',
   'settings.telegram.save': 'Save',
   'settings.telegram.unlink': 'Unlink',
   'settings.telegram.notLinked': 'Not linked.',

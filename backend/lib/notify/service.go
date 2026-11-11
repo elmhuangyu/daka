@@ -24,14 +24,18 @@ const (
 
 // TelegramStatus is the user-facing status of their Telegram bot configuration.
 type TelegramStatus struct {
-	Configured      bool       `json:"configured"`
-	HasToken        bool       `json:"has_token"`
-	Linked          bool       `json:"linked"`
-	Enabled         bool       `json:"enabled"`
-	RemindSensitive bool       `json:"remind_sensitive"`
-	DigestTime      string     `json:"digest_time"`
-	LinkedAt        *time.Time `json:"linked_at"`
-	BotUsername     string     `json:"bot_username,omitempty"`
+	Configured      bool   `json:"configured"`
+	HasToken        bool   `json:"has_token"`
+	Linked          bool   `json:"linked"`
+	Enabled         bool   `json:"enabled"`
+	RemindSensitive bool   `json:"remind_sensitive"`
+	DigestTime      string `json:"digest_time"`
+	// Timezone is the IANA zone digest_time is interpreted in (the user's Daka time zone).
+	Timezone string `json:"timezone"`
+	// Lang is the language of bot messages.
+	Lang        string     `json:"lang"`
+	LinkedAt    *time.Time `json:"linked_at"`
+	BotUsername string     `json:"bot_username,omitempty"`
 }
 
 // Options configure a Service.
@@ -221,13 +225,9 @@ func (s *Service) handle(ctx context.Context, u Update) {
 		s.mu.Lock()
 		delete(s.bad, chat)
 		s.mu.Unlock()
-		msg := "Linked to Daka. You will get a daily digest"
-		if link.DigestTime != "" {
-			msg += " at " + link.DigestTime
-		}
-		reply(msg + " (your Daka time zone).")
+		reply(msgsFor(link.Lang).linkedText(link.DigestTime))
 	case errors.Is(err, ErrChatTaken):
-		reply("This chat is already linked to a Daka account.")
+		reply(msgsFor("").chatTaken)
 	case errors.Is(err, ErrInvalidCode):
 		s.mu.Lock()
 		b.n++
@@ -236,7 +236,7 @@ func (s *Service) handle(ctx context.Context, u Update) {
 		}
 		s.bad[chat] = b
 		s.mu.Unlock()
-		reply("That link code is invalid or expired. Create a new one in Daka settings.")
+		reply(msgsFor("").invalidCode)
 	default:
 		log.Error().Err(err).Msg("notify: bind failed")
 	}
@@ -488,11 +488,7 @@ func (s *Service) SyncLink(ctx context.Context, userID string) (*dbmodels.Telegr
 	if err != nil {
 		return nil, err
 	}
-	msg := "Linked to Daka. You will get a daily digest"
-	if bound.DigestTime != "" {
-		msg += " at " + bound.DigestTime
-	}
-	_ = client.SendMessage(ctx, bound.ChatID, msg+" (your Daka time zone).")
+	_ = client.SendMessage(ctx, bound.ChatID, msgsFor(bound.Lang).linkedText(bound.DigestTime))
 	return bound, nil
 }
 
@@ -502,6 +498,7 @@ func (s *Service) GetStatus(ctx context.Context, userID string) (TelegramStatus,
 		Configured:      s.Configured(),
 		DigestTime:      dbmodels.DefaultDigestTime,
 		RemindSensitive: true,
+		Timezone:        userTimezone(s.opts.DB, userID),
 	}
 	if !st.Configured {
 		return st, nil
@@ -519,6 +516,7 @@ func (s *Service) GetStatus(ctx context.Context, userID string) (TelegramStatus,
 		st.Enabled = l.Enabled
 		st.RemindSensitive = l.RemindSensitive
 		st.DigestTime = l.DigestTime
+		st.Lang = l.Lang
 		t := l.LinkedAt.UTC()
 		st.LinkedAt = &t
 	} else if hasCode {
@@ -532,6 +530,7 @@ func (s *Service) GetStatus(ctx context.Context, userID string) (TelegramStatus,
 				st.Enabled = synced.Enabled
 				st.RemindSensitive = synced.RemindSensitive
 				st.DigestTime = synced.DigestTime
+				st.Lang = synced.Lang
 				t := synced.LinkedAt.UTC()
 				st.LinkedAt = &t
 			}
@@ -570,5 +569,14 @@ func (s *Service) SendTestMessage(ctx context.Context, userID string) error {
 		return err
 	}
 	client := NewClient(token, s.opts.BaseURL)
-	return client.SendMessage(ctx, l.ChatID, "Hello from Daka! Your Telegram bot is working.")
+	return client.SendMessage(ctx, l.ChatID, msgsFor(l.Lang).test)
+}
+
+// userTimezone returns the user's IANA time zone (UTC when unset).
+func userTimezone(g *gorm.DB, userID string) string {
+	var st dbmodels.UserSettings
+	if err := g.Where("user_id = ?", userID).Take(&st).Error; err != nil || st.Timezone == "" {
+		return "UTC"
+	}
+	return st.Timezone
 }
