@@ -6,6 +6,7 @@ import App from './App.vue'
 import { makeRouter } from './router'
 import { fmt, matchesFilter, percent, ringStats, valueRows } from './today/logic'
 import type { ItemDetail } from './api'
+import { catalogEntry } from './composables/shortcutCatalog'
 
 function jsonRes(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -1031,6 +1032,119 @@ describe('Today keyboard shortcuts', () => {
     await flushPromises()
     expect(card.emitted('openDetails')).toHaveLength(1)
     w.unmount()
+  })
+
+  describe('arrow keys move between cards', () => {
+    const ids = () =>
+      [...document.querySelectorAll<HTMLElement>('[data-card]')].map((c) => c.dataset.testid)
+    const active = () => (document.activeElement as HTMLElement | null)?.dataset.testid
+    const arrow = (key: string, target: EventTarget = document.body) => {
+      const e = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+      target.dispatchEvent(e)
+      return e
+    }
+
+    it('Down/Up follow DOM order and clamp at the ends', async () => {
+      world.today = [tItem(1, 'A'), tItem(2, 'B'), tItem(3, 'C')]
+      world.items = [1, 2, 3].map((id) => detail({ id, name: 'n' + id }))
+      const w = await mountApp()
+      const order = ids()
+      expect(order.length).toBe(3)
+      const e = arrow('ArrowDown')
+      expect(e.defaultPrevented).toBe(true)
+      expect(active()).toBe(order[0])
+      arrow('ArrowDown', document.activeElement!)
+      arrow('ArrowDown', document.activeElement!)
+      expect(active()).toBe(order[2])
+      const end = arrow('ArrowDown', document.activeElement!)
+      expect(active()).toBe(order[2])
+      expect(end.defaultPrevented).toBe(true)
+      arrow('ArrowUp', document.activeElement!)
+      expect(active()).toBe(order[1])
+      arrow('ArrowUp', document.activeElement!)
+      arrow('ArrowUp', document.activeElement!)
+      expect(active()).toBe(order[0])
+      w.unmount()
+    })
+
+    it('Up from body focuses the last card', async () => {
+      setup()
+      const w = await mountApp()
+      const order = ids()
+      arrow('ArrowUp')
+      expect(active()).toBe(order.at(-1))
+      w.unmount()
+    })
+
+    it('skips cards inside a closed details and visits all in DOM order', async () => {
+      setup()
+      const w = await mountApp()
+      const all = [...document.querySelectorAll<HTMLElement>('[data-card]')]
+      const det = document.createElement('details')
+      const hidden = document.createElement('article')
+      hidden.setAttribute('data-card', '')
+      hidden.tabIndex = -1
+      hidden.dataset.testid = 'card-hidden'
+      det.appendChild(hidden)
+      all.at(-1)!.after(det)
+      arrow('ArrowUp')
+      expect(active()).toBe(all.at(-1)!.dataset.testid)
+      det.open = true
+      arrow('ArrowDown', document.activeElement!)
+      expect(active()).toBe('card-hidden')
+      det.remove()
+      w.unmount()
+    })
+
+    it('is not handled when there are no cards', async () => {
+      world.today = []
+      world.items = []
+      const w = await mountApp()
+      expect(document.querySelectorAll('[data-card]').length).toBe(0)
+      expect(arrow('ArrowDown').defaultPrevented).toBe(false)
+      w.unmount()
+    })
+
+    it('is ignored while typing and keeps x and Enter working on the focused card', async () => {
+      setup()
+      const w = await mountApp()
+      const order = ids()
+      arrow('ArrowDown')
+      const card = w.getComponent({ name: 'ItemCard' })
+      press('x', document.activeElement!)
+      await flushPromises()
+      expect(lastBody()).toEqual({ item_id: 1, mode: 'set' })
+      press('Enter', document.activeElement!)
+      await flushPromises()
+      expect(card.emitted('openDetails')).toHaveLength(1)
+      document.querySelector('[role=dialog]')?.remove()
+
+      const input = document.createElement('input')
+      document.querySelector(`[data-testid=${order[0]}]`)!.appendChild(input)
+      input.focus()
+      const e = arrow('ArrowDown', input)
+      expect(e.defaultPrevented).toBe(false)
+      expect(document.activeElement).toBe(input)
+      input.remove()
+      w.unmount()
+    })
+
+    it('unregisters on unmount', async () => {
+      setup()
+      const w = await mountApp()
+      w.unmount()
+      expect(arrow('ArrowDown').defaultPrevented).toBe(false)
+    })
+
+    it('has labels in both locales', async () => {
+      const { en } = await import('./i18n/en')
+      const { default: zh } = await import('./i18n/zh-CN')
+      for (const id of ['today.cardUp', 'today.cardDown']) {
+        const key = catalogEntry(id)!.labelKey
+        expect((en as Record<string, string>)[key]).toBeTruthy()
+        expect((zh as Record<string, string>)[key]).toBeTruthy()
+      }
+    })
   })
 
   it('keeps Tab order unchanged: no positive tabindex in cards', async () => {

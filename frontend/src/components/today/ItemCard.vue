@@ -131,7 +131,7 @@ function record(r: ValueRow) {
 
 <template>
   <article
-    class="card card-border bg-base-100 border-base-300 shadow-xs transition-all duration-200 hover:border-primary/30"
+    class="card card-border bg-base-100 border-base-300 shadow-xs transition-all duration-200 hover:border-primary/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
     :class="{ 'done opacity-70 bg-base-100/60': variant === 'done' }"
     :style="d.color ? { borderLeftColor: d.color, borderLeftWidth: '4px' } : {}"
     :data-testid="`card-${d.id}`"

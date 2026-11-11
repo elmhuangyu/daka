@@ -41,6 +41,18 @@ export const SHORTCUT_CATALOG: CatalogEntry[] = [
     labelKey: 'shortcuts.label.today.toggleCard',
   },
   {
+    id: 'today.cardUp',
+    keys: ['ArrowUp'],
+    scope: 'today',
+    labelKey: 'shortcuts.label.today.cardUp',
+  },
+  {
+    id: 'today.cardDown',
+    keys: ['ArrowDown'],
+    scope: 'today',
+    labelKey: 'shortcuts.label.today.cardDown',
+  },
+  {
     id: 'calendar.moveLeft',
     keys: ['ArrowLeft'],
     scope: 'calendar',

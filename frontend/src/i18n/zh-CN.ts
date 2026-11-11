@@ -867,6 +867,8 @@ const zhCN: Record<MessageKey, string> = {
   'shortcuts.label.today.nextDay': '后一天',
   'shortcuts.label.today.goToday': '跳到今天',
   'shortcuts.label.today.toggleCard': '打卡或取消打卡当前事项',
+  'shortcuts.label.today.cardUp': '上一个事项',
+  'shortcuts.label.today.cardDown': '下一个事项',
   'shortcuts.label.calendar.moveLeft': '焦点后移（一天）',
   'shortcuts.label.calendar.moveRight': '焦点前移（一天）',
   'shortcuts.label.calendar.moveUp': '焦点后移（一周）',

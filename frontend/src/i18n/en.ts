@@ -895,6 +895,8 @@ export const en = {
   'shortcuts.label.today.nextDay': 'Next day',
   'shortcuts.label.today.goToday': 'Jump to today',
   'shortcuts.label.today.toggleCard': 'Check or uncheck the focused item',
+  'shortcuts.label.today.cardUp': 'Previous item',
+  'shortcuts.label.today.cardDown': 'Next item',
   'shortcuts.label.calendar.moveLeft': 'Move focus back (one day)',
   'shortcuts.label.calendar.moveRight': 'Move focus forward (one day)',
   'shortcuts.label.calendar.moveUp': 'Move focus back (one week)',

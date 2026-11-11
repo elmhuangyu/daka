@@ -356,7 +356,33 @@ function toggleFocusedCard() {
   card?.querySelector<HTMLButtonElement>('[data-testid="toggle"]:not(:disabled)')?.click()
 }
 
+const rootEl = ref<HTMLElement | null>(null)
+
+/**
+ * Move focus to the previous/next visible card in DOM order (which equals visual order),
+ * clamped at the ends. Returns false (not handled) only when there are no cards.
+ */
+function moveCardFocus(dir: 1 | -1): boolean {
+  const cards = [...(rootEl.value?.querySelectorAll<HTMLElement>('[data-card]') ?? [])].filter(
+    (c) => !c.closest('details:not([open]), [hidden], [aria-hidden="true"]'),
+  )
+  if (!cards.length) return false
+  const cur = document.activeElement?.closest('[data-card]') as HTMLElement | null
+  const i = cur ? cards.indexOf(cur) : -1
+  let next: number
+  if (i < 0) next = dir === 1 ? 0 : cards.length - 1
+  else next = Math.min(cards.length - 1, Math.max(0, i + dir))
+  const el = cards[next]
+  if (el !== document.activeElement) {
+    el.focus()
+    el.scrollIntoView?.({ block: 'nearest' })
+  }
+  return true
+}
+
 useShortcut([
+  catalogDef('today.cardUp', () => moveCardFocus(-1)),
+  catalogDef('today.cardDown', () => moveCardFocus(1)),
   catalogDef('today.prevDay', () => store.goToPrevDay()),
   catalogDef('today.nextDay', () => store.goToNextDay()),
   catalogDef('today.goToday', () => store.goToToday()),
@@ -395,7 +421,7 @@ watch(
 </script>
 
 <template>
-  <section class="mx-auto max-w-2xl space-y-4 p-4">
+  <section ref="rootEl" class="mx-auto max-w-2xl space-y-4 p-4">
     <header v-if="store.view" class="flex items-center justify-between gap-3 pb-1">
       <div class="flex items-center gap-1 sm:gap-1.5 flex-nowrap shrink-0">
         <button
