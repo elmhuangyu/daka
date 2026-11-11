@@ -153,6 +153,37 @@ export const SHORTCUT_CATALOG: CatalogEntry[] = [
     scope: 'calendar',
     labelKey: 'shortcuts.label.calendar.next',
   },
+  {
+    id: 'project.rowUp',
+    keys: ['ArrowUp'],
+    scope: 'projects',
+    labelKey: 'shortcuts.label.project.rowUp',
+  },
+  {
+    id: 'project.rowDown',
+    keys: ['ArrowDown'],
+    scope: 'projects',
+    labelKey: 'shortcuts.label.project.rowDown',
+  },
+  {
+    id: 'project.toggleRow',
+    keys: ['x'],
+    scope: 'projects',
+    labelKey: 'shortcuts.label.project.toggleRow',
+  },
+  {
+    id: 'project.deleteRow',
+    keys: ['d'],
+    scope: 'projects',
+    labelKey: 'shortcuts.label.project.deleteRow',
+  },
+  {
+    id: 'project.newSibling',
+    keys: ['Enter'],
+    scope: 'projects',
+    labelKey: 'shortcuts.label.project.newSibling',
+    displayOnly: true,
+  },
 ]
 
 const BY_ID = new Map(SHORTCUT_CATALOG.map((e) => [e.id, e]))

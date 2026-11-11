@@ -10,8 +10,10 @@ import { useI18n } from '../i18n'
 import { formatCustomDate } from '../i18n/format'
 import { usePrivacyStore } from '../stores/privacy'
 import { useProjectsStore } from '../stores/projects'
+import { catalogDef } from '../composables/shortcutCatalog'
+import { useShortcut } from '../composables/useShortcuts'
 
-const { t } = useI18n()
+const { t, tn } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const privacy = usePrivacyStore()
@@ -93,7 +95,11 @@ const categoriesById = computed(() => {
   return map
 })
 
-const subtaskParentId = ref<number | null>(null)
+/**
+ * The inline create form: `after` is the task whose subtree it follows; `parent` is the new
+ * task's parent (the same task for a sub-task, its parent for a sibling).
+ */
+const form = ref<{ after: number; parent: number | null; sibling: boolean } | null>(null)
 const subtaskName = ref('')
 const addingSubtask = ref(false)
 
@@ -110,7 +116,7 @@ const childrenByParent = computed(() => {
 
 type TreeRow =
   | { kind: 'task'; task: ItemDetail; depth: number }
-  | { kind: 'form'; parent: ItemDetail; depth: number }
+  | { kind: 'form'; after: ItemDetail; parent: number | null; sibling: boolean; depth: number }
 
 // Depth-first flattening of the task tree; the add-sub-task form is placed
 // after the open node's subtree.
@@ -120,8 +126,15 @@ const treeRows = computed<TreeRow[]>(() => {
   const visit = (task: ItemDetail, depth: number) => {
     rows.push({ kind: 'task', task, depth })
     for (const c of childrenByParent.value.get(task.id) ?? []) visit(c, depth + 1)
-    if (subtaskParentId.value === task.id)
-      rows.push({ kind: 'form', parent: task, depth: depth + 1 })
+    const f = form.value
+    if (f && f.after === task.id)
+      rows.push({
+        kind: 'form',
+        after: task,
+        parent: f.parent,
+        sibling: f.sibling,
+        depth: f.sibling ? depth : depth + 1,
+      })
   }
   for (const t of tasks.value) {
     if (!t.parent_id || !ids.has(t.parent_id)) visit(t, 0)
@@ -332,26 +345,61 @@ async function handleQuickAddTask() {
   }
 }
 
-// Task Management: Sub-tasks
-function openSubtaskForm(task: ItemDetail) {
-  subtaskParentId.value = task.id
+// Task Management: Sub-tasks and siblings (same inline form)
+const formOrigin = ref<number | null>(null)
+
+function openForm(task: ItemDetail, sibling: boolean) {
+  form.value = { after: task.id, parent: sibling ? parentOf(task) : task.id, sibling }
+  formOrigin.value = task.id
   subtaskName.value = ''
+  void nextTick(() =>
+    document.querySelector<HTMLInputElement>('[data-testid="input-task-form"]')?.focus(),
+  )
+}
+
+const openSubtaskForm = (task: ItemDetail) => openForm(task, false)
+
+/** The parent id, or null for a root (including an orphan whose parent is not loaded). */
+function parentOf(task: ItemDetail): number | null {
+  return task.parent_id && tasks.value.some((x) => x.id === task.parent_id) ? task.parent_id : null
 }
 
 function closeSubtaskForm() {
-  subtaskParentId.value = null
+  form.value = null
   subtaskName.value = ''
 }
 
-async function handleAddSubtask(parent: ItemDetail) {
+function focusTaskRow(id: number | null | undefined): boolean {
+  if (id == null) return false
+  const el = document.querySelector<HTMLElement>(`[data-task-row][data-task-id="${id}"]`)
+  if (!el) return false
+  el.focus()
+  el.scrollIntoView?.({ block: 'nearest' })
+  return true
+}
+
+/** Esc in the form: cancel and return to the row it was opened from. */
+function cancelForm() {
+  const origin = formOrigin.value
+  closeSubtaskForm()
+  void nextTick(() => focusTaskRow(origin))
+}
+
+async function handleAddSubtask() {
+  const f = form.value
   const name = subtaskName.value.trim()
-  if (!name || !project.value) return
+  if (!f || !name || !project.value || addingSubtask.value) return
   addingSubtask.value = true
   quickAddError.value = ''
   try {
-    await api.createTodoItem(name, null, project.value.id, parent.id)
+    const created = await api.createTodoItem(name, null, project.value.id, f.parent)
     subtaskName.value = ''
     await refreshTasks()
+    if (f.sibling) {
+      closeSubtaskForm()
+      await nextTick()
+      focusTaskRow(created?.id)
+    }
   } catch (e) {
     quickAddError.value = api.describeError(e)
   } finally {
@@ -429,6 +477,118 @@ async function deleteTask(task: ItemDetail) {
     error.value = api.describeError(e)
   }
 }
+
+// Keyboard delete: confirm first; the dialog shows only the number of sub-tasks.
+const confirmTask = ref<ItemDetail | null>(null)
+const confirmBusy = ref(false)
+const cancelBtn = ref<HTMLButtonElement | null>(null)
+
+function subtaskCount(task: ItemDetail): number {
+  let n = 0
+  const walk = (id: number) => {
+    for (const c of childrenByParent.value.get(id) ?? []) {
+      n++
+      walk(c.id)
+    }
+  }
+  walk(task.id)
+  return n
+}
+
+function openDeleteTask(task: ItemDetail) {
+  confirmTask.value = task
+  void nextTick(() => cancelBtn.value?.focus())
+}
+
+function cancelDeleteTask() {
+  const id = confirmTask.value?.id
+  confirmTask.value = null
+  void nextTick(() => focusTaskRow(id))
+}
+
+async function confirmDeleteTask() {
+  const task = confirmTask.value
+  if (!task || confirmBusy.value) return
+  confirmBusy.value = true
+  const rows = taskRows()
+  const mine = rows.findIndex((r) => Number(r.dataset.taskId) === task.id)
+  // Next row outside the deleted subtree, else the previous one.
+  const survivors = rows.filter((r) => !isInSubtree(task, Number(r.dataset.taskId)))
+  const after = rows.slice(mine + 1).find((r) => survivors.includes(r))
+  const before = rows
+    .slice(0, mine)
+    .reverse()
+    .find((r) => survivors.includes(r))
+  const target = Number((after ?? before)?.dataset.taskId)
+  try {
+    await api.deleteItem(task.id)
+    removeTaskLocally(task)
+    confirmTask.value = null
+    await nextTick()
+    if (!focusTaskRow(Number.isNaN(target) ? null : target)) {
+      ;(document.activeElement as HTMLElement | null)?.blur?.()
+    }
+  } catch (e) {
+    confirmTask.value = null
+    error.value = api.describeError(e)
+    void nextTick(() => focusTaskRow(task.id))
+  } finally {
+    confirmBusy.value = false
+  }
+}
+
+function isInSubtree(root: ItemDetail, id: number): boolean {
+  if (id === root.id) return true
+  let cur = tasks.value.find((x) => x.id === id)
+  while (cur?.parent_id) {
+    if (cur.parent_id === root.id) return true
+    cur = tasks.value.find((x) => x.id === cur!.parent_id)
+  }
+  return false
+}
+
+// Keyboard navigation over the task rows
+const listEl = ref<HTMLElement | null>(null)
+
+function taskRows(): HTMLElement[] {
+  return [...(listEl.value?.querySelectorAll<HTMLElement>('[data-task-row]') ?? [])]
+}
+
+function focusedTask(): ItemDetail | null {
+  const row = document.activeElement?.closest<HTMLElement>('[data-task-row]')
+  const id = Number(row?.dataset.taskId)
+  return tasks.value.find((x) => x.id === id) ?? null
+}
+
+/** Tree (DOM) order, clamped at the ends. Returns false (not handled) only without rows. */
+function moveRowFocus(dir: 1 | -1): boolean {
+  const rows = taskRows()
+  if (!rows.length) return false
+  const cur = document.activeElement?.closest<HTMLElement>('[data-task-row]') ?? null
+  const i = cur ? rows.indexOf(cur) : -1
+  const next =
+    i < 0 ? (dir === 1 ? 0 : rows.length - 1) : Math.min(rows.length - 1, Math.max(0, i + dir))
+  const el = rows[next]!
+  if (el !== document.activeElement) {
+    el.focus()
+    el.scrollIntoView?.({ block: 'nearest' })
+  }
+  return true
+}
+
+useShortcut([
+  catalogDef('project.rowUp', () => moveRowFocus(-1)),
+  catalogDef('project.rowDown', () => moveRowFocus(1)),
+  catalogDef('project.toggleRow', () => {
+    const task = focusedTask()
+    if (task) void toggleTask(task)
+  }),
+  catalogDef('project.deleteRow', () => {
+    const task = focusedTask()
+    if (task) openDeleteTask(task)
+  }),
+  catalogDef('project.newSibling'),
+])
 
 function taskDueDate(task: ItemDetail): string | null {
   if (task.current_rule.schedule_type === 'fixed_rrule' && task.current_rule.dtstart) {
@@ -728,18 +888,22 @@ function taskDueDate(task: ItemDetail): string | null {
           <p class="text-sm text-base-content/60">{{ t('projects.noTasks') }}</p>
         </div>
 
-        <div v-else class="space-y-2" data-testid="project-tasks-list">
+        <div v-else ref="listEl" class="space-y-2" data-testid="project-tasks-list">
           <template
             v-for="row in treeRows"
-            :key="`${row.kind}-${row.kind === 'task' ? row.task.id : row.parent.id}`"
+            :key="`${row.kind}-${row.kind === 'task' ? row.task.id : row.after.id}`"
           >
             <div
               v-if="row.kind === 'task'"
-              class="group rounded-xl border border-base-300 bg-base-100 p-3 sm:px-4 flex flex-wrap items-center gap-x-3 gap-y-2 transition-colors hover:bg-base-200/40"
+              class="group rounded-xl border border-base-300 bg-base-100 p-3 sm:px-4 flex flex-wrap items-center gap-x-3 gap-y-2 transition-colors hover:bg-base-200/40 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              data-task-row
+              tabindex="-1"
+              :data-task-id="row.task.id"
               :id="`task-${row.task.id}`"
               :style="indentStyle(row.depth)"
               :class="{ 'ring-2 ring-primary/60': highlightId === row.task.id }"
               :data-testid="`task-item-${row.task.id}`"
+              @keydown.enter.self.prevent="openForm(row.task, true)"
             >
               <div class="flex items-center gap-3 min-w-0 flex-1 basis-48">
                 <input
@@ -809,23 +973,26 @@ function taskDueDate(task: ItemDetail): string | null {
               v-else
               class="flex items-center gap-2"
               :style="indentStyle(row.depth)"
-              @submit.prevent="handleAddSubtask(row.parent)"
+              @submit.prevent="handleAddSubtask"
             >
               <input
                 v-model="subtaskName"
                 type="text"
                 class="input input-sm input-bordered min-w-0 flex-1"
-                :placeholder="t('projects.subtaskPlaceholder')"
+                :placeholder="
+                  row.sibling ? t('projects.siblingPlaceholder') : t('projects.subtaskPlaceholder')
+                "
                 autocomplete="off"
                 autofocus
-                :data-testid="`input-subtask-name-${row.parent.id}`"
-                @keydown.esc="closeSubtaskForm"
+                data-testid="input-task-form"
+                :data-form-for="row.after.id"
+                @keydown.esc.prevent="cancelForm"
               />
               <button
                 type="submit"
                 class="btn btn-sm btn-primary"
                 :disabled="!subtaskName.trim() || addingSubtask"
-                :data-testid="`btn-submit-subtask-${row.parent.id}`"
+                :data-testid="`btn-submit-subtask-${row.after.id}`"
               >
                 {{ t('projects.addTask') }}
               </button>
@@ -834,6 +1001,51 @@ function taskDueDate(task: ItemDetail): string | null {
               </button>
             </form>
           </template>
+        </div>
+      </div>
+
+      <!-- Delete task confirmation (keyboard delete) -->
+      <div
+        v-if="confirmTask"
+        class="modal modal-open"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-task-title"
+        data-testid="modal-delete-task"
+        @keydown.esc.prevent="cancelDeleteTask"
+      >
+        <div class="modal-box max-w-sm space-y-3">
+          <h3 id="delete-task-title" class="text-lg font-bold">
+            {{ t('projects.deleteTaskTitle') }}
+          </h3>
+          <p class="text-sm">{{ t('projects.deleteTaskWarning') }}</p>
+          <p
+            v-if="subtaskCount(confirmTask) > 0"
+            class="text-sm"
+            data-testid="delete-task-subtasks"
+          >
+            {{ tn('projects.deleteTaskSubtasks', subtaskCount(confirmTask)) }}
+          </p>
+          <div class="modal-action">
+            <button
+              ref="cancelBtn"
+              type="button"
+              class="btn btn-ghost"
+              data-testid="btn-cancel-delete-task"
+              @click="cancelDeleteTask"
+            >
+              {{ t('common.cancel') }}
+            </button>
+            <button
+              type="button"
+              class="btn btn-error"
+              :disabled="confirmBusy"
+              data-testid="btn-confirm-delete-task"
+              @click="confirmDeleteTask"
+            >
+              {{ t('common.delete') }}
+            </button>
+          </div>
         </div>
       </div>
 

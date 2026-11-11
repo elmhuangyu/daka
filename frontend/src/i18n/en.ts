@@ -355,6 +355,12 @@ export const en = {
   'projects.tomorrow': 'Tomorrow',
   'projects.unlinkTask': 'Unlink from project',
   'projects.deleteTask': 'Delete task',
+  'projects.deleteTaskTitle': 'Delete this task?',
+  'projects.deleteTaskWarning':
+    'The task and its check-in history will be deleted. This cannot be undone.',
+  'projects.deleteTaskSubtasks.one': '{count} sub-task will be deleted too.',
+  'projects.deleteTaskSubtasks.other': '{count} sub-tasks will be deleted too.',
+  'projects.siblingPlaceholder': 'New task name...',
   'projects.deleteConfirmPrompt': 'Are you sure you want to delete this project?',
   'projects.deleteWithItemsPrompt': 'This project has {count} tasks. Choose how to handle them:',
   'projects.unlinkTasks': 'Unlink tasks (keep items)',
@@ -836,6 +842,7 @@ export const en = {
   'shortcuts.scope.global': 'Global',
   'shortcuts.scope.today': 'Today',
   'shortcuts.scope.calendar': 'Calendar',
+  'shortcuts.scope.projects': 'Projects',
   'shortcuts.unbound': 'Unbound',
   'shortcuts.fixed': 'Fixed',
   'shortcuts.help.disabled':
@@ -913,6 +920,11 @@ export const en = {
   'shortcuts.label.calendar.today': 'Jump to today',
   'shortcuts.label.calendar.prev': 'Previous period',
   'shortcuts.label.calendar.next': 'Next period',
+  'shortcuts.label.project.rowUp': 'Previous task',
+  'shortcuts.label.project.rowDown': 'Next task',
+  'shortcuts.label.project.toggleRow': 'Check or uncheck the focused task',
+  'shortcuts.label.project.deleteRow': 'Delete the focused task',
+  'shortcuts.label.project.newSibling': 'Add a task below the focused task',
 } as const
 
 export type MessageKey = keyof typeof en

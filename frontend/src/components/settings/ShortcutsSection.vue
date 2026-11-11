@@ -39,8 +39,9 @@ const SCOPE_TITLES: Record<ShortcutScope, MessageKey> = {
   global: 'shortcuts.scope.global',
   today: 'shortcuts.scope.today',
   calendar: 'shortcuts.scope.calendar',
+  projects: 'shortcuts.scope.projects',
 }
-const SCOPE_ORDER: ShortcutScope[] = ['global', 'today', 'calendar']
+const SCOPE_ORDER: ShortcutScope[] = ['global', 'today', 'calendar', 'projects']
 const EXPORT_FILE = 'daka-shortcuts.json'
 const MAX_IMPORT_BYTES = 64 * 1024
 

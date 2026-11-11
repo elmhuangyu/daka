@@ -1,12 +1,20 @@
 import { nextTick } from 'vue'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 import { makeRouter } from '../router'
 import { usePrivacyStore } from '../stores/privacy'
 import ProjectDetailView from './ProjectDetailView.vue'
-import type { ItemDetail, Project } from '../api'
+import { setAuthHooks, type ItemDetail, type Project } from '../api'
+import { installShortcutListener, useShortcutList } from '../composables/useShortcuts'
+import { catalogEntry } from '../composables/shortcutCatalog'
+import { en } from '../i18n/en'
+import zhCN from '../i18n/zh-CN'
+import ShortcutHelp from '../components/ShortcutHelp.vue'
+import { helpOpen } from '../composables/useGlobalShortcuts'
+
+enableAutoUnmount(afterEach)
 
 function jsonRes(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -115,6 +123,7 @@ beforeEach(() => {
       const b = calls.at(-1)!.body as {
         name: string
         project_id?: number
+        parent_id?: number
         rule?: { dtstart?: string; schedule_type: string }
       }
       const newTask: ItemDetail = {
@@ -124,6 +133,7 @@ beforeEach(() => {
         kind: 'event',
         polarity: 'positive',
         project_id: b.project_id ?? null,
+        parent_id: b.parent_id,
         category_id: 10,
         effective_sensitive: false,
         options: [],
@@ -543,5 +553,386 @@ describe('ProjectDetailView', () => {
 
     expect(w.text()).not.toContain('Stale Unredacted Secret Task')
     expect(w.text()).not.toContain('Top Secret Task')
+  })
+})
+
+describe('ProjectDetailView keyboard', () => {
+  let off: (() => void) | undefined
+  const press = (key: string, target: EventTarget = document.body) => {
+    const e = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+    target.dispatchEvent(e)
+    return e
+  }
+  const active = () => (document.activeElement as HTMLElement | null)?.dataset.taskId
+  const rowIds = () =>
+    [...document.querySelectorAll<HTMLElement>('[data-task-row]')].map((r) => r.dataset.taskId)
+  const click = (testid: string) =>
+    (document.querySelector(`[data-testid="${testid}"]`) as HTMLElement).click()
+  const checkins = () => calls.filter((c) => c.url === '/api/checkins')
+
+  function task(id: number, name: string, parent?: number): ItemDetail {
+    return {
+      ...currentTasks[1]!,
+      id,
+      name,
+      parent_id: parent,
+      stats: { counts: { last_30_days: 0, this_year: 0, total: 0 } },
+    }
+  }
+
+  async function mountWith(list: ItemDetail[]) {
+    currentTasks = list
+    off = installShortcutListener()
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = makeRouter(createMemoryHistory())
+    await router.push('/projects/1')
+    await router.isReady()
+    const w = mount(ProjectDetailView, {
+      global: { plugins: [pinia, router] },
+      attachTo: document.body,
+    })
+    await flushPromises()
+    return w
+  }
+
+  // Tree: 201 > (202 > 203), 204. Listed out of order to prove DOM order is the tree order.
+  const mountTree = () =>
+    mountWith([task(201, 'A'), task(204, 'D'), task(203, 'C', 202), task(202, 'B', 201)])
+
+  beforeEach(() => {
+    setAuthHooks({})
+  })
+  afterEach(() => {
+    off?.()
+    document.body.innerHTML = ''
+  })
+
+  it('Up/Down follow tree order, clamp at the ends and start from body', async () => {
+    const w = await mountTree()
+    expect(rowIds()).toEqual(['201', '202', '203', '204'])
+    expect(document.querySelector('[data-task-row]')!.getAttribute('tabindex')).toBe('-1')
+    expect(press('ArrowDown').defaultPrevented).toBe(true)
+    expect(active()).toBe('201')
+    press('ArrowDown', document.activeElement!)
+    press('ArrowDown', document.activeElement!)
+    expect(active()).toBe('203')
+    press('ArrowDown', document.activeElement!)
+    press('ArrowDown', document.activeElement!)
+    expect(active()).toBe('204')
+    press('ArrowUp', document.activeElement!)
+    expect(active()).toBe('203')
+    ;(document.activeElement as HTMLElement).blur()
+    press('ArrowUp')
+    expect(active()).toBe('204')
+    w.unmount()
+  })
+
+  it('Up/Down are not handled without rows', async () => {
+    const w = await mountWith([])
+    expect(press('ArrowDown').defaultPrevented).toBe(false)
+    w.unmount()
+  })
+
+  it('x toggles the focused row only, and not while typing', async () => {
+    const w = await mountTree()
+    press('x')
+    await flushPromises()
+    expect(checkins()).toHaveLength(0)
+    press('ArrowDown')
+    press('x', document.activeElement!)
+    await flushPromises()
+    expect(checkins().at(-1)?.body).toMatchObject({ item_id: 201, mode: 'set' })
+
+    const n = checkins().length
+    const input = document.createElement('input')
+    document.querySelector('[data-task-row]')!.appendChild(input)
+    input.focus()
+    press('x', input)
+    await flushPromises()
+    expect(checkins()).toHaveLength(n)
+    w.unmount()
+  })
+
+  it('d opens a confirm with the sub-task count; Esc cancels; confirm deletes', async () => {
+    const w = await mountTree()
+    press('ArrowDown')
+    press('d', document.activeElement!)
+    await flushPromises()
+    const dlg = document.querySelector('[data-testid="modal-delete-task"]')!
+    expect(dlg.getAttribute('role')).toBe('dialog')
+    expect(dlg.getAttribute('aria-modal')).toBe('true')
+    expect(dlg.textContent).toContain('2 sub-tasks will be deleted too.')
+    expect((document.activeElement as HTMLElement).dataset.testid).toBe('btn-cancel-delete-task')
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false)
+
+    press('Escape', document.activeElement!)
+    await flushPromises()
+    expect(document.querySelector('[data-testid="modal-delete-task"]')).toBeNull()
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false)
+    expect(active()).toBe('201')
+
+    // Shortcuts are ignored while the dialog is open.
+    press('d', document.activeElement!)
+    await flushPromises()
+    press('x', document.querySelector('[data-testid="btn-cancel-delete-task"]')!)
+    press('ArrowDown', document.querySelector('[data-testid="btn-cancel-delete-task"]')!)
+    expect(checkins()).toHaveLength(0)
+    expect(document.activeElement).toBe(
+      document.querySelector('[data-testid="btn-cancel-delete-task"]'),
+    )
+
+    click('btn-confirm-delete-task')
+    await flushPromises()
+    expect(calls.filter((c) => c.method === 'DELETE').map((c) => c.url)).toEqual(['/api/items/201'])
+    expect(rowIds()).toEqual(['204'])
+    expect(active()).toBe('204')
+    expect(document.querySelector('[data-testid="modal-delete-task"]')).toBeNull()
+    w.unmount()
+  })
+
+  it('deleting the last row focuses the previous row; singular wording', async () => {
+    const w = await mountTree()
+    press('ArrowUp')
+    press('d', document.activeElement!)
+    await flushPromises()
+    expect(document.querySelector('[data-testid="delete-task-subtasks"]')).toBeNull()
+    click('btn-confirm-delete-task')
+    await flushPromises()
+    expect(active()).toBe('203')
+    press('ArrowUp', document.activeElement!)
+    press('d', document.activeElement!)
+    await flushPromises()
+    expect(document.querySelector('[data-testid="delete-task-subtasks"]')!.textContent).toContain(
+      '1 sub-task will',
+    )
+    w.unmount()
+  })
+
+  it('retries the delete after reauth on 403 reauth_required', async () => {
+    const w = await mountTree()
+    const hook = vi.fn<() => Promise<boolean>>(async () => true)
+    setAuthHooks({ onReauthRequired: hook })
+    const inner = globalThis.fetch
+    let first = true
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE' && first) {
+        first = false
+        calls.push({ url, method: 'DELETE' })
+        return jsonRes({ error: 'reauth_required' }, 403)
+      }
+      return inner(url, init)
+    })
+    press('ArrowUp')
+    press('d', document.activeElement!)
+    await flushPromises()
+    click('btn-confirm-delete-task')
+    await flushPromises()
+    expect(hook).toHaveBeenCalledTimes(1)
+    expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(2)
+    expect(rowIds()).toEqual(['201', '202', '203'])
+    w.unmount()
+  })
+
+  it('a failed delete shows the page error and closes the dialog', async () => {
+    const w = await mountTree()
+    const inner = globalThis.fetch
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) =>
+      init?.method === 'DELETE' ? jsonRes({ error: 'boom' }, 500) : inner(url, init),
+    )
+    press('ArrowDown')
+    press('d', document.activeElement!)
+    await flushPromises()
+    click('btn-confirm-delete-task')
+    await flushPromises()
+    expect(document.querySelector('[data-testid="modal-delete-task"]')).toBeNull()
+    expect(document.querySelector('[data-testid="project-error"]')).not.toBeNull()
+    expect(rowIds()).toHaveLength(4)
+    w.unmount()
+  })
+
+  it('Enter on a nested row opens a sibling form after its subtree, then creates', async () => {
+    const w = await mountTree()
+    press('ArrowDown')
+    press('ArrowDown', document.activeElement!)
+    expect(active()).toBe('202')
+    press('Enter', document.activeElement!)
+    await flushPromises()
+    const input = document.querySelector<HTMLInputElement>('[data-testid="input-task-form"]')!
+    expect(document.activeElement).toBe(input)
+    const rows = [...document.querySelector('[data-testid="project-tasks-list"]')!.children]
+    const formEl = input.closest('form')!
+    // After 202's subtree (203), before 204, at 202's indent.
+    expect(rows.indexOf(formEl)).toBe(rows.indexOf(document.getElementById('task-203')!) + 1)
+    expect(formEl.style.marginLeft).toBe(document.getElementById('task-202')!.style.marginLeft)
+    // Name is required.
+    press('Enter', input)
+    await flushPromises()
+    expect(calls.some((c) => c.url === '/api/items' && c.method === 'POST')).toBe(false)
+    input.value = 'New sibling'
+    input.dispatchEvent(new Event('input'))
+    formEl.dispatchEvent(new Event('submit', { cancelable: true }))
+    await flushPromises()
+    const post = calls.find((c) => c.url === '/api/items' && c.method === 'POST')
+    expect(post?.body).toMatchObject({ name: 'New sibling', project_id: 1, parent_id: 201 })
+    expect(document.querySelector('[data-testid="input-task-form"]')).toBeNull()
+    expect(active()).toBe('103')
+    w.unmount()
+  })
+
+  it('Enter on a top-level row creates a top-level task', async () => {
+    const w = await mountTree()
+    press('ArrowUp')
+    press('Enter', document.activeElement!)
+    await flushPromises()
+    const input = document.querySelector<HTMLInputElement>('[data-testid="input-task-form"]')!
+    input.value = 'Top'
+    input.dispatchEvent(new Event('input'))
+    input.closest('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
+    await flushPromises()
+    const post = calls.find((c) => c.url === '/api/items' && c.method === 'POST')!
+    expect((post.body as { parent_id?: number }).parent_id ?? null).toBeNull()
+    w.unmount()
+  })
+
+  it('Esc in the sibling form cancels and refocuses the origin row', async () => {
+    const w = await mountTree()
+    press('ArrowDown')
+    press('Enter', document.activeElement!)
+    await flushPromises()
+    press('Escape', document.querySelector('[data-testid="input-task-form"]')!)
+    await flushPromises()
+    expect(document.querySelector('[data-testid="input-task-form"]')).toBeNull()
+    expect(active()).toBe('201')
+    expect(calls.some((c) => c.url === '/api/items' && c.method === 'POST')).toBe(false)
+    w.unmount()
+  })
+
+  const formInput = () =>
+    document.querySelector<HTMLInputElement>('[data-testid="input-task-form"]')
+  const itemPosts = () => calls.filter((c) => c.url === '/api/items' && c.method === 'POST')
+  const submitForm = async (name: string) => {
+    const input = formInput()!
+    input.value = name
+    input.dispatchEvent(new Event('input'))
+    input.closest('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
+    await flushPromises()
+  }
+  const listRows = () => [...document.querySelector('[data-testid="project-tasks-list"]')!.children]
+
+  it('the add-sub-task button on a nested row opens a form after its subtree, one level deeper', async () => {
+    const w = await mountTree()
+    click('btn-add-subtask-202')
+    await flushPromises()
+    const input = formInput()!
+    expect(document.activeElement).toBe(input)
+    const formEl = input.closest('form')!
+    const rows = listRows()
+    expect(rows.indexOf(formEl)).toBe(rows.indexOf(document.getElementById('task-203')!) + 1)
+    const base = parseFloat(document.getElementById('task-202')!.style.marginLeft || '0')
+    expect(parseFloat(formEl.style.marginLeft || '0')).toBeGreaterThan(base)
+    expect(formEl.style.marginLeft).toBe(document.getElementById('task-203')!.style.marginLeft)
+
+    await submitForm('  Child of B ')
+    expect(itemPosts()).toHaveLength(1)
+    expect(itemPosts()[0]!.body).toMatchObject({
+      name: 'Child of B',
+      project_id: 1,
+      parent_id: 202,
+    })
+    // The form stays open for the next sub-task, with the input cleared.
+    expect(formInput()).not.toBeNull()
+    expect(formInput()!.value).toBe('')
+    w.unmount()
+  })
+
+  it('the add-sub-task button on a root row posts the root as parent', async () => {
+    const w = await mountTree()
+    click('btn-add-subtask-204')
+    await flushPromises()
+    const formEl = formInput()!.closest('form')!
+    const rows = listRows()
+    expect(rows.indexOf(formEl)).toBe(rows.indexOf(document.getElementById('task-204')!) + 1)
+    expect(parseFloat(formEl.style.marginLeft || '0')).toBeGreaterThan(
+      parseFloat(document.getElementById('task-204')!.style.marginLeft || '0'),
+    )
+    await submitForm('First')
+    await submitForm('Second')
+    expect(itemPosts().map((c) => c.body)).toMatchObject([
+      { name: 'First', project_id: 1, parent_id: 204 },
+      { name: 'Second', project_id: 1, parent_id: 204 },
+    ])
+    expect(formInput()).not.toBeNull()
+    w.unmount()
+  })
+
+  it('Esc and Cancel close the sub-task form without creating; only Esc refocuses the row', async () => {
+    const w = await mountTree()
+    click('btn-add-subtask-202')
+    await flushPromises()
+    press('Escape', formInput()!)
+    await flushPromises()
+    expect(formInput()).toBeNull()
+    expect(active()).toBe('202')
+
+    click('btn-add-subtask-202')
+    await flushPromises()
+    const cancel = formInput()!
+      .closest('form')!
+      .querySelector<HTMLElement>('button[type="button"]')!
+    cancel.click()
+    await flushPromises()
+    expect(formInput()).toBeNull()
+    expect(itemPosts()).toHaveLength(0)
+    w.unmount()
+  })
+
+  it('typing in the form keeps native keys', async () => {
+    const w = await mountTree()
+    press('ArrowDown')
+    press('Enter', document.activeElement!)
+    await flushPromises()
+    const input = document.querySelector('[data-testid="input-task-form"]')!
+    expect(press('d', input).defaultPrevented).toBe(false)
+    expect(press('ArrowDown', input).defaultPrevented).toBe(false)
+    expect(document.querySelector('[data-testid="modal-delete-task"]')).toBeNull()
+    w.unmount()
+  })
+
+  it('registers its shortcuts and cleans up on unmount', async () => {
+    const list = useShortcutList()
+    const ids = () => list.value.filter((d) => d.scope === 'projects').map((d) => d.id)
+    const w = await mountTree()
+    expect(ids().sort()).toEqual(
+      [
+        'project.deleteRow',
+        'project.newSibling',
+        'project.rowDown',
+        'project.rowUp',
+        'project.toggleRow',
+      ].sort(),
+    )
+    w.unmount()
+    expect(ids()).toEqual([])
+  })
+
+  it('scope title and labels resolve in both locales; the help panel lists them', async () => {
+    const msgs: Record<string, string>[] = [en, zhCN]
+    for (const m of msgs) {
+      expect(m['shortcuts.scope.projects']).toBeTruthy()
+      for (const id of ['rowUp', 'rowDown', 'toggleRow', 'deleteRow', 'newSibling']) {
+        expect(m[catalogEntry(`project.${id}`)!.labelKey]).toBeTruthy()
+      }
+    }
+    const w = await mountTree()
+    helpOpen.value = true
+    const help = mount(ShortcutHelp, { attachTo: document.body })
+    await flushPromises()
+    expect(help.text()).toContain('Projects')
+    expect(help.text()).toContain('Delete the focused task')
+    expect(help.text()).toContain('Add a task below the focused task')
+    helpOpen.value = false
+    help.unmount()
+    w.unmount()
   })
 })

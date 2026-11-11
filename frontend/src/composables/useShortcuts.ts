@@ -4,7 +4,7 @@ import { parseBinding } from './shortcutBindings'
 import { PRIVACY_TOGGLE_ID } from './shortcutCatalog'
 import { shortcutPrefs } from './shortcutPrefs'
 
-export type ShortcutScope = 'global' | 'today' | 'calendar'
+export type ShortcutScope = 'global' | 'today' | 'calendar' | 'projects'
 
 export interface ShortcutDef {
   id: string

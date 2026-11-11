@@ -13,8 +13,9 @@ const SCOPE_TITLES: Record<ShortcutScope, MessageKey> = {
   global: 'shortcuts.scope.global',
   today: 'shortcuts.scope.today',
   calendar: 'shortcuts.scope.calendar',
+  projects: 'shortcuts.scope.projects',
 }
-const SCOPE_ORDER: ShortcutScope[] = ['global', 'today', 'calendar']
+const SCOPE_ORDER: ShortcutScope[] = ['global', 'today', 'calendar', 'projects']
 const GENERAL_ROWS: { labelKey: MessageKey; keys: string[][] }[] = [
   { labelKey: 'shortcuts.help.moveBetween', keys: [['Tab'], ['Shift', 'Tab']] },
   { labelKey: 'shortcuts.help.closeDialogs', keys: [['Esc']] },
