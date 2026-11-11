@@ -343,3 +343,23 @@ func TestSubItemsInheritSensitivity(t *testing.T) {
 	c.ok(200, "PATCH", fmt.Sprintf("/api/items/%d", p2), obj{"is_sensitive": true})
 	assertProtected(t, s, c, child2)
 }
+
+// A top-level item moved under a sensitive parent (PATCH parent_id) becomes
+// sensitive, together with its own sub-tasks, and is protected on every
+// surface.
+func TestReparentUnderSensitiveParentIsProtected(t *testing.T) {
+	s := startStack(t, "2025-09-10", stackOpts{})
+	c := s.newClient()
+	c.createItem(obj{"name": pubName, "tracker_type": "boolean", "rule": fixedRule("FREQ=DAILY", "none")})
+
+	parent := c.createItem(obj{"name": "parent", "tracker_type": "boolean", "kind": "event", "is_sensitive": true,
+		"rule": obj{"schedule_type": "none", "holiday_mode": "none"}})
+	child := c.createItem(obj{"name": secName, "tracker_type": "boolean", "kind": "event",
+		"rule": fixedRule("FREQ=DAILY", "none")})
+	grand := c.createItem(obj{"name": secName, "tracker_type": "boolean", "kind": "event",
+		"parent_id": child, "rule": fixedRule("FREQ=DAILY", "none")})
+
+	c.ok(200, "PATCH", fmt.Sprintf("/api/items/%d", child), obj{"parent_id": parent})
+	assertProtected(t, s, c, child)
+	assertProtected(t, s, c, grand)
+}

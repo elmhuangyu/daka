@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -82,6 +83,7 @@ type patchItemRequest struct {
 	Emoji       *string          `json:"emoji"`
 	CategoryID  nullable[uint]   `json:"category_id"`
 	ProjectID   nullable[uint]   `json:"project_id"`
+	ParentID    nullable[uint]   `json:"parent_id"` // see applyReparent
 	IsSensitive *bool            `json:"is_sensitive"`
 	Pinned      *bool            `json:"pinned"`
 	SortOrder   *int             `json:"sort_order"`
@@ -287,18 +289,19 @@ func (s *server) patchItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRequest) (result, error) {
-	// Row lock (PostgreSQL; SQLite serializes writers anyway) so a concurrent
-	// category freeze cannot be overwritten by this read-modify-write.
-	// Children are locked in the same statement, in id order, matching
-	// patchProject's ordering so concurrent updates cannot deadlock.
-	subtree, err := itemDescendants(tx, userID, id)
+	// Row locks (PostgreSQL; SQLite serializes writers anyway) so a concurrent
+	// category freeze cannot be overwritten by this read-modify-write, and so
+	// concurrent reparents cannot form a cycle. See lockItemTree.
+	var newParent *uint
+	if req.ParentID.Set && !req.ParentID.Null {
+		newParent = &req.ParentID.Val
+	}
+	subtree, locked, err := lockItemTree(tx, userID, id, newParent)
 	if err != nil {
 		return result{}, err
 	}
-	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Model(&dbmodels.Item{}).
-		Where("user_id = ? AND id IN ?", userID, append(subtree, id)).Order("id").
-		Pluck("id", &[]uint{}).Error; err != nil {
-		return result{}, err
+	if !locked {
+		return errResult(http.StatusConflict, "the item tree changed concurrently, retry"), nil
 	}
 	item, found, err := loadOwnedItem(tx, userID, id)
 	if err != nil {
@@ -396,6 +399,13 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 			item.CategoryID = &cid
 			// DESIGN 4.1 rule 1: a sensitive category makes its items sensitive.
 			item.IsSensitive = item.IsSensitive || cat.IsSensitive
+		}
+	}
+	if req.ParentID.Set {
+		if res, bad, err := s.applyReparent(tx, userID, &item, subtree, req); err != nil {
+			return result{}, err
+		} else if bad {
+			return res, nil
 		}
 	}
 	if req.ProjectID.Set && item.ParentID != nil {
@@ -519,7 +529,7 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 		}
 	}
 	if err := tx.Model(&dbmodels.Item{}).Where("id = ?", item.ID).Select(
-		"Name", "Description", "Color", "Emoji", "CategoryID", "ProjectID", "IsSensitive", "Pinned", "SortOrder", "Archived", "RemindTime",
+		"Name", "Description", "Color", "Emoji", "CategoryID", "ProjectID", "ParentID", "IsSensitive", "Pinned", "SortOrder", "Archived", "RemindTime",
 		"Unit", "Step", "MinVal", "MaxVal", "Aggregate", "WarningDays").Updates(&item).Error; err != nil {
 		return result{}, err
 	}
@@ -619,4 +629,221 @@ func itemDescendants(tx *gorm.DB, userID string, id uint) ([]uint, error) {
 		}
 	}
 	return out, nil
+}
+
+// reparentRaceHook is a test seam. It runs inside lockItemTree after the
+// candidate lock set is computed and before the rows are locked, which is where
+// a concurrent transaction could commit a change.
+var reparentRaceHook func(tx *gorm.DB, round int)
+
+const lockTreeRounds = 4
+
+// itemAncestors returns the ids of id's ancestor chain (nearest first), not
+// including id. Unknown or foreign ids end the walk; a seen set guards loops.
+func itemAncestors(tx *gorm.DB, userID string, id uint) ([]uint, error) {
+	seen := map[uint]bool{id: true}
+	var out []uint
+	cur := id
+	for {
+		var rows []dbmodels.Item
+		if err := tx.Select("id", "parent_id").Where("user_id = ? AND id = ?", userID, cur).Limit(1).Find(&rows).Error; err != nil {
+			return nil, err
+		}
+		if len(rows) == 0 || rows[0].ParentID == nil || seen[*rows[0].ParentID] {
+			return out, nil
+		}
+		cur = *rows[0].ParentID
+		seen[cur] = true
+		out = append(out, cur)
+	}
+}
+
+// lockItemTree row-locks (FOR UPDATE, in ascending id order in one statement,
+// so concurrent writers cannot deadlock) every row a move of id under newParent
+// reads: id, its subtree, the new parent and the new parent's ancestors. Locking
+// the new parent chain too is what serializes "A under B" against "B under A".
+// Because the set is derived from rows that may change before the locks are
+// granted, it is recomputed after locking and compared; on a mismatch it
+// retries, and gives up (locked=false, a 409) after lockTreeRounds. The
+// returned subtree (descendants of id) therefore comes from locked, committed
+// state. SQLite ignores FOR UPDATE; its single writer makes the check trivial.
+func lockItemTree(tx *gorm.DB, userID string, id uint, newParent *uint) (subtree []uint, locked bool, err error) {
+	compute := func() ([]uint, []uint, error) {
+		sub, err := itemDescendants(tx, userID, id)
+		if err != nil {
+			return nil, nil, err
+		}
+		set := append([]uint{id}, sub...)
+		if newParent != nil {
+			set = append(set, *newParent)
+			anc, err := itemAncestors(tx, userID, *newParent)
+			if err != nil {
+				return nil, nil, err
+			}
+			set = append(set, anc...)
+		}
+		slices.Sort(set)
+		return sub, slices.Compact(set), nil
+	}
+	_, set, err := compute()
+	if err != nil {
+		return nil, false, err
+	}
+	for round := 0; round < lockTreeRounds; round++ {
+		if reparentRaceHook != nil {
+			reparentRaceHook(tx, round)
+		}
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Model(&dbmodels.Item{}).
+			Where("user_id = ? AND id IN ?", userID, set).Order("id").
+			Pluck("id", &[]uint{}).Error; err != nil {
+			return nil, false, err
+		}
+		sub2, set2, err := compute()
+		if err != nil {
+			return nil, false, err
+		}
+		if slices.Equal(set, set2) {
+			return sub2, true, nil
+		}
+		set = set2
+	}
+	return nil, false, nil
+}
+
+// maxItemDepth is the deepest allowed sub-task nesting, counting a top-level
+// item as level 1. It is enforced on create and when reparenting (PATCH parent_id); moving to
+// top level is always allowed. Import does not enforce it (see import_handler).
+const maxItemDepth = 5
+
+const errItemTooDeep = "sub-tasks can nest at most 5 levels"
+
+// applyReparent handles a parent_id in PATCH. It mutates item in memory (the
+// caller persists it and propagates project and sensitivity to subtree, the
+// moved item's descendants). The bool reports that res is a rejection.
+//
+// Rules: the parent must be one of the user's items (404 otherwise, the same
+// answer for other users' ids); no self-parenting or cycles; at most
+// maxItemDepth levels in total. Kinds are not restricted (create does not
+// restrict them either). Under a parent the whole moved subtree takes the
+// parent's project (null included) and becomes sensitive when the parent is
+// effectively sensitive. Moving to top level keeps the project. History
+// (logs, rule versions) is never touched.
+//
+// Exposure (DESIGN 4.1 rule 3): when the item leaves a sensitive parent or a
+// sensitive project, it is frozen as sensitive (and with it its subtree)
+// unless ?confirm_exposure=1. Stored flags are never cleared.
+func (s *server) applyReparent(tx *gorm.DB, userID string, item *dbmodels.Item, subtree []uint, req patchItemRequest) (result, bool, error) {
+	sensFn, err := sensitiveFn(tx, userID)
+	if err != nil {
+		return result{}, false, err
+	}
+	projSens, err := projectSensitiveFn(tx, userID)
+	if err != nil {
+		return result{}, false, err
+	}
+	var newParent *dbmodels.Item
+	if !req.ParentID.Null {
+		if req.ParentID.Val == 0 {
+			return errResult(http.StatusBadRequest, "invalid parent"), true, nil
+		}
+		if req.ParentID.Val == item.ID {
+			return errResult(http.StatusBadRequest, "an item cannot be its own parent"), true, nil
+		}
+		p, found, err := loadOwnedItem(tx, userID, req.ParentID.Val)
+		if err != nil {
+			return result{}, false, err
+		}
+		if !found {
+			return errResult(http.StatusNotFound, "parent not found"), true, nil
+		}
+		for _, d := range subtree {
+			if d == p.ID {
+				return errResult(http.StatusBadRequest, "the parent cannot be a descendant of the item"), true, nil
+			}
+		}
+		newParent = &p
+	}
+	if sameParent(item.ParentID, newParent) {
+		return result{}, false, nil
+	}
+
+	var rows []dbmodels.Item
+	if newParent != nil {
+		if err := tx.Select("id", "parent_id").Where("user_id = ?", userID).Find(&rows).Error; err != nil {
+			return result{}, false, err
+		}
+	}
+	parentOf := make(map[uint]*uint, len(rows))
+	children := make(map[uint][]uint, len(rows))
+	for _, r := range rows {
+		parentOf[r.ID] = r.ParentID
+		if r.ParentID != nil {
+			children[*r.ParentID] = append(children[*r.ParentID], r.ID)
+		}
+	}
+	// height: levels of the moved subtree (a leaf is 1). The subtree is
+	// cycle-free here (descendants came from a seen-set walk).
+	height, level := 0, []uint{item.ID}
+	for len(level) > 0 && height <= maxItemDepth {
+		height++
+		var next []uint
+		for _, id := range level {
+			next = append(next, children[id]...)
+		}
+		level = next
+	}
+	depth := 0
+	if newParent != nil {
+		for cur := &newParent.ID; cur != nil && depth <= maxItemDepth; cur = parentOf[*cur] {
+			depth++
+		}
+	}
+	// Moving to top level (depth 0) is always allowed, even for a deeper
+	// legacy subtree, so users can always escape an over-deep chain.
+	if newParent != nil && depth+height > maxItemDepth {
+		return errResult(http.StatusBadRequest, errItemTooDeep), true, nil
+	}
+
+	// Does the move take the item out of a sensitive container?
+	leaving := false
+	if item.ParentID != nil {
+		old, found, err := loadOwnedItem(tx, userID, *item.ParentID)
+		if err != nil {
+			return result{}, false, err
+		}
+		leaving = found && sensFn(old)
+	}
+	if newParent != nil && !sameProject(item.ProjectID, newParent.ProjectID) && item.ProjectID != nil {
+		oldProj, found, err := loadOwnedProject(tx, userID, *item.ProjectID)
+		if err != nil {
+			return result{}, false, err
+		}
+		leaving = leaving || (found && projSens(oldProj))
+	}
+	if leaving && !req.confirmExposure {
+		item.IsSensitive = true
+	}
+	if newParent == nil {
+		item.ParentID = nil
+		return result{}, false, nil
+	}
+	pid := newParent.ID
+	item.ParentID = &pid
+	item.ProjectID = newParent.ProjectID
+	item.IsSensitive = item.IsSensitive || sensFn(*newParent)
+	return result{}, false, nil
+}
+
+func sameParent(cur *uint, np *dbmodels.Item) bool {
+	if cur == nil || np == nil {
+		return cur == nil && np == nil
+	}
+	return *cur == np.ID
+}
+
+func sameProject(a, b *uint) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
 }

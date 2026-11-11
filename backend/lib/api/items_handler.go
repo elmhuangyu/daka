@@ -319,6 +319,14 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 			if err != nil {
 				return err
 			}
+			anc, err := itemAncestors(tx, userID, parent.ID)
+			if err != nil {
+				return err
+			}
+			if len(anc)+2 > maxItemDepth { // ancestors + parent + the new item
+				out = errResult(http.StatusBadRequest, errItemTooDeep)
+				return nil
+			}
 			// Sub-items live in the parent's project and inherit its sensitivity.
 			if req.ProjectID != nil && (parent.ProjectID == nil || *req.ProjectID != *parent.ProjectID) {
 				out = errResult(http.StatusBadRequest, "sub-items follow their parent's project")
