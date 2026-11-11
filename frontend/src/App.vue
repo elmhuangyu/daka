@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import './icons'
 import AppLayout from './components/AppLayout.vue'
 import ReauthModal from './components/ReauthModal.vue'
+import { installShortcutListener, useShortcut } from './composables/useShortcuts'
 import { useAuthStore } from './stores/auth'
 import { useOfflineStore } from './stores/offline'
 import { usePrivacyStore } from './stores/privacy'
@@ -58,21 +59,26 @@ watch(
   },
 )
 
-function onKey(e: KeyboardEvent) {
-  if (!e.repeat && e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'h') {
-    e.preventDefault()
-    privacy.toggle()
-  }
-}
+useShortcut({
+  id: 'privacy.toggle',
+  keys: ['ctrl+shift+h'],
+  scope: 'global',
+  label: 'Toggle privacy mask',
+  allowInInput: true,
+  handler: () => privacy.toggle(),
+})
+
+let removeShortcutListener: (() => void) | null = null
 
 onMounted(() => {
-  window.addEventListener('keydown', onKey)
+  removeShortcutListener = installShortcutListener()
   auth.listenBroadcast()
   offline.listen()
   void offline.start()
 })
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onKey)
+  removeShortcutListener?.()
+  removeShortcutListener = null
   if (removeActivationListener) {
     removeActivationListener()
     removeActivationListener = null

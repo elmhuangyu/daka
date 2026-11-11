@@ -1,10 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import indexHtml from '../index.html?raw'
 import { createMemoryHistory } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 import App from './App.vue'
 import { makeRouter } from './router'
+import { usePrivacyStore } from './stores/privacy'
+
+const wrappers: VueWrapper[] = []
+function mountApp(pinia: ReturnType<typeof createPinia>, router: ReturnType<typeof makeRouter>) {
+  const w = mount(App, { attachTo: document.body, global: { plugins: [pinia, router] } })
+  wrappers.push(w)
+  return w
+}
 
 function jsonRes(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -34,6 +42,7 @@ beforeEach(() => {
   )
 })
 afterEach(() => {
+  wrappers.splice(0).forEach((w) => w.unmount())
   vi.unstubAllGlobals()
 })
 
@@ -44,7 +53,7 @@ describe('App', () => {
     const router = makeRouter(createMemoryHistory())
     await router.push('/')
     await router.isReady()
-    mount(App, { global: { plugins: [pinia, router] } })
+    mountApp(pinia, router)
     await flushPromises()
     expect(document.title).toBe('Daka')
     expect(indexHtml).toContain('<title>Daka</title>')
@@ -79,7 +88,7 @@ describe('App', () => {
     const router = makeRouter(createMemoryHistory())
     await router.push('/')
     await router.isReady()
-    mount(App, { global: { plugins: [pinia, router] } })
+    mountApp(pinia, router)
     await flushPromises()
 
     const authStore = (await import('./stores/auth')).useAuthStore()
@@ -108,5 +117,40 @@ describe('App', () => {
     authAuthenticated = false
     authStore.markUnauthenticated()
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('login'))
+  })
+
+  it('toggles privacy with Ctrl+Shift+H from a focused input and ignores auto-repeat', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = makeRouter(createMemoryHistory())
+    await router.push('/')
+    await router.isReady()
+    mountApp(pinia, router)
+    await flushPromises()
+    const privacy = usePrivacyStore()
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    input.focus()
+    const press = (repeat: boolean) => {
+      const e = new KeyboardEvent('keydown', {
+        key: 'H',
+        ctrlKey: true,
+        shiftKey: true,
+        repeat,
+        bubbles: true,
+        cancelable: true,
+      })
+      input.dispatchEvent(e)
+      return e
+    }
+    const before = privacy.redact
+    const first = press(false)
+    expect(first.defaultPrevented).toBe(true)
+    expect(privacy.redact).toBe(!before)
+    press(true)
+    expect(privacy.redact).toBe(!before)
+    press(false)
+    expect(privacy.redact).toBe(before)
+    input.remove()
   })
 })
