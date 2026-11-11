@@ -363,3 +363,31 @@ func TestReparentUnderSensitiveParentIsProtected(t *testing.T) {
 	assertProtected(t, s, c, child)
 	assertProtected(t, s, c, grand)
 }
+
+// Moving a child under a sensitive parent through POST /move (with a position)
+// protects it and its sub-tasks on every surface; read tokens cannot POST it.
+func TestMoveUnderSensitiveParentIsProtected(t *testing.T) {
+	s := startStack(t, "2025-09-10", stackOpts{})
+	c := s.newClient()
+	c.createItem(obj{"name": pubName, "tracker_type": "boolean", "rule": fixedRule("FREQ=DAILY", "none")})
+
+	parent := c.createItem(obj{"name": "parent", "tracker_type": "boolean", "kind": "event", "is_sensitive": true,
+		"rule": obj{"schedule_type": "none", "holiday_mode": "none"}})
+	first := c.createItem(obj{"name": "first", "tracker_type": "boolean", "kind": "event", "parent_id": parent,
+		"rule": obj{"schedule_type": "none", "holiday_mode": "none"}})
+	child := c.createItem(obj{"name": secName, "tracker_type": "boolean", "kind": "event",
+		"rule": fixedRule("FREQ=DAILY", "none")})
+	grand := c.createItem(obj{"name": secName, "tracker_type": "boolean", "kind": "event",
+		"parent_id": child, "rule": fixedRule("FREQ=DAILY", "none")})
+
+	rt := c.token("read", "")
+	rc := s.newClient()
+	r := rc.doHdr("POST", fmt.Sprintf("/api/items/%d/move", child), obj{"parent_id": parent}, bearer(rt))
+	require.Equal(t, 401, r.Status, r.Body)
+	require.NotContains(t, c.ok(200, "GET", fmt.Sprintf("/api/items/%d", child), nil).Body, `"is_sensitive":true`,
+		"a rejected token request changes nothing")
+
+	c.ok(200, "POST", fmt.Sprintf("/api/items/%d/move", child), obj{"parent_id": parent, "before_id": first})
+	assertProtected(t, s, c, child)
+	assertProtected(t, s, c, grand)
+}

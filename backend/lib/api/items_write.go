@@ -102,6 +102,9 @@ type patchItemRequest struct {
 
 	// confirmExposure comes from ?confirm_exposure=1, never from the body.
 	confirmExposure bool
+
+	// move is set by POST /api/items/{id}/move; see applyMoveOrder.
+	move *moveSpec
 }
 
 func str[T ~string](p *string, dst *T) {
@@ -296,7 +299,11 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 	if req.ParentID.Set && !req.ParentID.Null {
 		newParent = &req.ParentID.Val
 	}
-	subtree, locked, err := lockItemTree(tx, userID, id, newParent)
+	var scope *siblingScope
+	if req.move != nil {
+		scope = &siblingScope{parentSet: req.ParentID.Set, parent: newParent}
+	}
+	subtree, locked, err := lockItemTree(tx, userID, id, newParent, scope)
 	if err != nil {
 		return result{}, err
 	}
@@ -401,6 +408,7 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 			item.IsSensitive = item.IsSensitive || cat.IsSensitive
 		}
 	}
+	origParent := item.ParentID
 	if req.ParentID.Set {
 		if res, bad, err := s.applyReparent(tx, userID, &item, subtree, req); err != nil {
 			return result{}, err
@@ -450,6 +458,25 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 			item.ProjectID = &pid
 			// DESIGN 4.1 rule 1: a sensitive project makes its items sensitive.
 			item.IsSensitive = item.IsSensitive || projSens(proj)
+		}
+	}
+
+	if req.move != nil {
+		parentChanged := (origParent == nil) != (item.ParentID == nil) ||
+			(origParent != nil && *origParent != *item.ParentID)
+		res, bad, noop, err := s.applyMoveOrder(tx, userID, &item, req.move, parentChanged)
+		if err != nil {
+			return result{}, err
+		}
+		if bad {
+			return res, nil
+		}
+		if noop {
+			resp, err := s.itemResponseOf(tx, userID, item)
+			if err != nil {
+				return result{}, err
+			}
+			return jsonResult(http.StatusOK, resp), nil
 		}
 	}
 
@@ -521,7 +548,7 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 		}
 	}
 
-	if len(subtree) > 0 {
+	if len(subtree) > 0 && (req.move == nil || req.ParentID.Set) {
 		// Sub-items follow their parent's project and sensitivity.
 		if err := tx.Model(&dbmodels.Item{}).Where("user_id = ? AND id IN ?", userID, subtree).
 			Updates(map[string]any{"project_id": item.ProjectID, "is_sensitive": gorm.Expr("is_sensitive OR ?", item.IsSensitive)}).Error; err != nil {
@@ -667,7 +694,10 @@ func itemAncestors(tx *gorm.DB, userID string, id uint) ([]uint, error) {
 // retries, and gives up (locked=false, a 409) after lockTreeRounds. The
 // returned subtree (descendants of id) therefore comes from locked, committed
 // state. SQLite ignores FOR UPDATE; its single writer makes the check trivial.
-func lockItemTree(tx *gorm.DB, userID string, id uint, newParent *uint) (subtree []uint, locked bool, err error) {
+//
+// With a non-nil scope (POST /move) the target sibling set is part of the same
+// ordered statement, so the lock order stays a single ascending-id statement.
+func lockItemTree(tx *gorm.DB, userID string, id uint, newParent *uint, scope *siblingScope) (subtree []uint, locked bool, err error) {
 	compute := func() ([]uint, []uint, error) {
 		sub, err := itemDescendants(tx, userID, id)
 		if err != nil {
@@ -681,6 +711,13 @@ func lockItemTree(tx *gorm.DB, userID string, id uint, newParent *uint) (subtree
 				return nil, nil, err
 			}
 			set = append(set, anc...)
+		}
+		if scope != nil {
+			sibs, err := scope.siblingIDs(tx, userID, id)
+			if err != nil {
+				return nil, nil, err
+			}
+			set = append(set, sibs...)
 		}
 		slices.Sort(set)
 		return sub, slices.Compact(set), nil

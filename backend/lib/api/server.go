@@ -107,6 +107,7 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("POST /api/items", s.postItem)
 	mux.HandleFunc("GET /api/items/{id}", s.getItem)
 	mux.HandleFunc("PATCH /api/items/{id}", s.patchItem)
+	mux.HandleFunc("POST /api/items/{id}/move", s.moveItem)
 	mux.Handle("DELETE /api/items/{id}", reauth(http.HandlerFunc(s.deleteItem)))
 	mux.HandleFunc("GET /api/items/{id}/options", s.listOptions)
 	mux.HandleFunc("POST /api/items/{id}/options", s.postOption)

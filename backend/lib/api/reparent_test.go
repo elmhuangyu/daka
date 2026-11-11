@@ -270,7 +270,7 @@ func TestLockItemTreeSet(t *testing.T) {
 	rec := &sqlRecorder{Interface: logger.Default.LogMode(logger.Silent)}
 	require.NoError(t, e.db.Write().Transaction(func(tx *gorm.DB) error {
 		tx = tx.Session(&gorm.Session{Logger: rec})
-		sub, ok, err := lockItemTree(tx, "u1", abc[0], &xyz[2])
+		sub, ok, err := lockItemTree(tx, "u1", abc[0], &xyz[2], nil)
 		require.NoError(t, err)
 		require.True(t, ok)
 		require.ElementsMatch(t, abc[1:], sub)
