@@ -233,3 +233,75 @@ export function groupByTree<T>(
   for (const e of entries) visit(e, 0) // safety net for parent cycles
   return out
 }
+
+/**
+ * Pace of an "at least" quota inside its calendar window:
+ * - met: target reached (extra counts beyond it are a bonus)
+ * - relaxed: more days left than check-ins needed, today is optional
+ * - must: as many days left as check-ins needed, do it today
+ * - behind: fewer days left than check-ins needed, the target is out of reach
+ */
+export type QuotaPaceState = 'met' | 'relaxed' | 'must' | 'behind'
+
+export interface QuotaPace {
+  state: QuotaPaceState
+  /** Check-ins still needed (0 when met). */
+  needed: number
+  /** Days left in the window, today included. */
+  daysLeft: number
+  /** Check-ins beyond the target. */
+  extra: number
+  /** Whole-number target small enough to draw as one pip per check-in. */
+  pips: boolean
+}
+
+const MAX_PIPS = 7
+
+function dayNumber(date: string): number {
+  const [y, m, d] = date.split('-').map(Number)
+  return Date.UTC(y, m - 1, d) / 86400000
+}
+
+/** Returns null when the pace does not apply (at-most quotas, bad dates). */
+export function quotaPace(d: ItemDetail, date: string | undefined): QuotaPace | null {
+  const q = d.stats?.quota
+  if (!q || q.comparator !== 'at_least' || !date || !q.window_end) return null
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{4}-\d{2}-\d{2}$/.test(q.window_end)) return null
+  const daysLeft = Math.max(0, dayNumber(q.window_end) - dayNumber(date) + 1)
+  const needed = q.met ? 0 : Math.max(1, Math.ceil(q.limit - q.used - 1e-9))
+  const extra = q.met ? Math.max(0, Math.floor(q.used - q.limit + 1e-9)) : 0
+  let state: QuotaPaceState = 'relaxed'
+  if (q.met) state = 'met'
+  else if (daysLeft < needed) state = 'behind'
+  else if (daysLeft === needed) state = 'must'
+  return {
+    state,
+    needed,
+    daysLeft,
+    extra,
+    pips: Number.isInteger(q.limit) && q.limit >= 1 && q.limit <= MAX_PIPS,
+  }
+}
+
+const PACE_ORDER: Record<QuotaPaceState, number> = { must: 0, behind: 1, relaxed: 2, met: 3 }
+
+/** Sort key for quota cards: urgent first, finished last, other quotas in between. */
+export function quotaUrgency(d: ItemDetail, date: string | undefined): number {
+  const p = quotaPace(d, date)
+  return p ? PACE_ORDER[p.state] : 2
+}
+
+export function quotaPaceText(p: QuotaPace): string {
+  switch (p.state) {
+    case 'met':
+      return p.extra > 0
+        ? t('today.quota.pace.bonus', { extra: p.extra })
+        : t('today.quota.pace.met')
+    case 'must':
+      return t('today.quota.pace.must', { needed: p.needed })
+    case 'behind':
+      return t('today.quota.pace.behind')
+    default:
+      return t('today.quota.pace.relaxed', { needed: p.needed, days: p.daysLeft })
+  }
+}

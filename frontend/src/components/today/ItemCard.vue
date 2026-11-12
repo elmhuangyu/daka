@@ -8,6 +8,8 @@ import { useI18n } from '../../i18n'
 import {
   fmt,
   maintenanceText,
+  quotaPace,
+  quotaPaceText,
   quotaText,
   valueRows,
   type CardVM,
@@ -22,6 +24,8 @@ const props = defineProps<{
   project?: Project | null
   variant: 'todo' | 'done' | 'maintenance' | 'quota'
   busy: boolean
+  /** The local date being viewed, used for quota pacing. */
+  date?: string
   /** An offline check-in for this item is queued and not yet confirmed. */
   pending?: boolean
 }>()
@@ -51,7 +55,21 @@ const activeNote = computed(
 )
 
 const quota = computed(() => d.value.stats?.quota ?? null)
+const pace = computed(() => quotaPace(d.value, props.date))
+const paceClass = computed(() => {
+  switch (pace.value?.state) {
+    case 'met':
+      return 'text-success'
+    case 'must':
+      return 'text-warning font-medium'
+    case 'behind':
+      return 'text-base-content/60'
+    default:
+      return 'text-base-content/70'
+  }
+})
 const trafficClass = computed(() => {
+  if (pace.value?.state === 'met') return 'progress-success'
   switch (quota.value?.traffic) {
     case 'red':
       return 'progress-error'
@@ -243,14 +261,56 @@ function record(r: ValueRow) {
       </p>
 
       <div v-if="variant === 'quota' && quota" class="space-y-1">
+        <div
+          v-if="pace?.pips"
+          class="flex items-center gap-1.5"
+          role="img"
+          :aria-label="quotaText(d)"
+          data-testid="quota-pips"
+        >
+          <span
+            v-for="i in quota.limit"
+            :key="i"
+            class="size-3.5 rounded-full border-2 transition-colors"
+            :class="
+              i <= quota.used
+                ? pace.state === 'met'
+                  ? 'bg-success border-success'
+                  : 'bg-primary border-primary'
+                : pace.state === 'must'
+                  ? 'border-warning'
+                  : 'border-base-content/30'
+            "
+          ></span>
+          <span
+            v-if="pace.extra > 0"
+            class="badge badge-success badge-sm font-semibold"
+            data-testid="quota-bonus"
+            >+{{ pace.extra }}</span
+          >
+        </div>
         <progress
+          v-else
           class="progress w-full"
           :class="trafficClass"
           :value="Math.min(quota.used, quota.limit)"
           :max="quota.limit || 1"
           :aria-label="t('today.card.quotaUsed')"
         ></progress>
-        <p class="text-sm" data-testid="quota-text">
+        <p v-if="pace" class="text-sm" :class="paceClass" data-testid="quota-pace">
+          <Icon
+            v-if="pace.state === 'met'"
+            icon="lucide:check-circle-2"
+            class="inline size-4 align-text-bottom"
+            aria-hidden="true"
+          />
+          {{ quotaPaceText(pace) }}
+        </p>
+        <p
+          class="text-sm"
+          :class="pace ? 'text-xs text-base-content/60' : ''"
+          data-testid="quota-text"
+        >
           {{ quotaText(d)
           }}<span v-if="quota.exceeded" class="ml-1 font-semibold text-error">{{
             t('today.card.exceeded')

@@ -376,6 +376,8 @@ export interface QuotaProgress {
   comparator: string
   window: string
   period: string
+  window_start?: string
+  window_end?: string
   used: number
   limit: number
   remaining: number

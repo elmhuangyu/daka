@@ -4,7 +4,7 @@ import { createMemoryHistory } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 import App from './App.vue'
 import { makeRouter } from './router'
-import { fmt, matchesFilter, percent, ringStats, valueRows } from './today/logic'
+import { fmt, matchesFilter, percent, quotaPace, ringStats, valueRows } from './today/logic'
 import type { ItemDetail } from './api'
 import { catalogEntry } from './composables/shortcutCatalog'
 
@@ -169,6 +169,39 @@ describe('Today URL', () => {
     await flushPromises()
     expect(todayUrls().at(-1)).not.toContain('date=')
     w.unmount()
+  })
+})
+
+describe('quotaPace', () => {
+  const q = (used: number, over: Record<string, unknown> = {}) =>
+    ({
+      stats: {
+        quota: {
+          comparator: 'at_least',
+          window: 'calendar',
+          period: 'week',
+          window_end: '2026-11-15',
+          used,
+          limit: 3,
+          remaining: 3 - used,
+          ratio: used / 3,
+          met: used >= 3,
+          exceeded: false,
+          ...over,
+        },
+      },
+    }) as unknown as ItemDetail
+  it.each([
+    ['2026-11-12', 1, 'relaxed', 2, 4],
+    ['2026-11-14', 1, 'must', 2, 2],
+    ['2026-11-15', 1, 'behind', 2, 1],
+    ['2026-11-12', 3, 'met', 0, 4],
+  ])('%s used %i -> %s', (date, used, state, needed, daysLeft) => {
+    expect(quotaPace(q(used), date)).toMatchObject({ state, needed, daysLeft })
+  })
+  it('counts bonus check-ins and ignores at_most quotas', () => {
+    expect(quotaPace(q(5), '2026-11-12')?.extra).toBe(2)
+    expect(quotaPace(q(1, { comparator: 'at_most' }), '2026-11-12')).toBeNull()
   })
 })
 

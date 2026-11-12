@@ -8,6 +8,8 @@ import { t } from '../i18n'
 import {
   matchesFilter,
   needsAttention,
+  quotaPace,
+  quotaUrgency,
   ringStats,
   type CardVM,
   type CategoryFilter,
@@ -213,7 +215,15 @@ export const useTodayStore = defineStore('today', () => {
   })
   const maintenanceCards = computed(() => scoped(items.value.filter(needsAttention).map(vm)))
   const quotaCards = computed(() =>
-    scoped(items.value.filter((d) => d.current_rule.schedule_type === 'quota').map(vm)),
+    scoped(items.value.filter((d) => d.current_rule.schedule_type === 'quota').map(vm)).sort(
+      (a, b) => quotaUrgency(a.detail, view.value?.date) - quotaUrgency(b.detail, view.value?.date),
+    ),
+  )
+  /** Quota items that must be checked in today to stay on pace. */
+  const quotaUrgentCount = computed(
+    () =>
+      quotaCards.value.filter((c) => quotaPace(c.detail, view.value?.date)?.state === 'must')
+        .length,
   )
 
   const upcoming = computed(() => view.value?.upcoming ?? [])
@@ -339,6 +349,7 @@ export const useTodayStore = defineStore('today', () => {
     doneCards,
     maintenanceCards,
     quotaCards,
+    quotaUrgentCount,
     unscheduledItems,
     upcoming,
     ring,

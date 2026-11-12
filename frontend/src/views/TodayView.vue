@@ -1105,6 +1105,7 @@ watch(
       <!-- Quota: collapsed by default so it does not nag; open it to log or check progress -->
       <details
         v-if="store.quotaCards.length"
+        :open="store.quotaUrgentCount > 0 || undefined"
         class="card card-border bg-base-100/60 border-base-300/80 shadow-xs group"
         data-testid="section-quota"
       >
@@ -1119,6 +1120,12 @@ watch(
                 count: store.quotaCards.length,
               })
             }}
+            <span
+              v-if="store.quotaUrgentCount"
+              class="badge badge-warning badge-sm"
+              data-testid="quota-urgent"
+              >{{ t('today.quota.urgent', { count: store.quotaUrgentCount }) }}</span
+            >
           </span>
           <Icon
             icon="lucide:chevron-down"
@@ -1134,6 +1141,7 @@ watch(
                 :category="cat(c)"
                 :project="projectFor(c)"
                 variant="quota"
+                :date="store.view?.date"
                 :busy="store.busy.includes(c.detail.id)"
                 :pending="offline.pendingItems.includes(c.detail.id)"
                 @log="log"
