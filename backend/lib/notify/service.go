@@ -42,7 +42,7 @@ type TelegramStatus struct {
 type Options struct {
 	DB   *gorm.DB
 	Keys *secret.Keyring
-	// Token is the optional fallback bot token (for tests and single-bot mode).
+	// Token is the optional fallback bot token (tests only; the server does not set it, bots are per-user).
 	Token string
 	// BaseURL overrides the Telegram API (tests only).
 	BaseURL  string

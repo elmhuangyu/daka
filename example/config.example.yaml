@@ -1,7 +1,7 @@
 # Daka example configuration. Copy to config.yaml and pass it with
 #   daka --config config.yaml
 # Every key is optional; the values below are the defaults unless noted.
-# Secrets (DAKA_SECRET_KEY, DAKA_SECRET_KEY_OLD, DAKA_TELEGRAM_BOT_TOKEN) are
+# Secrets (DAKA_SECRET_KEY, DAKA_SECRET_KEY_OLD) are
 # read from the environment only and must not be put in this file.
 # Most keys can also be set with DAKA_* environment variables (see .env.example).
 

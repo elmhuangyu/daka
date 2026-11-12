@@ -99,10 +99,9 @@ auth:
 		},
 		{
 			name: "secrets only from env",
-			env:  map[string]string{"DAKA_SECRET_KEY": "k", "DAKA_TELEGRAM_BOT_TOKEN": "t"},
+			env:  map[string]string{"DAKA_SECRET_KEY": "k"},
 			check: func(t *testing.T, c *Config) {
 				require.Equal(t, "k", c.Secrets.SecretKey.Reveal())
-				require.Equal(t, "t", c.Secrets.TelegramBotToken.Reveal())
 			},
 		},
 		{name: "secret key in yaml rejected", yaml: "secret_key: oops\n", wantErr: "secret_key"},
@@ -136,7 +135,6 @@ func TestLoadMissingFile(t *testing.T) {
 func TestSecretsNeverRendered(t *testing.T) {
 	c, err := Load("", envFrom(map[string]string{
 		"DAKA_SECRET_KEY":         "KEY-VALUE",
-		"DAKA_TELEGRAM_BOT_TOKEN": "TG-VALUE",
 		"DAKA_AUTH_SHARED_SECRET": "PW-VALUE",
 		"DAKA_AUTH_CLIENT_SECRET": "CS-VALUE",
 		"DAKA_DB_DSN":             "postgres://user:DSNPASS@h/db",
@@ -150,7 +148,7 @@ func TestSecretsNeverRendered(t *testing.T) {
 		fmt.Sprint(c.Secrets.SecretKey), fmt.Sprint(c.Auth.SharedSecret), fmt.Sprint(c.Auth.ClientSecret),
 	}
 	for _, o := range outs {
-		for _, s := range []string{"KEY-VALUE", "TG-VALUE", "PW-VALUE", "CS-VALUE", "DSNPASS"} {
+		for _, s := range []string{"KEY-VALUE", "PW-VALUE", "CS-VALUE", "DSNPASS"} {
 			require.False(t, strings.Contains(o, s), "leaked %s in %q", s, o)
 		}
 	}

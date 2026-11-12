@@ -127,7 +127,6 @@ func serve(ctx context.Context, cfg *config.Config, ln net.Listener, logger zero
 	tg := notify.New(notify.Options{
 		DB:       d.Write(),
 		Keys:     keys,
-		Token:    cfg.Secrets.TelegramBotToken.Reveal(),
 		Calendar: app.HolidayCalendars(hp),
 	})
 	handler, sessions, err := app.NewHandler(cfg, d, hp, tg)

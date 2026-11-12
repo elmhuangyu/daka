@@ -155,8 +155,7 @@ type SecretsConfig struct {
 	SecretKey Secret `json:"secret_key"`
 	// SecretKeyOld holds comma-separated retired master keys (DAKA_SECRET_KEY_OLD)
 	// that can still decrypt during key rotation.
-	SecretKeyOld     Secret `json:"secret_key_old"`
-	TelegramBotToken Secret `json:"telegram_bot_token"`
+	SecretKeyOld Secret `json:"secret_key_old"`
 }
 
 // Default returns the configuration used when nothing is specified.
@@ -175,9 +174,9 @@ func Default() Config {
 // String renders the config for logging; secrets are redacted.
 func (c Config) String() string {
 	return fmt.Sprintf(
-		"Config{server.listen=%q db.driver=%q db.dsn=%s auth.issuer=%q auth.client_id=%q auth.client_secret=%s auth.redirect_url=%q auth.allow_insecure_public=%t auth.shared_secret=%s auth.secure_cookie=%t secret_key=%s secret_key_old=%s telegram_bot_token=%s}",
+		"Config{server.listen=%q db.driver=%q db.dsn=%s auth.issuer=%q auth.client_id=%q auth.client_secret=%s auth.redirect_url=%q auth.allow_insecure_public=%t auth.shared_secret=%s auth.secure_cookie=%t secret_key=%s secret_key_old=%s}",
 		c.Server.Listen, c.DB.Driver, c.DB.DSN, c.Auth.Issuer, c.Auth.ClientID, c.Auth.ClientSecret, c.Auth.RedirectURL,
-		c.Auth.AllowInsecurePublic, c.Auth.SharedSecret, c.Auth.SecureCookie, c.Secrets.SecretKey, c.Secrets.SecretKeyOld, c.Secrets.TelegramBotToken,
+		c.Auth.AllowInsecurePublic, c.Auth.SharedSecret, c.Auth.SecureCookie, c.Secrets.SecretKey, c.Secrets.SecretKeyOld,
 	)
 }
 
@@ -261,7 +260,6 @@ func applyEnv(c *Config, getenv func(string) string) error {
 	secret("DAKA_AUTH_SHARED_SECRET", &c.Auth.SharedSecret)
 	secret("DAKA_SECRET_KEY", &c.Secrets.SecretKey)
 	secret("DAKA_SECRET_KEY_OLD", &c.Secrets.SecretKeyOld)
-	secret("DAKA_TELEGRAM_BOT_TOKEN", &c.Secrets.TelegramBotToken)
 	if v := getenv("DAKA_TRUSTED_PROXIES"); v != "" {
 		c.Server.TrustedProxies = nil
 		for _, e := range strings.Split(v, ",") {
