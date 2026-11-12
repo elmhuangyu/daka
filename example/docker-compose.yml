@@ -1,13 +1,12 @@
 # Example deployment. From this directory:
 #   cp .env.example .env && cp config.example.yaml config.yaml   # then edit both
-#   docker compose up -d --build
+#   docker compose up -d
 # Put a TLS reverse proxy in front: session cookies are Secure by default.
 services:
   daka:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    image: daka:local
+    image: ghcr.io/elmhuangyu/daka:latest
+    # To build from source instead, replace `image` with:
+    #   build: { context: .., dockerfile: Dockerfile }
     restart: unless-stopped
     command: ["--config", "/etc/daka/config.yaml"]
     env_file: .env

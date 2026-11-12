@@ -9,9 +9,11 @@
 timezone: UTC
 
 server:
-  # Loopback = single-user mode, no login. A non-loopback address requires OIDC
-  # or (allow_insecure_public + shared_secret) below.
-  listen: 127.0.0.1:8080
+  # Default 127.0.0.1:8080 = loopback, single-user mode, no login. A
+  # non-loopback address requires OIDC or (allow_insecure_public +
+  # shared_secret) below. The Docker image sets DAKA_LISTEN=0.0.0.0:8080, which
+  # overrides this key, so leave it unset when using the image.
+  # listen: 127.0.0.1:8080
   # Directory with the built frontend (frontend/dist). The Docker image sets it.
   # static_dir: /app/web
   # Extra Host header names (no port) accepted behind a reverse proxy.
