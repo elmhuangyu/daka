@@ -9,7 +9,6 @@ const { t } = useI18n()
 const offline = useOfflineStore()
 const pauseText = computed(() => {
   if (offline.paused === 'unauthorized') return t('offline.signInAgain')
-  if (offline.paused === 'reauth_required') return t('offline.confirmIdentity')
   return ''
 })
 </script>

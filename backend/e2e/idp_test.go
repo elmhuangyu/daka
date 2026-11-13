@@ -33,7 +33,7 @@ type fakeIdP struct {
 	mu       sync.Mutex
 	codes    map[string]issuedCode
 	lastAuth url.Values
-	// authAge makes the auth_time claim older than now (stale reauth tests).
+	// authAge makes the auth_time claim older than now (stale auth tests).
 	authAge time.Duration
 }
 

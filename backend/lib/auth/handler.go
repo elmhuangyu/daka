@@ -61,7 +61,6 @@ func NewHandler(o HandlerOptions) http.Handler {
 	mux.HandleFunc("POST /api/auth/login", h.login)
 	mux.HandleFunc("POST /api/auth/logout", h.logout)
 	mux.HandleFunc("GET /api/auth/me", h.me)
-	mux.HandleFunc("POST /api/auth/reauth", h.reauth)
 	mux.HandleFunc("GET /api/auth/oidc/login", h.oidcLogin)
 	mux.HandleFunc("GET /api/auth/oidc/callback", h.oidcCallback)
 	mux.HandleFunc("/api/auth/", func(w http.ResponseWriter, _ *http.Request) {
@@ -211,43 +210,12 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *handler) reauth(w http.ResponseWriter, r *http.Request) {
-	s, ok := h.session(r)
-	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	if !CheckCSRF(r, s) {
-		writeError(w, http.StatusForbidden, "csrf")
-		return
-	}
-	if h.OIDC != nil {
-		writeJSON(w, http.StatusOK, map[string]string{"redirect": "/api/auth/oidc/login?reauth=1"})
-		return
-	}
-	if !h.readSecret(w, r) { // 404 when no shared secret is configured
-		return
-	}
-	if err := h.Manager.MarkReauth(r); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
-}
-
 func (h *handler) oidcLogin(w http.ResponseWriter, r *http.Request) {
 	if h.OIDC == nil || h.Manager == nil {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	reauth := r.URL.Query().Get("reauth") == "1"
-	if reauth {
-		if _, ok := h.Manager.Session(r); !ok {
-			writeError(w, http.StatusUnauthorized, "unauthorized")
-			return
-		}
-	}
-	u, err := h.OIDC.Begin(r.Context(), w, h.SecureCookie, reauth)
+	u, err := h.OIDC.Begin(r.Context(), w, h.SecureCookie)
 	if err != nil {
 		log.Error().Err(err).Msg("oidc begin")
 		writeError(w, http.StatusBadGateway, "identity provider unavailable")
@@ -273,20 +241,6 @@ func (h *handler) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userID := id.UserID()
-	if id.Reauth {
-		s, ok := h.Manager.Session(r)
-		if !ok || s.UserID != userID {
-			log.Warn().Msg("oidc reauth by a different identity or without session")
-			writeError(w, http.StatusForbidden, "login_failed")
-			return
-		}
-		if err := h.Manager.MarkReauth(r); err != nil {
-			writeError(w, http.StatusInternalServerError, "internal error")
-			return
-		}
-		http.Redirect(w, r, RedirectAfterLogin, http.StatusFound)
-		return
-	}
 	if err := h.upsertUser(userID, id); err != nil {
 		log.Error().Err(err).Msg("upsert oidc user")
 		writeError(w, http.StatusInternalServerError, "internal error")

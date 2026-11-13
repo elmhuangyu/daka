@@ -32,12 +32,6 @@ func (c *client) login(secret string) {
 	c.refreshCSRF()
 }
 
-// reauth performs the shared-secret re-authentication.
-func (c *client) reauth(secret string) {
-	c.t.Helper()
-	c.ok(200, "POST", "/api/auth/reauth", obj{"secret": secret})
-}
-
 func setCookieHeader(r resp, name string) string {
 	for _, v := range r.Header.Values("Set-Cookie") {
 		if strings.HasPrefix(v, name+"=") {
@@ -87,7 +81,7 @@ func TestSingleUserModeGuards(t *testing.T) {
 	c.ok(200, "GET", "/api/items", nil)
 }
 
-// F5 / B7: shared-secret login, cookie flags, CSRF, reauth, logout.
+// F5 / B7: shared-secret login, cookie flags, CSRF, logout.
 func TestSharedSecretSessionFlow(t *testing.T) {
 	s := startStack(t, "2025-09-10", stackOpts{mut: withSecret})
 	c := s.newClient()
@@ -136,30 +130,13 @@ func TestSharedSecretSessionFlow(t *testing.T) {
 	c.csrf = noCSRF
 	id := c.createItem(body)
 
-	// Reauth: logging in starts a 5 minute window; afterwards dangerous
-	// operations need a fresh reauth.
+	// Dangerous operations need only the session: no re-authentication step.
 	s.clk.Advance(6 * time.Minute)
-	path := fmt.Sprintf("/api/items/%d", id)
-	r = c.do("DELETE", path, nil)
-	require.Equal(t, 403, r.Status)
-	require.Contains(t, r.Body, "reauth_required")
-	require.Equal(t, 403, c.do("POST", "/api/tokens", obj{"name": "t"}).Status)
-	require.Equal(t, 403, c.do("GET", "/api/export", nil).Status)
-	require.Equal(t, 401, c.do("POST", "/api/auth/reauth", obj{"secret": "wrong"}).Status)
-	require.Equal(t, 403, c.do("DELETE", path, nil).Status, "a failed reauth does not unlock")
-	c.csrf = ""
-	require.Equal(t, 403, c.do("POST", "/api/auth/reauth", obj{"secret": sharedSecret}).Status, "reauth itself is CSRF protected")
-	c.csrf = noCSRF
-	c.reauth(sharedSecret)
 	c.ok(201, "POST", "/api/tokens", obj{"name": "t"})
-	s.clk.Advance(4 * time.Minute)
-	c.ok(200, "DELETE", path, nil)
-	s.clk.Advance(2 * time.Minute)
-	id = c.createItem(body)
-	require.Equal(t, 403, c.do("DELETE", fmt.Sprintf("/api/items/%d", id), nil).Status, "the window expired")
+	c.ok(200, "DELETE", fmt.Sprintf("/api/items/%d", id), nil)
+	require.Equal(t, 404, c.do("POST", "/api/auth/reauth", obj{"secret": sharedSecret}).Status, "the reauth endpoint is gone")
 
 	// API tokens are not sessions: a token cannot be used on session routes.
-	c.reauth(sharedSecret)
 	tok := c.token("read", "")
 	anon := s.newClient()
 	require.Equal(t, 401, anon.doHdr("POST", "/api/items", body, bearer(tok)).Status)
@@ -289,28 +266,12 @@ func TestOIDCFlow(t *testing.T) {
 	// The OIDC user is a separate account from default_user.
 	require.Contains(t, c.ok(200, "GET", "/api/items", nil).Body, "oidc item")
 
-	// Reauth goes through the IdP again with prompt=login and a fresh auth_time.
+	// Dangerous operations need only the session, even long after login.
 	clk.Advance(10 * time.Minute)
-	del := fmt.Sprintf("/api/items/%d", id)
-	require.Contains(t, c.do("DELETE", del, nil).Body, "reauth_required")
-	rr := jsonOf[map[string]string](t, c.ok(200, "POST", "/api/auth/reauth", nil))
-	require.Equal(t, "/api/auth/oidc/login?reauth=1", rr["redirect"])
-	// A stale IdP authentication is refused.
-	idp.authAge = 10 * time.Minute
-	cb, q, _ := start(c, rr["redirect"])
-	require.Equal(t, "login", q.Get("prompt"))
-	require.Equal(t, "0", q.Get("max_age"))
-	require.Equal(t, 400, c.do("GET", cb, nil).Status)
-	require.Equal(t, 403, c.do("DELETE", del, nil).Status)
-	// A fresh one is accepted.
-	idp.authAge = 0
-	cb, _, _ = start(c, rr["redirect"])
-	r = c.do("GET", cb, nil)
-	require.Equal(t, http.StatusFound, r.Status, r.Body)
-	c.ok(200, "DELETE", del, nil)
+	c.ok(200, "DELETE", fmt.Sprintf("/api/items/%d", id), nil)
 
-	// Reauth without a session is refused.
-	require.Equal(t, 401, s.newClient().do("GET", "/api/auth/oidc/login?reauth=1", nil).Status)
+	// A callback without a pending login is refused (and logged).
+	require.Equal(t, 400, s.newClient().do("GET", "/api/auth/oidc/callback?code=x&state=y", nil).Status)
 
 	// Logout.
 	cookie := c.cookie("daka_session")

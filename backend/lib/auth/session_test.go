@@ -58,7 +58,6 @@ func newEnv(t *testing.T, secure bool, secret string) *env {
 		_, _ = w.Write([]byte(u.ID))
 	})
 	mux := http.NewServeMux()
-	mux.Handle("/danger", RequireReauth(e.clk.Now)(ok))
 	mux.Handle("/", ok)
 	e.api = Middleware(e.m)(mux)
 	return e
@@ -212,37 +211,6 @@ func TestLoginRotatesSession(t *testing.T) {
 	rec := call(e.h, "POST", "/api/auth/login", `{"secret":"pw-pw-pw-pw-pw-pw"}`, nil, c1)
 	require.Equal(t, 200, rec.Code)
 	require.Equal(t, 401, call(e.api, "GET", "/x", "", nil, c1).Code, "old session is revoked on login")
-}
-
-func TestReauthSecretAndRequireReauth(t *testing.T) {
-	e := newEnv(t, false, "pw-pw-pw-pw-pw-pw")
-	c, tok := e.login(t)
-	hdr := map[string]string{CSRFHeader: tok}
-
-	rec := call(e.api, "DELETE", "/danger", "", hdr, c)
-	require.Equal(t, 403, rec.Code)
-	require.JSONEq(t, `{"error":"reauth_required"}`, rec.Body.String())
-
-	require.Equal(t, 403, call(e.h, "POST", "/api/auth/reauth", `{"secret":"pw-pw-pw-pw-pw-pw"}`, nil, c).Code, "csrf needed")
-	require.Equal(t, 401, call(e.h, "POST", "/api/auth/reauth", `{"secret":"bad"}`, hdr, c).Code)
-	require.Equal(t, 403, call(e.api, "DELETE", "/danger", "", hdr, c).Code)
-	require.Equal(t, 401, call(e.h, "POST", "/api/auth/reauth", `{"secret":"pw-pw-pw-pw-pw-pw"}`, nil).Code, "needs session")
-	require.Equal(t, 200, call(e.h, "POST", "/api/auth/reauth", `{"secret":"pw-pw-pw-pw-pw-pw"}`, hdr, c).Code)
-
-	require.Equal(t, 200, call(e.api, "DELETE", "/danger", "", hdr, c).Code)
-	e.clk.Advance(5*time.Minute - time.Second)
-	require.Equal(t, 200, call(e.api, "DELETE", "/danger", "", hdr, c).Code)
-	e.clk.Advance(2 * time.Second)
-	rec = call(e.api, "DELETE", "/danger", "", hdr, c)
-	require.Equal(t, 403, rec.Code)
-	require.JSONEq(t, `{"error":"reauth_required"}`, rec.Body.String())
-	// ordinary routes are unaffected
-	require.Equal(t, 200, call(e.api, "DELETE", "/x", "", hdr, c).Code)
-}
-
-func TestRequireReauthNoSessionPasses(t *testing.T) {
-	h := Middleware(nil)(RequireReauth(nil)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {})))
-	require.Equal(t, 200, call(h, "DELETE", "/danger", "", nil).Code)
 }
 
 func TestSingleUserOriginGuard(t *testing.T) {

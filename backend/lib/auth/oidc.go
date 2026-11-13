@@ -24,10 +24,6 @@ const (
 	// oidcCookiePath scopes the pending-login cookie to the auth endpoints.
 	oidcCookiePath = "/api/auth"
 	maxPending     = 10000
-	// reauthMaxAge is the maximum age of auth_time accepted for a reauth.
-	reauthMaxAge = 120 * time.Second
-	// authTimeSkew tolerates IdP clock drift for auth_time in the future.
-	authTimeSkew = 60 * time.Second
 	// userInfoTimeout bounds the fallback call to the IdP UserInfo endpoint.
 	userInfoTimeout = 5 * time.Second
 )
@@ -123,16 +119,14 @@ type Identity struct {
 	Name, Email     string
 	AvatarURL       string
 	AuthTime        time.Time // zero when the IdP omitted auth_time
-	Reauth          bool      // the login was started as a reauth
 }
 
 // UserID is the Daka user ID of the identity.
 func (i Identity) UserID() string { return OIDCUserID(i.Issuer, i.Subject) }
 
 // Begin prepares an authorization redirect. It sets the daka_oidc cookie on w
-// and returns the IdP URL. With reauth, the IdP is forced to re-prompt
-// (prompt=login, max_age=0).
-func (o *OIDC) Begin(ctx context.Context, w http.ResponseWriter, secure, reauth bool) (string, error) {
+// and returns the IdP URL.
+func (o *OIDC) Begin(ctx context.Context, w http.ResponseWriter, secure bool) (string, error) {
 	_, oc, _, err := o.ensure(ctx)
 	if err != nil {
 		return "", err
@@ -146,14 +140,11 @@ func (o *OIDC) Begin(ctx context.Context, w http.ResponseWriter, secure, reauth 
 		return "", err
 	}
 	verifier := oauth2.GenerateVerifier()
-	handle, err := o.pending.put(pendingLogin{state: state, nonce: nonce, verifier: verifier, reauth: reauth})
+	handle, err := o.pending.put(pendingLogin{state: state, nonce: nonce, verifier: verifier})
 	if err != nil {
 		return "", err
 	}
 	opts := []oauth2.AuthCodeOption{oauth2.S256ChallengeOption(verifier), oidc.Nonce(nonce)}
-	if reauth {
-		opts = append(opts, oauth2.SetAuthURLParam("prompt", "login"), oauth2.SetAuthURLParam("max_age", "0"))
-	}
 	setCookiePath(w, OIDCCookieName, handle, oidcCookiePath, int(oidcPendingTTL/time.Second), secure)
 	return oc.AuthCodeURL(state, opts...), nil
 }
@@ -168,8 +159,7 @@ func reject(format string, a ...any) error {
 
 // Complete finishes the flow: it consumes the pending login (single use),
 // checks state, exchanges the code with the PKCE verifier, verifies the ID
-// token (signature via JWKS, issuer, audience, expiry) and the nonce, and for
-// reauth requires a fresh auth_time.
+// token (signature via JWKS, issuer, audience, expiry) and the nonce.
 func (o *OIDC) Complete(ctx context.Context, w http.ResponseWriter, r *http.Request, secure bool) (Identity, error) {
 	setCookiePath(w, OIDCCookieName, "", oidcCookiePath, -1, secure)
 	c, err := r.Cookie(OIDCCookieName)
@@ -228,7 +218,6 @@ func (o *OIDC) Complete(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		Subject:   idt.Subject,
 		Email:     claims.Email,
 		AvatarURL: sanitizeAvatarURL(claims.Picture),
-		Reauth:    p.reauth,
 	}
 	hasExplicitName := claims.Name != "" || claims.Username != "" || claims.Email != ""
 	id.Name = firstNonEmpty(claims.Name, claims.Username, claims.Email, "user")
@@ -273,11 +262,6 @@ func (o *OIDC) Complete(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	if claims.AuthTime > 0 {
 		id.AuthTime = time.Unix(claims.AuthTime, 0)
 	}
-	if p.reauth {
-		if id.AuthTime.IsZero() || now.Sub(id.AuthTime) > reauthMaxAge || id.AuthTime.Sub(now) > authTimeSkew {
-			return Identity{}, reject("auth_time not fresh for reauth")
-		}
-	}
 	if id.AuthTime.IsZero() {
 		id.AuthTime = now
 	}
@@ -310,7 +294,6 @@ func sanitizeAvatarURL(raw string) string {
 
 type pendingLogin struct {
 	state, nonce, verifier string
-	reauth                 bool
 	expires                time.Time
 }
 

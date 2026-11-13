@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"net/http"
 	"time"
 
@@ -18,17 +17,14 @@ import (
 const (
 	// DefaultSessionTTL is the absolute lifetime of a session.
 	DefaultSessionTTL = 14 * 24 * time.Hour
-	// ReauthWindow is how long a re-authentication stays valid (DESIGN 8).
-	ReauthWindow = 5 * time.Minute
 )
 
 // Session is the authenticated state behind a session cookie.
 type Session struct {
-	UserID      string
-	AuthMethod  string
-	CSRFToken   string
-	ExpiresAt   time.Time
-	ReauthUntil time.Time // zero when never re-authenticated
+	UserID     string
+	AuthMethod string
+	CSRFToken  string
+	ExpiresAt  time.Time
 }
 
 // ManagerOptions configures a Manager.
@@ -104,11 +100,7 @@ func (m *Manager) Create(w http.ResponseWriter, r *http.Request, userID, method 
 }
 
 func toSession(row dbmodels.Session, raw string) Session {
-	s := Session{UserID: row.UserID, AuthMethod: row.AuthMethod, CSRFToken: csrfToken(raw), ExpiresAt: row.ExpiresAt}
-	if row.ReauthUntil != nil {
-		s.ReauthUntil = *row.ReauthUntil
-	}
-	return s
+	return Session{UserID: row.UserID, AuthMethod: row.AuthMethod, CSRFToken: csrfToken(raw), ExpiresAt: row.ExpiresAt}
 }
 
 func (m *Manager) lookup(r *http.Request) (dbmodels.Session, string, bool) {
@@ -136,17 +128,6 @@ func (m *Manager) Session(r *http.Request) (Session, bool) {
 func (m *Manager) Verify(r *http.Request) (User, bool) {
 	s, ok := m.Session(r)
 	return User{ID: s.UserID}, ok
-}
-
-// MarkReauth records a fresh re-authentication on the session of r.
-func (m *Manager) MarkReauth(r *http.Request) error {
-	row, _, ok := m.lookup(r)
-	if !ok {
-		return errors.New("no session")
-	}
-	until := m.now().Add(ReauthWindow)
-	return m.db.Model(&dbmodels.Session{}).Where("id = ?", row.ID).
-		Updates(map[string]any{"reauth_until": until, "auth_time": m.now()}).Error
 }
 
 func (m *Manager) revokeRequest(r *http.Request) {

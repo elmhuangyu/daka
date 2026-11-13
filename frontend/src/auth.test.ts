@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import {
   ApiError,
@@ -12,7 +11,6 @@ import {
   broadcastAuthEvent,
 } from './api'
 import { useAuthStore } from './stores/auth'
-import ReauthModal from './components/ReauthModal.vue'
 
 function jsonRes(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -80,24 +78,6 @@ describe('api auth helpers', () => {
     routes['/api/checkins'] = () => jsonRes({ error: 'invalid_secret' }, 401)
     await expect(setCheckin(1, true)).rejects.toThrow(Error)
     expect(onUnauthorized).toHaveBeenCalledTimes(1)
-  })
-
-  it('retries once after reauth_required when the hook resolves true', async () => {
-    const onReauthRequired = vi.fn<() => Promise<boolean>>(async () => true)
-    setAuthHooks({ onReauthRequired })
-    let n = 0
-    routes['/api/checkins'] = () =>
-      n++ === 0 ? jsonRes({ error: 'reauth_required' }, 403) : jsonRes({ ok: true })
-    await setCheckin(1, true)
-    expect(onReauthRequired).toHaveBeenCalledTimes(1)
-    expect(callsTo('/api/checkins')).toHaveLength(2)
-  })
-
-  it('surfaces reauth_required when the user cancels', async () => {
-    setAuthHooks({ onReauthRequired: async () => false })
-    routes['/api/checkins'] = () => jsonRes({ error: 'reauth_required' }, 403)
-    await expect(setCheckin(1, true)).rejects.toMatchObject({ code: 'reauth_required' })
-    expect(callsTo('/api/checkins')).toHaveLength(1)
   })
 })
 
@@ -186,67 +166,5 @@ describe('auth store', () => {
     broadcastAuthEvent({ type: 'logged_out' })
     await vi.waitFor(() => expect(auth.authenticated).toBe(false))
     expect(auth.user).toBeNull()
-  })
-
-  it('reauth modal (secret mode) calls the reauth endpoint and unblocks the request', async () => {
-    const pinia = createPinia()
-    setActivePinia(pinia)
-    const auth = useAuthStore()
-    await auth.init()
-    let n = 0
-    routes['/api/checkins'] = () =>
-      n++ === 0 ? jsonRes({ error: 'reauth_required' }, 403) : jsonRes({ ok: true })
-    routes['/api/auth/reauth'] = () => jsonRes({ ok: true })
-    const w = mount(ReauthModal, { global: { plugins: [pinia] } })
-    const pending = setCheckin(1, true)
-    await flushPromises()
-    expect(w.find('[data-testid=reauth-modal]').exists()).toBe(true)
-    await w.get('input[type=password]').setValue('s3')
-    await w.get('form').trigger('submit')
-    await flushPromises()
-    await pending
-    const [, init] = callsTo('/api/auth/reauth')[0]
-    expect(JSON.parse(init.body)).toEqual({ secret: 's3' })
-    expect(init.headers['X-Daka-CSRF']).toBe('tok')
-    expect(w.find('[data-testid=reauth-modal]').exists()).toBe(false)
-    expect(n).toBe(2)
-  })
-
-  it('reauth modal shows wrong-secret errors and stays open; cancel rejects', async () => {
-    const pinia = createPinia()
-    setActivePinia(pinia)
-    const auth = useAuthStore()
-    await auth.init()
-    routes['/api/checkins'] = () => jsonRes({ error: 'reauth_required' }, 403)
-    routes['/api/auth/reauth'] = () => jsonRes({ error: 'invalid_secret' }, 401)
-    const w = mount(ReauthModal, { global: { plugins: [pinia] } })
-    const pending = setCheckin(1, true).catch((e) => e)
-    await flushPromises()
-    await w.get('input[type=password]').setValue('bad')
-    await w.get('form').trigger('submit')
-    await flushPromises()
-    expect(w.get('[data-testid=reauth-error]').text()).toBe('Invalid secret')
-    await w.get('button[type=button]').trigger('click')
-    expect(await pending).toMatchObject({ code: 'reauth_required' })
-    expect(w.find('[data-testid=reauth-modal]').exists()).toBe(false)
-  })
-
-  it('reauth modal (OIDC mode) navigates to the server-provided redirect', async () => {
-    routes['/api/auth/status'] = () =>
-      jsonRes({ oidc_enabled: true, login_required: true, authenticated: true })
-    routes['/api/auth/reauth'] = () => jsonRes({ redirect: '/api/auth/oidc/login?reauth=1' })
-    const pinia = createPinia()
-    setActivePinia(pinia)
-    const auth = useAuthStore()
-    await auth.init()
-    const assign = vi.fn<(url: string) => void>()
-    vi.stubGlobal('location', { ...window.location, assign })
-    const w = mount(ReauthModal, { global: { plugins: [pinia] } })
-    void auth.requestReauth()
-    await flushPromises()
-    expect(w.find('input[type=password]').exists()).toBe(false)
-    await w.get('form').trigger('submit')
-    await flushPromises()
-    expect(assign).toHaveBeenCalledWith('/api/auth/oidc/login?reauth=1')
   })
 })

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -411,20 +410,6 @@ func TestProjectPatchDesensitizationFreezing(t *testing.T) {
 	require.Equal(t, 200, w.Code)
 	gotIt3 := e.rawItem(it3)
 	require.True(t, gotIt3.IsSensitive, "item should be frozen sensitive when project leaves sensitive category")
-}
-
-func TestDeleteProjectRequiresReauthWhenConfigured(t *testing.T) {
-	e := newEnv(t)
-	deny := func(_ http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			errResult(http.StatusForbidden, "reauth_required").write(w)
-		})
-	}
-	e.h = NewRouter(Deps{DB: e.db, Now: func() time.Time { return e.now }, Auth: userHeaderAuth, Reauth: deny})
-
-	p := e.createProject("u1", m{"name": "Protected Project"})
-	require.Equal(t, 403, e.do("DELETE", fmt.Sprintf("/api/projects/%d", p.ID), "u1", "", nil).Code)
-	require.Equal(t, 200, e.do("GET", fmt.Sprintf("/api/projects/%d", p.ID), "u1", "", nil).Code, "only DELETE is guarded")
 }
 
 func TestItemSensitivityThroughProject(t *testing.T) {

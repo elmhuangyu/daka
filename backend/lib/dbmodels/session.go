@@ -19,7 +19,4 @@ type Session struct {
 	AuthTime  time.Time
 	CreatedAt time.Time
 	ExpiresAt time.Time `gorm:"not null;index"`
-	// ReauthUntil, when in the future, marks a recent re-authentication that
-	// permits dangerous operations (DESIGN 8, 5 minutes).
-	ReauthUntil *time.Time
 }

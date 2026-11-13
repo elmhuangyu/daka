@@ -2,7 +2,7 @@ package auth
 
 import "time"
 
-// FailureLimiter throttles brute-force attempts on login / reauth. It is
+// FailureLimiter throttles brute-force attempts on login. It is
 // satisfied by ratelimit.AuthFailureLimiter; prefix distinguishes the endpoint.
 type FailureLimiter interface {
 	// Check reports whether an attempt may proceed; when locked out,

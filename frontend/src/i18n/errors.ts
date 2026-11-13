@@ -10,7 +10,6 @@ export const ERROR_KEYS = {
   invalid_secret: 'errors.invalidSecret',
   too_many_attempts: 'errors.tooManyAttempts',
   unauthorized: 'errors.unauthorized',
-  reauth_required: 'errors.reauthRequired',
   csrf: 'errors.csrf',
   cross_origin: 'errors.crossOrigin',
   login_failed: 'errors.loginFailed',

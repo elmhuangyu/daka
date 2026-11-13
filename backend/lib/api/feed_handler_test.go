@@ -153,28 +153,6 @@ func TestTokenCreateValidation(t *testing.T) {
 	require.Equal(t, "all", c.Privacy)
 }
 
-func TestTokenManagementRequiresReauth(t *testing.T) {
-	e := newEnv(t)
-	denyReauth := func(http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusForbidden)
-		})
-	}
-	h := NewRouter(Deps{DB: e.db, Now: func() time.Time { return e.now }, Auth: userHeaderAuth, Reauth: denyReauth})
-	post := func(method, target string) int {
-		r := httptest.NewRequest(method, target, strings.NewReader(`{"name":"x"}`))
-		w := httptest.NewRecorder()
-		h.ServeHTTP(w, r)
-		return w.Code
-	}
-	require.Equal(t, 403, post("POST", "/api/tokens"))
-	require.Equal(t, 403, post("DELETE", "/api/tokens/1"))
-	require.Equal(t, 200, post("GET", "/api/tokens")) // listing needs no reauth
-	var n int64
-	require.NoError(t, e.db.Write().Model(&dbmodels.ApiToken{}).Count(&n).Error)
-	require.Zero(t, n)
-}
-
 // denyAll is a login-mode verifier that accepts nothing.
 type denyAll struct{}
 

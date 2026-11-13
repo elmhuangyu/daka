@@ -41,6 +41,7 @@ beforeEach(() => {
         ? jsonRes({ error: 'invalid combination', reason: 'quota_option_required' }, 400)
         : jsonRes({ id: 5 }, 201)
     }
+    if (url === '/api/items/6' && method === 'DELETE') return jsonRes({}, 200)
     if (url === '/api/items/6' && method === 'PATCH') {
       return jsonRes({ id: 6, ...(calls.at(-1)!.body as object) })
     }
@@ -264,5 +265,21 @@ describe('ItemEditorView', () => {
     expect(w.find('[data-testid=sched-none-hint]').exists()).toBe(false)
     await w.get('[data-testid=f-schedule]').setValue('none')
     expect(w.find('[data-testid=sched-none-hint]').exists()).toBe(true)
+  })
+
+  it('deletes an item from the edit page after confirmation', async () => {
+    const { w, router } = await mountAt('/items/6/edit')
+    expect(w.find('[data-testid=delete-confirm]').exists()).toBe(false)
+    await w.get('[data-testid=delete]').trigger('click')
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false)
+    await w.get('[data-testid=delete-confirm]').trigger('click')
+    await flushPromises()
+    expect(calls.some((c) => c.url === '/api/items/6' && c.method === 'DELETE')).toBe(true)
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/items'))
+  })
+
+  it('has no delete button when creating', async () => {
+    const { w } = await mountAt('/items/new')
+    expect(w.find('[data-testid=delete]').exists()).toBe(false)
   })
 })

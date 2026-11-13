@@ -188,7 +188,7 @@ export const useItemDetailStore = defineStore('itemDetail', () => {
     }
   }
 
-  /** Permanent delete (reauth is handled by api.ts); true on success. */
+  /** Permanent delete; true on success. */
   async function remove(): Promise<boolean> {
     try {
       await api.deleteItem(id.value)

@@ -33,9 +33,6 @@ type Deps struct {
 	// Calendar returns the holiday calendar for a UserSettings.holiday_region;
 	// nil, or a nil result, means no holiday awareness.
 	Calendar func(region dbmodels.HolidayRegion) schedule.DayCalendar
-	// Reauth guards dangerous routes (DELETE /api/items/{id}); it must run
-	// after Auth (see auth.RequireReauth). Nil means no extra guard.
-	Reauth func(http.Handler) http.Handler
 	// Versions are the per-item write counters bumped by check-in writes (part
 	// of the stats cache key); nil creates a private set.
 	Versions *stats.Versions
@@ -95,10 +92,6 @@ func NewRouter(d Deps) http.Handler {
 	if s.now == nil {
 		s.now = time.Now
 	}
-	reauth := d.Reauth
-	if reauth == nil {
-		reauth = func(h http.Handler) http.Handler { return h }
-	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/checkins", s.postCheckin)
 	mux.HandleFunc("PATCH /api/checkins/{id}", s.patchCheckin)
@@ -108,7 +101,7 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /api/items/{id}", s.getItem)
 	mux.HandleFunc("PATCH /api/items/{id}", s.patchItem)
 	mux.HandleFunc("POST /api/items/{id}/move", s.moveItem)
-	mux.Handle("DELETE /api/items/{id}", reauth(http.HandlerFunc(s.deleteItem)))
+	mux.Handle("DELETE /api/items/{id}", http.HandlerFunc(s.deleteItem))
 	mux.HandleFunc("GET /api/items/{id}/options", s.listOptions)
 	mux.HandleFunc("POST /api/items/{id}/options", s.postOption)
 	mux.HandleFunc("PUT /api/items/{id}/options/{oid}", s.putOption)
@@ -119,13 +112,13 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /api/categories", s.listCategories)
 	mux.HandleFunc("POST /api/categories", s.postCategory)
 	mux.HandleFunc("PUT /api/categories/{id}", s.putCategory)
-	mux.Handle("DELETE /api/categories/{id}", reauth(http.HandlerFunc(s.deleteCategory)))
+	mux.Handle("DELETE /api/categories/{id}", http.HandlerFunc(s.deleteCategory))
 	mux.HandleFunc("GET /api/projects", s.listProjects)
 	mux.HandleFunc("POST /api/projects", s.postProject)
 	mux.HandleFunc("GET /api/projects/{id}", s.getProject)
 	mux.HandleFunc("PATCH /api/projects/{id}", s.patchProject)
 	mux.HandleFunc("PUT /api/projects/{id}", s.patchProject)
-	mux.Handle("DELETE /api/projects/{id}", reauth(http.HandlerFunc(s.deleteProject)))
+	mux.Handle("DELETE /api/projects/{id}", http.HandlerFunc(s.deleteProject))
 	mux.HandleFunc("GET /api/freezes", s.listFreezes)
 	mux.HandleFunc("POST /api/freezes", s.postFreeze)
 	mux.HandleFunc("DELETE /api/freezes/{id}", s.deleteFreeze)
@@ -135,17 +128,17 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /api/view/calendar", s.getCalendarView)
 	mux.HandleFunc("GET /api/calendar/holidays", s.getHolidays)
 	mux.HandleFunc("GET /api/tokens", s.listTokens)
-	mux.Handle("POST /api/tokens", reauth(http.HandlerFunc(s.postToken)))
-	mux.Handle("DELETE /api/tokens/{id}", reauth(http.HandlerFunc(s.deleteToken)))
+	mux.Handle("POST /api/tokens", http.HandlerFunc(s.postToken))
+	mux.Handle("DELETE /api/tokens/{id}", http.HandlerFunc(s.deleteToken))
 	mux.HandleFunc("GET /api/telegram", s.getTelegram)
-	mux.Handle("PUT /api/telegram", reauth(http.HandlerFunc(s.putTelegram)))
-	mux.Handle("POST /api/telegram/link-code", reauth(http.HandlerFunc(s.postTelegramLinkCode)))
+	mux.Handle("PUT /api/telegram", http.HandlerFunc(s.putTelegram))
+	mux.Handle("POST /api/telegram/link-code", http.HandlerFunc(s.postTelegramLinkCode))
 	mux.HandleFunc("POST /api/telegram/test", s.postTelegramTest)
-	mux.Handle("DELETE /api/telegram", reauth(http.HandlerFunc(s.deleteTelegram)))
+	mux.Handle("DELETE /api/telegram", http.HandlerFunc(s.deleteTelegram))
 	mux.HandleFunc("PATCH /api/telegram/settings", s.patchTelegramSettings)
-	mux.Handle("GET /api/export", reauth(http.HandlerFunc(s.getExport)))
-	mux.Handle("POST /api/import", reauth(http.HandlerFunc(s.postImport)))
-	mux.Handle("DELETE /api/account", reauth(http.HandlerFunc(s.deleteAccount)))
+	mux.Handle("GET /api/export", http.HandlerFunc(s.getExport))
+	mux.Handle("POST /api/import", http.HandlerFunc(s.postImport))
+	mux.Handle("DELETE /api/account", http.HandlerFunc(s.deleteAccount))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		errResult(http.StatusNotFound, "not found").write(w)
 	})

@@ -85,7 +85,7 @@ describe('OfflineQueue', () => {
     expect(q.failures).toEqual([])
   })
 
-  it('pauses on 401 and on reauth_required until a manual retry', async () => {
+  it('pauses on 401 until a manual retry', async () => {
     let err: ApiError | null = new ApiError('unauthorized', 401, 'unauthorized')
     const send = vi.fn<() => Promise<void>>(async () => {
       if (err) throw err
@@ -97,9 +97,6 @@ describe('OfflineQueue', () => {
     expect(q.pending).toHaveLength(1)
     await q.replay() // still paused: no new request
     expect(send).toHaveBeenCalledTimes(1)
-    err = new ApiError('reauth_required', 403, 'reauth_required')
-    await q.retry()
-    expect(q.paused).toBe('reauth_required')
     err = null
     await q.retry()
     expect(q.paused).toBe('')

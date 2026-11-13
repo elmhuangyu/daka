@@ -1,11 +1,8 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -129,33 +126,8 @@ func (f fakeBot) SendTestMessage(ctx context.Context, userID string) error {
 
 func tgEnv(t *testing.T, configured bool) *env {
 	e := newEnv(t)
-	e.h = NewRouter(Deps{DB: e.db, Now: func() time.Time { return e.now }, Auth: userHeaderAuth, Telegram: fakeBot{on: configured, db: e.db.Write()},
-		Reauth: func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Header.Get("X-Reauth") == "" {
-					errResult(http.StatusForbidden, "reauth_required").write(w)
-					return
-				}
-				next.ServeHTTP(w, r)
-			})
-		}})
+	e.h = NewRouter(Deps{DB: e.db, Now: func() time.Time { return e.now }, Auth: userHeaderAuth, Telegram: fakeBot{on: configured, db: e.db.Write()}})
 	return e
-}
-
-func (e *env) doReauth(method, path, user string, body any) *httptest.ResponseRecorder {
-	e.t.Helper()
-	var buf bytes.Buffer
-	if body != nil {
-		require.NoError(e.t, json.NewEncoder(&buf).Encode(body))
-	}
-	r := httptest.NewRequest(method, path, &buf)
-	if user != "" {
-		r.Header.Set("X-User", user)
-	}
-	r.Header.Set("X-Reauth", "1")
-	w := httptest.NewRecorder()
-	e.h.ServeHTTP(w, r)
-	return w
 }
 
 func TestTelegramLinkLifecycle(t *testing.T) {
@@ -168,15 +140,10 @@ func TestTelegramLinkLifecycle(t *testing.T) {
 	require.Equal(t, true, st["configured"])
 	require.Equal(t, false, st["linked"])
 
-	// mutating endpoints need reauth
-	require.Equal(t, 403, e.do("POST", "/api/telegram/link-code", "", "", nil).Code)
-	require.Equal(t, 403, e.do("DELETE", "/api/telegram", "", "", nil).Code)
-	require.Equal(t, 403, e.do("PUT", "/api/telegram", "", "", m{"bot_token": "token"}).Code)
-
 	// test message before linking answers 404
 	require.Equal(t, 404, e.do("POST", "/api/telegram/test", "", "", nil).Code)
 
-	w = e.doReauth("POST", "/api/telegram/link-code", "", nil)
+	w = e.do("POST", "/api/telegram/link-code", "", "", nil)
 	require.Equal(t, 201, w.Code, w.Body.String())
 	var lc struct {
 		Code     string `json:"code"`
@@ -216,7 +183,7 @@ func TestTelegramLinkLifecycle(t *testing.T) {
 	require.Equal(t, false, st["linked"])
 	require.Equal(t, 404, e.do("PATCH", "/api/telegram/settings", "u2", "", m{"enabled": false}).Code)
 
-	require.Equal(t, 200, e.doReauth("DELETE", "/api/telegram", "", nil).Code)
+	require.Equal(t, 200, e.do("DELETE", "/api/telegram", "", "", nil).Code)
 	var n int64
 	require.NoError(t, e.db.Write().Model(&dbmodels.TelegramLink{}).Count(&n).Error)
 	require.Zero(t, n)
@@ -226,19 +193,19 @@ func TestTelegramPutBot(t *testing.T) {
 	e := tgEnv(t, true)
 
 	// Bad token answers 400
-	w := e.doReauth("PUT", "/api/telegram", "", m{"bot_token": "bad"})
+	w := e.do("PUT", "/api/telegram", "", "", m{"bot_token": "bad"})
 	require.Equal(t, 400, w.Code)
 
 	// Missing token answers 400
-	w = e.doReauth("PUT", "/api/telegram", "", m{"bot_token": ""})
+	w = e.do("PUT", "/api/telegram", "", "", m{"bot_token": ""})
 	require.Equal(t, 400, w.Code)
 
 	// Missing encryption key answers 503
-	w = e.doReauth("PUT", "/api/telegram", "", m{"bot_token": "nokey"})
+	w = e.do("PUT", "/api/telegram", "", "", m{"bot_token": "nokey"})
 	require.Equal(t, 503, w.Code)
 
 	// Chat ID taken answers 409
-	w = e.doReauth("PUT", "/api/telegram", "", m{"bot_token": "valid_token", "chat_id": 88888})
+	w = e.do("PUT", "/api/telegram", "", "", m{"bot_token": "valid_token", "chat_id": 88888})
 	require.Equal(t, 409, w.Code)
 
 	// Test message with missing key answers 503
@@ -246,7 +213,7 @@ func TestTelegramPutBot(t *testing.T) {
 	require.Equal(t, 503, w.Code)
 
 	// Valid setup with token and chat_id
-	w = e.doReauth("PUT", "/api/telegram", "", m{"bot_token": "valid_token", "chat_id": 12345})
+	w = e.do("PUT", "/api/telegram", "", "", m{"bot_token": "valid_token", "chat_id": 12345})
 	require.Equal(t, 200, w.Code, w.Body.String())
 	var st map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &st))
@@ -259,8 +226,8 @@ func TestTelegramNotConfigured(t *testing.T) {
 	w := e.do("GET", "/api/telegram", "", "", nil)
 	require.Equal(t, 200, w.Code)
 	require.Contains(t, w.Body.String(), `"configured":false`)
-	require.Equal(t, 503, e.doReauth("POST", "/api/telegram/link-code", "", nil).Code)
-	require.Equal(t, 503, e.doReauth("PUT", "/api/telegram", "", m{"bot_token": "abc"}).Code)
+	require.Equal(t, 503, e.do("POST", "/api/telegram/link-code", "", "", nil).Code)
+	require.Equal(t, 503, e.do("PUT", "/api/telegram", "", "", m{"bot_token": "abc"}).Code)
 	require.Equal(t, 503, e.do("POST", "/api/telegram/test", "", "", nil).Code)
 
 	e.h = NewRouter(Deps{DB: e.db, Auth: userHeaderAuth}) // nil Telegram dep

@@ -26,13 +26,11 @@ const summary = {
 }
 let calls: { url: string; method: string; body?: string }[]
 let importError: string | null
-let reauthNeeded: boolean
 
 beforeEach(() => {
   resetCsrf()
   calls = []
   importError = null
-  reauthNeeded = false
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
     calls.push({ url, method, body: init?.body ? String(init.body) : undefined })
@@ -45,7 +43,6 @@ beforeEach(() => {
       return jsonRes({ ...summary, dry_run: url.includes('dry_run=1') })
     }
     if (url === '/api/account') {
-      if (reauthNeeded) return jsonRes({ error: 'reauth_required' }, 403)
       return jsonRes({ deleted: true })
     }
     return jsonRes({})
@@ -130,19 +127,5 @@ describe('DataSection', () => {
     expect(JSON.parse(del?.body ?? '{}')).toEqual({ confirm: 'DELETE' })
     expect(auth.authenticated).toBe(false)
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('login'))
-  })
-
-  it('reports a failed delete (reauth declined) and stays signed in', async () => {
-    reauthNeeded = true
-    const { w, router, auth } = await mountSection()
-    await w.get('[data-testid=data-confirm]').setValue('DELETE')
-    await w.get('[data-testid=data-delete]').trigger('click')
-    await flushPromises()
-    expect(auth.reauthOpen).toBe(true)
-    auth.settleReauth(false)
-    await flushPromises()
-    expect(w.get('[data-testid=data-error]').text()).toContain('Confirm your identity')
-    expect(router.currentRoute.value.name).toBe('settings')
-    expect(auth.authenticated).toBe(true)
   })
 })

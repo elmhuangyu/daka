@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -298,20 +297,15 @@ func TestSensitiveOptionsAndExplicitExposure(t *testing.T) {
 	require.True(t, public(id2))
 }
 
-// Export is a plaintext backup by design: it must demand re-authentication
-// when logins are on, and must not be reachable with API tokens.
+// Export is a plaintext backup by design: it needs a session when
+// logins are on, and must not be reachable with API tokens.
 func TestExportIsPlaintextAndGuarded(t *testing.T) {
 	s := startStack(t, "2025-09-10", stackOpts{mut: func(cfg *config.Config) { cfg.Auth.SharedSecret = "correct horse battery" }})
 	c := s.newClient()
 	c.login("correct horse battery")
-	s.clk.Advance(10 * time.Minute) // the login's re-authentication window has passed
 	c.createItem(obj{"name": secName, "tracker_type": "boolean", "is_sensitive": true, "rule": fixedRule("FREQ=DAILY", "none")})
-	r := c.do("GET", "/api/export", nil)
-	require.Equal(t, 403, r.Status)
-	require.Contains(t, r.Body, "reauth_required")
-	noLeak(t, "export without reauth", r.Body)
-	c.reauth("correct horse battery")
-	r = c.ok(200, "GET", "/api/export", nil)
+	require.Equal(t, 401, s.newClient().do("GET", "/api/export", nil).Status, "export needs a session")
+	r := c.ok(200, "GET", "/api/export", nil)
 	require.Contains(t, r.Body, secName, "export is a plaintext backup by design")
 	// Tokens never reach export.
 	tok := c.token("read", "")

@@ -5,6 +5,7 @@ import EmojiPicker from '../components/EmojiPicker.vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   createCategory,
+  deleteItem,
   deleteOption,
   getItem,
   listCategories,
@@ -36,6 +37,7 @@ import {
   type ItemForm,
 } from '../itemForm'
 import { localIso, WEEKDAYS } from '../rrule'
+import { useItemsStore } from '../stores/items'
 import { usePrivacyStore } from '../stores/privacy'
 import { useI18n } from '../i18n'
 import { formatCustomDate, monthName, weekdayName } from '../i18n/format'
@@ -46,6 +48,7 @@ const { t, tParts } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const privacy = usePrivacyStore()
+const panel = useItemsStore()
 
 const editId = computed(() => (route.params.id ? Number(route.params.id) : null))
 const isEdit = computed(() => editId.value !== null)
@@ -186,6 +189,24 @@ async function addCategory() {
     showAddCategory.value = false
   } catch (e) {
     submitError.value = describeItemError(e)
+  }
+}
+
+const confirmDelete = ref(false)
+
+async function removeItem() {
+  if (busy.value || editId.value === null) return
+  busy.value = true
+  submitError.value = ''
+  try {
+    await deleteItem(editId.value)
+    void panel.refresh()
+    await router.push('/items')
+  } catch (e) {
+    submitError.value = describeItemError(e)
+    confirmDelete.value = false
+  } finally {
+    busy.value = false
   }
 }
 
@@ -982,6 +1003,33 @@ const showHoliday = computed(() => holidayAllowed(form))
           {{ isEdit ? t('items.editor.saveChanges') : t('items.editor.create') }}
         </button>
         <RouterLink to="/" class="btn btn-ghost">{{ t('common.cancel') }}</RouterLink>
+        <div v-if="isEdit" class="ml-auto flex items-center gap-2">
+          <button
+            v-if="!confirmDelete"
+            type="button"
+            class="btn btn-outline btn-error"
+            :disabled="busy"
+            data-testid="delete"
+            @click="confirmDelete = true"
+          >
+            <Icon icon="lucide:trash-2" aria-hidden="true" /> {{ t('items.detail.deleteItem') }}
+          </button>
+          <template v-else>
+            <span class="text-sm text-error font-medium">{{ t('items.detail.deleteAsk') }}</span>
+            <button
+              type="button"
+              class="btn btn-error shadow-xs"
+              :disabled="busy"
+              data-testid="delete-confirm"
+              @click="removeItem"
+            >
+              {{ t('items.detail.deleteConfirm') }}
+            </button>
+            <button type="button" class="btn btn-ghost" @click="confirmDelete = false">
+              {{ t('common.cancel') }}
+            </button>
+          </template>
+        </div>
       </div>
     </form>
   </section>

@@ -12,10 +12,6 @@ export const useAuthStore = defineStore('auth', () => {
   const authenticated = ref(false)
   const user = ref<{ id: string; name: string; email?: string; avatar_url?: string } | null>(null)
 
-  // Reauth modal state. Concurrent requests share one prompt.
-  const reauthOpen = ref(false)
-  let reauthWaiters: Array<(ok: boolean) => void> = []
-
   let initPromise: Promise<void> | null = null
 
   async function loadUser() {
@@ -72,38 +68,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  function requestReauth(): Promise<boolean> {
-    return new Promise((resolve) => {
-      reauthWaiters.push(resolve)
-      reauthOpen.value = true
-    })
-  }
-
-  function settleReauth(ok: boolean) {
-    const w = reauthWaiters
-    reauthWaiters = []
-    reauthOpen.value = false
-    for (const r of w) r(ok)
-  }
-
-  /** Secret-mode reauth. Settles true on success; throws ApiError otherwise. */
-  async function reauthWithSecret(secret: string) {
-    await api.reauth(secret)
-    settleReauth(true)
-  }
-
-  /** OIDC reauth: asks the server for the redirect target and navigates there. */
-  async function reauthWithOidc() {
-    const r = await api.reauth()
-    if (r.redirect) {
-      settleReauth(false)
-      window.location.assign(r.redirect)
-    } else {
-      settleReauth(true)
-    }
-  }
-
-  api.setAuthHooks({ onUnauthorized: markUnauthenticated, onReauthRequired: requestReauth })
+  api.setAuthHooks({ onUnauthorized: markUnauthenticated })
 
   let unsubscribeBroadcast: (() => void) | null = null
   function listenBroadcast() {
@@ -124,16 +89,11 @@ export const useAuthStore = defineStore('auth', () => {
     loginRequired,
     authenticated,
     user,
-    reauthOpen,
     init,
     refreshStatus,
     markUnauthenticated,
     loginWithSecret,
     logout,
-    requestReauth,
-    settleReauth,
-    reauthWithSecret,
-    reauthWithOidc,
     listenBroadcast,
   }
 })

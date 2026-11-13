@@ -68,7 +68,7 @@ func finiteBounded(f float64) bool {
 
 func finitePtr(p *float64) bool { return p == nil || finiteBounded(*p) }
 
-// POST /api/import[?dry_run=1][&apply_settings=1] (behind reauth). The body is
+// POST /api/import[?dry_run=1][&apply_settings=1]. The body is
 // a document produced by GET /api/export. Everything is validated before the
 // first write and written in one transaction (all or nothing). Data is added
 // to the current user with fresh ids; existing data is never modified and

@@ -386,61 +386,6 @@ func TestOIDCStateAndNonceAreUnique(t *testing.T) {
 	require.GreaterOrEqual(t, len(s1), 43)
 }
 
-func TestOIDCReauth(t *testing.T) {
-	e := newOIDCEnv(t, false)
-	sc := e.login(t)
-	rec := call(e.h, "GET", "/api/auth/me", "", nil, sc)
-	var me map[string]string
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &me))
-	hdr := map[string]string{CSRFHeader: me["csrf_token"]}
-
-	// reauth endpoint hands out the redirect
-	rec = call(e.h, "POST", "/api/auth/reauth", "", hdr, sc)
-	require.Equal(t, 200, rec.Code)
-	require.JSONEq(t, `{"redirect":"/api/auth/oidc/login?reauth=1"}`, rec.Body.String())
-	require.Equal(t, 403, call(e.h, "POST", "/api/auth/reauth", "", nil, sc).Code)
-
-	// reauth login requires a session
-	require.Equal(t, 401, call(e.h, "GET", "/api/auth/oidc/login?reauth=1", "", nil).Code)
-
-	// 1. stale auth_time is rejected (IdP ignored max_age=0)
-	e.idp.authTime = func() time.Time { return e.clk.Now().Add(-10 * time.Minute) }
-	oc, cb := e.start(t, "/api/auth/oidc/login?reauth=1", sc)
-	require.Equal(t, "login", e.idp.lastAuth.Get("prompt"))
-	require.Equal(t, "0", e.idp.lastAuth.Get("max_age"))
-	require.Equal(t, 400, call(e.h, "GET", cb, "", nil, oc, sc).Code)
-	s, _ := e.m.Session(requestWith(sc))
-	require.True(t, s.ReauthUntil.IsZero())
-
-	// 2. missing auth_time is rejected
-	e.idp.authTime = nil
-	oc, cb = e.start(t, "/api/auth/oidc/login?reauth=1", sc)
-	require.Equal(t, 400, call(e.h, "GET", cb, "", nil, oc, sc).Code)
-
-	// 3. a different identity cannot reauth the session
-	e.idp.authTime = func() time.Time { return e.clk.Now() }
-	e.idp.sub = "someone-else"
-	oc, cb = e.start(t, "/api/auth/oidc/login?reauth=1", sc)
-	require.Equal(t, 403, call(e.h, "GET", cb, "", nil, oc, sc).Code)
-	e.idp.sub = "sub-1"
-
-	// 4. fresh auth_time marks the existing session, no new session is made
-	oc, cb = e.start(t, "/api/auth/oidc/login?reauth=1", sc)
-	rec = call(e.h, "GET", cb, "", nil, oc, sc)
-	require.Equal(t, 302, rec.Code, rec.Body.String())
-	require.Equal(t, "/", rec.Header().Get("Location"))
-	require.Nil(t, cookieNamed(rec, SessionCookieName))
-	s, ok := e.m.Session(requestWith(sc))
-	require.True(t, ok)
-	require.WithinDuration(t, e.clk.Now().Add(5*time.Minute), s.ReauthUntil, time.Second)
-}
-
-func requestWith(c *http.Cookie) *http.Request {
-	r := httptest.NewRequest("GET", "/", nil)
-	r.AddCookie(c)
-	return r
-}
-
 func TestOIDCDiscoveryFailureIsRetried(t *testing.T) {
 	e := newOIDCEnv(t, false)
 	// A provider that is down at first: point a fresh client at a dead URL.

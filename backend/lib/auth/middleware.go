@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
-	"time"
 )
 
 // SessionCookieName is the name of the session cookie.
@@ -22,7 +21,7 @@ type SessionVerifier interface {
 
 // SessionSource is implemented by verifiers that expose the full session
 // (Manager). Middleware then also enforces CSRF and exposes the session to
-// handlers (see SessionFrom, RequireReauth).
+// handlers (see SessionFrom).
 type SessionSource interface {
 	Session(r *http.Request) (Session, bool)
 }
@@ -110,26 +109,4 @@ func SameOrigin(r *http.Request) bool {
 		return true
 	}
 	return false
-}
-
-// RequireReauth rejects requests whose session has no re-authentication within
-// the last 5 minutes with 403 {"error":"reauth_required"}. It is applied to
-// DELETE /api/items/{id}, DELETE /api/categories/{id} and API token creation
-// and revocation (DELETE /api/account is not implemented yet). API tokens never
-// reach this middleware: they are refused on every route except the ICS feed.
-// Without a cookie session (single-user mode without shared_secret) there is
-// nothing to re-authenticate against and requests pass.
-func RequireReauth(now func() time.Time) func(http.Handler) http.Handler {
-	if now == nil {
-		now = time.Now
-	}
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if s, ok := SessionFrom(r.Context()); ok && !s.ReauthUntil.After(now()) {
-				writeError(w, http.StatusForbidden, "reauth_required")
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
 }

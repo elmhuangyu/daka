@@ -19,5 +19,5 @@
 // Cookies are httpOnly, SameSite=Lax (Strict would break the IdP redirect back)
 // and Secure per auth.secure_cookie. State-changing requests authenticated by
 // a session need the X-Daka-CSRF header holding the session-bound token served
-// by GET /api/auth/me. RequireReauth guards dangerous routes (5 minute window).
+// by GET /api/auth/me.
 package auth

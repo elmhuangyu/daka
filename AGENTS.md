@@ -30,7 +30,7 @@ Before finishing a change, run `just fmt lint build test`.
 ## Layout
 
 - `backend/cmd/daka`: entry point, config, server wiring, `user claim` subcommand.
-- `backend/lib/`: `app` (handler assembly, bootstrap), `api` (HTTP handlers, OpenAPI), `auth` (sessions, OIDC, CSRF, reauth, HostGuard), `config`, `db` (SQLite/Postgres), `dbmodels` (GORM models, `registry.go`), `schedule` (RRULE, holidays, quota), `holiday`, `stats`, `extcal`, `notify` (Telegram), `ratelimit`, `secret`.
+- `backend/lib/`: `app` (handler assembly, bootstrap), `api` (HTTP handlers, OpenAPI), `auth` (sessions, OIDC, CSRF, HostGuard), `config`, `db` (SQLite/Postgres), `dbmodels` (GORM models, `registry.go`), `schedule` (RRULE, holidays, quota), `holiday`, `stats`, `extcal`, `notify` (Telegram), `ratelimit`, `secret`.
 - `backend/e2e`: cross-cutting scenario tests over the real HTTP stack.
 - `frontend/src`: Vue 3 + Vite + TS + Tailwind v4 + DaisyUI + Pinia. `views/`, `components/`, `stores/`, `offline/` (IndexedDB queue), `i18n/`; PWA files in `frontend/public`.
 - `skills/daka/SKILL.md`: Claude skill for the read-only AI API.
@@ -48,7 +48,7 @@ Before finishing a change, run `just fmt lint build test`.
 - `?redact=1` is applied server-side. The frontend privacy guard (Ctrl+Shift+H) clears plaintext synchronously and discards stale responses.
 - Secrets (`DAKA_SECRET_KEY`, `DAKA_SECRET_KEY_OLD`) come from the environment only. Never store them in the DB, config files, logs, or the repo. User-configured secrets (such as per-user Telegram bot tokens and external calendar URLs) are encrypted at rest with `DAKA_SECRET_KEY`.
 - API tokens are read-only and hashed (SHA-256). `dk_` Bearer tokens go through `tokenGate` (GET allowlist in `readAllowed`); the feed token works only on `/api/calendar/feed.ics`. A new GET route is not token-accessible unless added to the allowlist on purpose.
-- Dangerous routes (delete item/category/account, tokens, export, import, Telegram link) sit behind `Reauth`. Mutating requests require the `X-Daka-CSRF` header.
+- There is no re-authentication step: a valid session authorizes dangerous routes too (delete item/category/account, tokens, export, import, Telegram link). Mutating requests require the `X-Daka-CSRF` header.
 - Outbound fetches (external calendars, holiday data) must stay SSRF-safe.
 - Telegram is per-user and notify-only: each user can configure their own bot token to receive a daily morning digest plus optional per-item `remind_time`. No inline check-in.
 

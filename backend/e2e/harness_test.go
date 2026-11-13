@@ -1,6 +1,6 @@
 // Package e2e drives the real daka HTTP stack (app.NewHandler, the same
 // constructor cmd/daka uses) over a loopback httptest server with a temporary
-// SQLite database, an injected clock and real sessions, CSRF and reauth. Tests
+// SQLite database, an injected clock and real sessions and CSRF. Tests
 // behave like a client: a cookie jar and the X-Daka-CSRF header, nothing else.
 package e2e
 

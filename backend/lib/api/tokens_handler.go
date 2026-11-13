@@ -100,7 +100,7 @@ func (s *server) listTokens(w http.ResponseWriter, r *http.Request) {
 	jsonResult(http.StatusOK, map[string]any{"tokens": out}).write(w)
 }
 
-// POST /api/tokens (behind reauth): creates a feed:read (default) or read token. The plaintext
+// POST /api/tokens: creates a feed:read (default) or read token. The plaintext
 // is returned exactly once.
 func (s *server) postToken(w http.ResponseWriter, r *http.Request) {
 	userID, ok := requestUser(w, r)
@@ -209,7 +209,7 @@ func (s *server) postToken(w http.ResponseWriter, r *http.Request) {
 	jsonResult(http.StatusCreated, resp).write(w)
 }
 
-// DELETE /api/tokens/{id} (behind reauth): revokes the token. If ?delete=1 is
+// DELETE /api/tokens/{id}: revokes the token. If ?delete=1 is
 // passed, permanently deletes the token row from the database.
 func (s *server) deleteToken(w http.ResponseWriter, r *http.Request) {
 	userID, ok := requestUser(w, r)

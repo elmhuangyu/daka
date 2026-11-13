@@ -3,7 +3,6 @@ import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import './icons'
 import AppLayout from './components/AppLayout.vue'
-import ReauthModal from './components/ReauthModal.vue'
 import ShortcutHelp from './components/ShortcutHelp.vue'
 import { useGlobalShortcuts } from './composables/useGlobalShortcuts'
 import { catalogDef, PRIVACY_TOGGLE_ID } from './composables/shortcutCatalog'
@@ -111,6 +110,5 @@ onBeforeUnmount(() => {
       <RouterView />
     </main>
   </AppLayout>
-  <ReauthModal />
   <ShortcutHelp v-if="!route.meta.public" />
 </template>

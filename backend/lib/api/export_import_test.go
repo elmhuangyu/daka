@@ -14,30 +14,14 @@ import (
 	"github.com/elmhuangyu/daka/backend/lib/dbmodels"
 )
 
-// dataEnv is an env whose dangerous routes require the X-Reauth header.
-func dataEnv(t *testing.T) *env {
-	e := newEnv(t)
-	e.h = NewRouter(Deps{DB: e.db, Now: func() time.Time { return e.now }, Auth: userHeaderAuth,
-		Reauth: func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Header.Get("X-Reauth") == "" {
-					errResult(http.StatusForbidden, "reauth_required").write(w)
-					return
-				}
-				next.ServeHTTP(w, r)
-			})
-		}})
-	return e
-}
+// dataEnv is the env used by the export, import and account tests.
+func dataEnv(t *testing.T) *env { return newEnv(t) }
 
-func (e *env) doRaw(method, path, user, body string, reauth bool) *httptest.ResponseRecorder {
+func (e *env) doRaw(method, path, user, body string) *httptest.ResponseRecorder {
 	e.t.Helper()
 	r := httptest.NewRequest(method, path, strings.NewReader(body))
 	if user != "" {
 		r.Header.Set("X-User", user)
-	}
-	if reauth {
-		r.Header.Set("X-Reauth", "1")
 	}
 	w := httptest.NewRecorder()
 	e.h.ServeHTTP(w, r)
@@ -46,7 +30,7 @@ func (e *env) doRaw(method, path, user, body string, reauth bool) *httptest.Resp
 
 func (e *env) export(user string) importDoc {
 	e.t.Helper()
-	w := e.doRaw("GET", "/api/export", user, "", true)
+	w := e.doRaw("GET", "/api/export", user, "")
 	require.Equal(e.t, 200, w.Code, w.Body.String())
 	var d importDoc
 	require.NoError(e.t, json.Unmarshal(w.Body.Bytes(), &d), w.Body.String())
@@ -197,12 +181,12 @@ func TestExportImportRoundTripPreservesHistory(t *testing.T) {
 	require.Len(t, orig.Checkins, 3)
 	require.Len(t, orig.Freezes, 1)
 
-	raw := e.doRaw("GET", "/api/export", "u1", "", true)
+	raw := e.doRaw("GET", "/api/export", "u1", "")
 	require.Equal(t, "no-store", raw.Header().Get("Cache-Control"))
 	require.Contains(t, raw.Header().Get("Content-Disposition"), "attachment")
 
 	// dry run reports the counts and writes nothing
-	w := e.doRaw("POST", "/api/import?dry_run=1", "u2", raw.Body.String(), true)
+	w := e.doRaw("POST", "/api/import?dry_run=1", "u2", raw.Body.String())
 	require.Equal(t, 200, w.Code, w.Body.String())
 	sum := decode[importSummary](t, w)
 	require.True(t, sum.DryRun)
@@ -214,7 +198,7 @@ func TestExportImportRoundTripPreservesHistory(t *testing.T) {
 
 	var verBefore int64
 	require.NoError(t, e.db.Read().Model(&dbmodels.UserSettings{}).Where("user_id = ?", "u2").Select("state_version").Scan(&verBefore).Error)
-	w = e.doRaw("POST", "/api/import", "u2", raw.Body.String(), true)
+	w = e.doRaw("POST", "/api/import", "u2", raw.Body.String())
 	require.Equal(t, 200, w.Code, w.Body.String())
 	var verAfter int64
 	require.NoError(t, e.db.Read().Model(&dbmodels.UserSettings{}).Where("user_id = ?", "u2").Select("state_version").Scan(&verAfter).Error)
@@ -238,7 +222,7 @@ func TestExportImportRoundTripPreservesHistory(t *testing.T) {
 	require.Equal(t, 3, e.count(&dbmodels.Item{}, "u1"))
 
 	// additive: importing again into the same user doubles the data
-	w = e.doRaw("POST", "/api/import", "u2", raw.Body.String(), true)
+	w = e.doRaw("POST", "/api/import", "u2", raw.Body.String())
 	require.Equal(t, 200, w.Code)
 	require.Equal(t, 2, e.count(&dbmodels.Project{}, "u2"))
 	require.Equal(t, 6, e.count(&dbmodels.Item{}, "u2"))
@@ -262,7 +246,7 @@ func TestImportApplySettings(t *testing.T) {
 	d := e.export("u1")
 	d.Settings = &exportSettings{Timezone: "Europe/Paris", WeekStart: 0, HolidayRegion: "US", StreakHolidayFreeze: true}
 	b, _ := json.Marshal(d)
-	require.Equal(t, 200, e.doRaw("POST", "/api/import?apply_settings=1", "u2", string(b), true).Code)
+	require.Equal(t, 200, e.doRaw("POST", "/api/import?apply_settings=1", "u2", string(b)).Code)
 	st := decode[calendarSettings](t, e.do("GET", "/api/settings/calendar", "u2", "", nil))
 	require.Equal(t, "Europe/Paris", st.Timezone)
 	require.Equal(t, 0, st.WeekStart)
@@ -270,7 +254,7 @@ func TestImportApplySettings(t *testing.T) {
 
 	d.Settings.Timezone = "Not/AZone"
 	b, _ = json.Marshal(d)
-	require.Equal(t, 400, e.doRaw("POST", "/api/import?apply_settings=1", "u2", string(b), true).Code)
+	require.Equal(t, 400, e.doRaw("POST", "/api/import?apply_settings=1", "u2", string(b)).Code)
 }
 
 func TestExportIsolatedAndHidesSecrets(t *testing.T) {
@@ -281,7 +265,7 @@ func TestExportIsolatedAndHidesSecrets(t *testing.T) {
 		Update("external_calendar_urls", `[{"id":"a","name":"Work","enc":"CIPHERTEXT-SECRET"}]`).Error)
 	require.NoError(t, e.db.Write().Create(&dbmodels.ApiToken{UserID: "u1", Name: "tok", TokenHash: "HASH-SECRET", Scopes: "feed:read", ExpiresAt: fixedNow.Add(time.Hour)}).Error)
 
-	w := e.doRaw("GET", "/api/export", "u1", "", true)
+	w := e.doRaw("GET", "/api/export", "u1", "")
 	body := w.Body.String()
 	require.NotContains(t, body, "OtherUsersItem")
 	require.NotContains(t, body, "CIPHERTEXT-SECRET")
@@ -289,23 +273,9 @@ func TestExportIsolatedAndHidesSecrets(t *testing.T) {
 	require.NotContains(t, body, "user_id")
 	require.Contains(t, body, `"external_calendars":[{"id":"a","name":"Work","url_hint":""}]`)
 
-	w = e.doRaw("GET", "/api/export", "u2", "", true)
+	w = e.doRaw("GET", "/api/export", "u2", "")
 	require.NotContains(t, w.Body.String(), "Workout")
 	require.Contains(t, w.Body.String(), "OtherUsersItem")
-}
-
-func TestRoutesRequireReauth(t *testing.T) {
-	e := dataEnv(t)
-	for _, c := range []struct{ method, path, body string }{
-		{"GET", "/api/export", ""},
-		{"POST", "/api/import", `{}`},
-		{"DELETE", "/api/account", `{"confirm":"DELETE"}`},
-	} {
-		w := e.doRaw(c.method, c.path, "u1", c.body, false)
-		require.Equal(t, 403, w.Code, c.path)
-		require.Contains(t, w.Body.String(), "reauth_required")
-	}
-	require.Equal(t, 1, e.count(&dbmodels.UserSettings{}, "u1"), "denied delete removed nothing")
 }
 
 func minimalDoc() m {
@@ -367,7 +337,7 @@ func TestImportRejectsInvalidPayloads(t *testing.T) {
 	}
 	for name, body := range cases {
 		e := dataEnv(t)
-		w := e.doRaw("POST", "/api/import", "u1", body, true)
+		w := e.doRaw("POST", "/api/import", "u1", body)
 		require.Equal(t, 400, w.Code, name+": "+w.Body.String())
 		require.NotContains(t, w.Body.String(), "SecretItem", name)
 		require.Zero(t, e.count(&dbmodels.Item{}, "u1"), name)
@@ -379,14 +349,14 @@ func TestImportRejectsInvalidPayloads(t *testing.T) {
 	// the base document is itself valid
 	e := dataEnv(t)
 	b, _ := json.Marshal(minimalDoc())
-	require.Equal(t, 200, e.doRaw("POST", "/api/import", "u1", string(b), true).Code)
+	require.Equal(t, 200, e.doRaw("POST", "/api/import", "u1", string(b)).Code)
 }
 
 func TestImportLimits(t *testing.T) {
 	e := dataEnv(t)
 	// body larger than the cap
 	big := `{"schema":"` + strings.Repeat("a", maxImportBytes+10) + `"}`
-	w := e.doRaw("POST", "/api/import", "u1", big, true)
+	w := e.doRaw("POST", "/api/import", "u1", big)
 	require.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
 
 	// too many items
@@ -397,7 +367,7 @@ func TestImportLimits(t *testing.T) {
 	}
 	d["items"] = items
 	b, _ := json.Marshal(d)
-	w = e.doRaw("POST", "/api/import", "u1", string(b), true)
+	w = e.doRaw("POST", "/api/import", "u1", string(b))
 	require.Equal(t, http.StatusRequestEntityTooLarge, w.Code, w.Body.String())
 
 	// too many options on one item
@@ -408,7 +378,7 @@ func TestImportLimits(t *testing.T) {
 	}
 	d["items"].([]m)[0]["options"] = opts
 	b, _ = json.Marshal(d)
-	require.Equal(t, 400, e.doRaw("POST", "/api/import", "u1", string(b), true).Code)
+	require.Equal(t, 400, e.doRaw("POST", "/api/import", "u1", string(b)).Code)
 }
 
 func TestImportRollbackOnLateFailure(t *testing.T) {
@@ -418,7 +388,7 @@ func TestImportRollbackOnLateFailure(t *testing.T) {
 	require.NoError(t, e.db.Write().Exec("DROP TABLE freeze_periods").Error)
 	d["freezes"] = []m{{"start_date": "2026-01-01", "end_date": "2026-01-02"}}
 	b, _ := json.Marshal(d)
-	w := e.doRaw("POST", "/api/import", "u1", string(b), true)
+	w := e.doRaw("POST", "/api/import", "u1", string(b))
 	require.Equal(t, 500, w.Code)
 	require.NotContains(t, w.Body.String(), "SecretItem")
 	require.Zero(t, e.count(&dbmodels.Item{}, "u1"))
@@ -464,12 +434,12 @@ func TestDeleteAccountRemovesEverythingOfTheUserOnly(t *testing.T) {
 
 	// wrong / missing confirmation deletes nothing
 	for _, body := range []string{``, `{}`, `{"confirm":"delete"}`, `{"confirm":"DELETE","x":1}`} {
-		w := e.doRaw("DELETE", "/api/account", "u1", body, true)
+		w := e.doRaw("DELETE", "/api/account", "u1", body)
 		require.Equal(t, 400, w.Code, body)
 	}
 	require.Equal(t, int64(1), e.rowsOf(&dbmodels.User{}, "id = ?", "u1"))
 
-	w := e.doRaw("DELETE", "/api/account", "u1", `{"confirm":"DELETE"}`, true)
+	w := e.doRaw("DELETE", "/api/account", "u1", `{"confirm":"DELETE"}`)
 	require.Equal(t, 200, w.Code, w.Body.String())
 	var cleared bool
 	for _, c := range w.Result().Cookies() {

@@ -585,7 +585,7 @@ func ruleErrResult(err error) (result, error) {
 }
 
 // DELETE /api/items/{id}: permanent delete, cascading at the service layer
-// (the schema has no foreign keys). Guarded by reauth in the router.
+// (the schema has no foreign keys).
 func (s *server) deleteItem(w http.ResponseWriter, r *http.Request) {
 	userID, ok := requestUser(w, r)
 	if !ok {

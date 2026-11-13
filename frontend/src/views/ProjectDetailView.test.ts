@@ -711,31 +711,6 @@ describe('ProjectDetailView keyboard', () => {
     w.unmount()
   })
 
-  it('retries the delete after reauth on 403 reauth_required', async () => {
-    const w = await mountTree()
-    const hook = vi.fn<() => Promise<boolean>>(async () => true)
-    setAuthHooks({ onReauthRequired: hook })
-    const inner = globalThis.fetch
-    let first = true
-    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
-      if (init?.method === 'DELETE' && first) {
-        first = false
-        calls.push({ url, method: 'DELETE' })
-        return jsonRes({ error: 'reauth_required' }, 403)
-      }
-      return inner(url, init)
-    })
-    press('ArrowUp')
-    press('d', document.activeElement!)
-    await flushPromises()
-    click('btn-confirm-delete-task')
-    await flushPromises()
-    expect(hook).toHaveBeenCalledTimes(1)
-    expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(2)
-    expect(rowIds()).toEqual(['201', '202', '203'])
-    w.unmount()
-  })
-
   it('a failed delete shows the page error and closes the dialog', async () => {
     const w = await mountTree()
     const inner = globalThis.fetch

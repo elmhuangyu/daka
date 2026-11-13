@@ -32,7 +32,7 @@ export interface QueueFailure {
   message: string
 }
 
-export type PauseReason = '' | 'unauthorized' | 'reauth_required'
+export type PauseReason = '' | 'unauthorized'
 
 export type Sender = (input: CheckinInput, key: string) => Promise<unknown>
 
@@ -222,11 +222,8 @@ export class OfflineQueue {
       } catch (err) {
         if (gen !== this.generation) return
         const status = err instanceof ApiError ? err.status : 0
-        const code = err instanceof ApiError ? err.code : ''
         if (status === 401) {
           this.paused = 'unauthorized'
-        } else if (status === 403 && code === 'reauth_required') {
-          this.paused = 'reauth_required'
         } else if (err instanceof ApiError && isDefinitive(status)) {
           await this.store.remove(e.seq!)
           this.pending = this.pending.filter((p) => p.seq !== e.seq)

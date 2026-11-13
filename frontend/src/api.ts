@@ -85,8 +85,6 @@ export function describeError(e: unknown): string {
 export interface AuthHooks {
   /** Called when the server says the session is gone (401 unauthorized). */
   onUnauthorized?: () => void
-  /** Called on 403 reauth_required; resolve true once reauth succeeded to retry the request. */
-  onReauthRequired?: () => Promise<boolean>
 }
 
 let hooks: AuthHooks = {}
@@ -230,31 +228,16 @@ export async function logout(): Promise<void> {
 /** OIDC login entry point; navigate the browser here (full page redirect). */
 export const OIDC_LOGIN_URL = '/api/auth/oidc/login'
 
-export interface ReauthResult {
-  ok?: boolean
-  /** OIDC mode: navigate here to re-authenticate at the identity provider. */
-  redirect?: string
-}
-
-/** POST /api/auth/reauth: shared secret in secret mode, redirect target in OIDC mode. */
-export function reauth(secret?: string): Promise<ReauthResult> {
-  return request<ReauthResult>(
-    '/api/auth/reauth',
-    jsonInit('POST', secret === undefined ? {} : { secret }),
-  )
-}
-
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
 interface Retry {
   csrf: boolean
-  reauth: boolean
 }
 
 async function request<T>(
   path: string,
   init: RequestInit = {},
-  retry: Retry = { csrf: false, reauth: false },
+  retry: Retry = { csrf: false },
   as: 'json' | 'text' = 'json',
 ): Promise<T> {
   let res: Response
@@ -298,15 +281,6 @@ async function request<T>(
     if (res.status === 403 && code === 'csrf' && !retry.csrf && !noToken) {
       // The cached token went stale (new session); fetch a fresh one and retry once.
       return request<T>(path, stripCsrf(init), { ...retry, csrf: true }, as)
-    }
-    if (
-      res.status === 403 &&
-      code === 'reauth_required' &&
-      !retry.reauth &&
-      hooks.onReauthRequired
-    ) {
-      if (await hooks.onReauthRequired())
-        return request<T>(path, init, { ...retry, reauth: true }, as)
     }
     if (res.status === 401 && code === 'unauthorized' && path !== '/api/auth/me') {
       broadcastAuthEvent({ type: 'session_expired' })
@@ -1206,16 +1180,16 @@ export function getItemCalendar(
   return request(`/api/view/calendar?${p.toString()}`)
 }
 
-/** DELETE /api/items/{id}; the 403 reauth_required hook retries it after confirmation. */
+/** DELETE /api/items/{id}. */
 export function deleteItem(id: number): Promise<unknown> {
   return request(`/api/items/${id}`, { method: 'DELETE' })
 }
 
-// --- Data: export / import / delete account (all behind reauth) ---
+// --- Data: export / import / delete account  ---
 
 /** GET /api/export: the raw JSON document text (kept as text so it is saved byte for byte). */
 export function exportData(): Promise<string> {
-  return request<string>('/api/export', {}, { csrf: false, reauth: false }, 'text')
+  return request<string>('/api/export', {}, { csrf: false }, 'text')
 }
 
 export interface ImportSummary {

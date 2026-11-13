@@ -17,8 +17,8 @@ const (
 	exportCheckinBatch = 2000
 )
 
-// GET /api/export (behind reauth): the user's complete data as one JSON
-// document. The response is plaintext sensitive data, hence reauth and
+// GET /api/export: the user's complete data as one JSON
+// document. The response is plaintext sensitive data, hence
 // Cache-Control: no-store. Large arrays are written in id-ordered batches from
 // one read transaction (a consistent snapshot) so memory stays bounded. External
 // calendar URLs are never exported (only name and url_hint).

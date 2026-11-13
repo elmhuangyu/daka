@@ -54,7 +54,7 @@ type telegramBotReq struct {
 	ChatID   *int64 `json:"chat_id"`
 }
 
-// PUT /api/telegram (behind reauth): configure or update personal bot token and/or chat ID.
+// PUT /api/telegram: configure or update personal bot token and/or chat ID.
 func (s *server) putTelegram(w http.ResponseWriter, r *http.Request) {
 	userID, ok := requestUser(w, r)
 	if !ok {
@@ -90,7 +90,7 @@ func (s *server) putTelegram(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// POST /api/telegram/link-code (behind reauth): a one-time code valid 10 minutes.
+// POST /api/telegram/link-code: a one-time code valid 10 minutes.
 func (s *server) postTelegramLinkCode(w http.ResponseWriter, r *http.Request) {
 	userID, ok := requestUser(w, r)
 	if !ok {
@@ -140,7 +140,7 @@ func (s *server) postTelegramTest(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// DELETE /api/telegram (behind reauth): unlink; idempotent.
+// DELETE /api/telegram: unlink; idempotent.
 func (s *server) deleteTelegram(w http.ResponseWriter, r *http.Request) {
 	userID, ok := requestUser(w, r)
 	if !ok {

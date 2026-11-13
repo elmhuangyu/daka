@@ -3,11 +3,9 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -491,19 +489,6 @@ func TestErrorsNeverEchoItemName(t *testing.T) {
 		require.GreaterOrEqual(t, w.Code, 400)
 		require.NotContains(t, w.Body.String(), "Highly Sensitive")
 	}
-}
-
-func TestDeleteItemRequiresReauthWhenConfigured(t *testing.T) {
-	e := newEnv(t)
-	deny := func(_ http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			errResult(http.StatusForbidden, "reauth_required").write(w)
-		})
-	}
-	e.h = NewRouter(Deps{DB: e.db, Now: func() time.Time { return e.now }, Auth: userHeaderAuth, Reauth: deny})
-	it := e.mustCreate("", rruleItem("x", "FREQ=DAILY"))
-	require.Equal(t, 403, e.do("DELETE", itemPath(it.ID), "", "", nil).Code)
-	require.Equal(t, 200, e.do("GET", itemPath(it.ID), "", "", nil).Code, "only DELETE is guarded")
 }
 
 func TestTodayUsesArchivedOptionExclusion(t *testing.T) {

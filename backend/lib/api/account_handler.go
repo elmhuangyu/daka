@@ -16,7 +16,7 @@ type deleteAccountRequest struct {
 	Confirm string `json:"confirm"`
 }
 
-// DELETE /api/account (behind reauth): permanently deletes the caller's user
+// DELETE /api/account: permanently deletes the caller's user
 // row and every row they own (items and their options / rule versions, check-in
 // logs, freezes, categories, settings with encrypted external calendar URLs,
 // API tokens, sessions, Telegram link and codes, reminder logs, idempotency
