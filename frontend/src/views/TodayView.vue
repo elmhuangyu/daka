@@ -343,6 +343,7 @@ const visibleCount = computed(
     store.todoCards.length +
     store.unscheduledTodoCards.length +
     store.maintenanceCards.length +
+    store.goalCards.length +
     store.quotaCards.length +
     store.doneCards.length,
 )
@@ -398,6 +399,7 @@ const allCards = computed<CardVM[]>(() => [
   ...store.todoCards,
   ...store.unscheduledTodoCards,
   ...store.maintenanceCards,
+  ...store.goalCards,
   ...store.quotaCards,
   ...store.doneCards,
 ])
@@ -1128,7 +1130,40 @@ watch(
         </div>
       </details>
 
-      <!-- Quota: collapsed by default so it does not nag; open it to log or check progress -->
+      <!-- Goals ("at least N per period"): always visible with progress -->
+      <div
+        v-if="store.goalCards.length"
+        class="card card-border bg-base-100 border-base-300 p-4 shadow-xs space-y-3"
+        data-testid="section-goals"
+      >
+        <h2 class="text-sm font-bold text-base-content/90 flex items-center gap-2">
+          <Icon icon="lucide:target" class="size-4 text-primary" aria-hidden="true" />
+          {{
+            t('common.countSuffix', {
+              title: t('today.section.goals'),
+              count: store.goalCards.length,
+            })
+          }}
+        </h2>
+        <ul class="space-y-2" data-testid="goal-list">
+          <li v-for="c in store.goalCards" :key="c.detail.id">
+            <ItemCard
+              :vm="c"
+              :category="cat(c)"
+              :project="projectFor(c)"
+              variant="quota"
+              :date="store.view?.date"
+              :busy="store.busy.includes(c.detail.id)"
+              :pending="offline.pendingItems.includes(c.detail.id)"
+              @log="log"
+              @remove="store.remove(c.detail.id, $event)"
+              @open-details="detailItemId = c.detail.id"
+            />
+          </li>
+        </ul>
+      </div>
+
+      <!-- Limits ("at most N per period", e.g. cola): collapsed so they do not nag -->
       <details
         v-if="store.quotaCards.length"
         :open="store.quotaUrgentCount > 0 || undefined"

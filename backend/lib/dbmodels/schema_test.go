@@ -46,7 +46,7 @@ func TestSchemaMatchesDesign(t *testing.T) {
 	}{
 		{&User{}, "users", map[string]string{"id": tStr, "email": tStr, "name": tStr, "avatar_url": tStr, "created_at": tTime}},
 		{&UserSettings{}, "user_settings", map[string]string{"user_id": tStr, "holiday_region": tStr, "timezone": tStr,
-			"week_start": tInt, "state_version": tInt, "external_calendar_urls": tStr, "streak_holiday_freeze": tBool}},
+			"week_start": tInt, "state_version": tInt, "external_calendar_urls": tStr, "streak_holiday_freeze": tBool, "language": tStr}},
 		{&Category{}, "categories", map[string]string{"id": tInt, "user_id": tStr, "name": tStr, "color": tStr, "icon": tStr,
 			"is_sensitive": tBool, "sort_order": tInt}},
 		{&Project{}, "projects", map[string]string{"id": tInt, "user_id": tStr, "category_id": tInt, "name": tStr,

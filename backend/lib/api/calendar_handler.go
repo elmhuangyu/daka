@@ -32,6 +32,7 @@ type calendarSettings struct {
 	WeekStart           int                   `json:"week_start"`
 	HolidayRegion       string                `json:"holiday_region"`
 	StreakHolidayFreeze bool                  `json:"streak_holiday_freeze"`
+	Language            string                `json:"language"`
 	ExternalCalendars   []externalCalendarOut `json:"external_calendars"`
 }
 
@@ -48,6 +49,7 @@ type calendarSettingsPut struct {
 	WeekStart           *int                  `json:"week_start"`
 	HolidayRegion       *string               `json:"holiday_region"`
 	StreakHolidayFreeze *bool                 `json:"streak_holiday_freeze"`
+	Language            *string               `json:"language"`
 	ExternalCalendars   *[]externalCalendarIn `json:"external_calendars"`
 }
 
@@ -66,7 +68,7 @@ func (s *server) calendarSettingsOf(st dbmodels.UserSettings) (calendarSettings,
 	}
 	return calendarSettings{
 		Timezone: tz, WeekStart: st.WeekStart, HolidayRegion: string(st.HolidayRegion),
-		StreakHolidayFreeze: st.StreakHolidayFreeze, ExternalCalendars: out,
+		StreakHolidayFreeze: st.StreakHolidayFreeze, Language: st.Language, ExternalCalendars: out,
 	}, nil
 }
 
@@ -146,6 +148,15 @@ func (s *server) putCalendarSettings(w http.ResponseWriter, r *http.Request) {
 		if req.StreakHolidayFreeze != nil && *req.StreakHolidayFreeze != st.StreakHolidayFreeze {
 			st.StreakHolidayFreeze, upd["streak_holiday_freeze"], bump = *req.StreakHolidayFreeze, *req.StreakHolidayFreeze, true
 		}
+		if req.Language != nil {
+			if *req.Language != "" && !validLanguage(*req.Language) {
+				return inputErr("invalid language")
+			}
+			// Language does not affect derived values, so no state_version bump.
+			if *req.Language != st.Language {
+				st.Language, upd["language"] = *req.Language, *req.Language
+			}
+		}
 		if req.ExternalCalendars != nil {
 			in := make([]extcal.Input, 0, len(*req.ExternalCalendars))
 			for _, c := range *req.ExternalCalendars {
@@ -188,6 +199,9 @@ func (s *server) putCalendarSettings(w http.ResponseWriter, r *http.Request) {
 		errResult(http.StatusInternalServerError, "internal error").write(w)
 	}
 }
+
+// validLanguage reports whether code is a UI locale the frontend ships.
+func validLanguage(code string) bool { return code == "en" || code == "zh-CN" }
 
 func inputErr(msg string) error { return extcal.InputError(msg) }
 

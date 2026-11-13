@@ -306,6 +306,9 @@ func validateImportSettings(st *exportSettings, now time.Time) *importFail {
 	if st.HolidayRegion != "" && !holiday.ValidRegion(st.HolidayRegion) {
 		return bad("settings", "bad_holiday_region")
 	}
+	if st.Language != "" && !validLanguage(st.Language) {
+		return bad("settings", "bad_language")
+	}
 	return nil
 }
 
@@ -623,6 +626,7 @@ func (p *importPlan) write(tx *gorm.DB, userID string) error {
 		if err := tx.Model(&dbmodels.UserSettings{}).Where("user_id = ?", userID).Updates(map[string]any{
 			"timezone": p.settings.Timezone, "week_start": p.settings.WeekStart,
 			"holiday_region": p.settings.HolidayRegion, "streak_holiday_freeze": p.settings.StreakHolidayFreeze,
+			"language": p.settings.Language,
 		}).Error; err != nil {
 			return err
 		}

@@ -312,3 +312,15 @@ func TestExternalCalendarWindowValidation(t *testing.T) {
 	require.Equal(t, 400, get("?start=2026-11-01"))
 	require.Equal(t, 400, get("?start=nope&end=2026-11-02"))
 }
+
+func TestSettingsCalendarLanguage(t *testing.T) {
+	e := newCalEnv(t, true)
+	require.Equal(t, "", e.settings("")["language"])
+	v0 := e.stateVersion("u1")
+	require.Equal(t, 200, e.do("PUT", "/api/settings/calendar", "", "", m{"language": "zh-CN"}).Code)
+	require.Equal(t, "zh-CN", e.settings("")["language"])
+	require.Equal(t, v0, e.stateVersion("u1"), "language does not bump state_version")
+	require.Equal(t, 400, e.do("PUT", "/api/settings/calendar", "", "", m{"language": "xx"}).Code)
+	require.Equal(t, "zh-CN", e.settings("")["language"])
+	require.Equal(t, "", e.settings("u2")["language"])
+}

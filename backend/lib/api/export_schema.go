@@ -16,6 +16,7 @@ type exportSettings struct {
 	WeekStart           int    `json:"week_start"`
 	HolidayRegion       string `json:"holiday_region"`
 	StreakHolidayFreeze bool   `json:"streak_holiday_freeze"`
+	Language            string `json:"language"`
 	// ExternalCalendars carries name and url_hint only: the (encrypted) feed
 	// URLs are secrets and are never exported. Import ignores the field.
 	ExternalCalendars []externalCalendarOut `json:"external_calendars"`

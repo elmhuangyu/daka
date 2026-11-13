@@ -41,8 +41,13 @@ function changeDateFormat() {
 }
 
 async function changeLanguage() {
-  // Per-device preference: stored in this browser only, never sent to the server.
+  // Stored in this browser for the first paint and saved to the account so other devices follow.
   lang.value = await setLocale(lang.value, { persist: true })
+  try {
+    await putCalendarSettings({ language: lang.value })
+  } catch (e) {
+    error.value = describeError(e)
+  }
 }
 
 function getEffectiveTheme(): string {

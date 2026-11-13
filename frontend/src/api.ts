@@ -367,6 +367,7 @@ export interface RuleDetail {
   holiday_mode?: string
   rolling_interval?: number
   rolling_unit?: string
+  quota_comparator?: string
   target_value?: number
   completion_rule?: string
   option_targets: Record<string, number>
@@ -834,6 +835,8 @@ export interface CalendarSettings {
   week_start: number
   holiday_region: string
   streak_holiday_freeze: boolean
+  /** UI language; empty until the user chooses one. */
+  language: string
   external_calendars: ExternalCalendarDto[]
 }
 
@@ -847,6 +850,7 @@ export function putCalendarSettings(body: {
   week_start?: number
   holiday_region?: string
   streak_holiday_freeze?: boolean
+  language?: string
   external_calendars?: { id?: string; name: string; url?: string }[]
 }): Promise<CalendarSettings> {
   return request<CalendarSettings>('/api/settings/calendar', jsonInit('PUT', body))

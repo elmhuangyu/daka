@@ -214,11 +214,22 @@ export const useTodayStore = defineStore('today', () => {
     return scoped(Array.from(map.values()))
   })
   const maintenanceCards = computed(() => scoped(items.value.filter(needsAttention).map(vm)))
-  const quotaCards = computed(() =>
-    scoped(items.value.filter((d) => d.current_rule.schedule_type === 'quota').map(vm)).sort(
+  const sortedQuota = (atLeast: boolean) =>
+    scoped(
+      items.value
+        .filter(
+          (d) =>
+            d.current_rule.schedule_type === 'quota' &&
+            (d.current_rule.quota_comparator !== 'at_most') === atLeast,
+        )
+        .map(vm),
+    ).sort(
       (a, b) => quotaUrgency(a.detail, view.value?.date) - quotaUrgency(b.detail, view.value?.date),
-    ),
-  )
+    )
+  /** "At least N per period" quotas are goals to reach: always visible. */
+  const goalCards = computed(() => sortedQuota(true))
+  /** "At most N per period" quotas are things to cut down: collapsed by default. */
+  const quotaCards = computed(() => sortedQuota(false))
   /** Quota items that must be checked in today to stay on pace. */
   const quotaUrgentCount = computed(
     () =>
@@ -348,6 +359,7 @@ export const useTodayStore = defineStore('today', () => {
     unscheduledTodoCards,
     doneCards,
     maintenanceCards,
+    goalCards,
     quotaCards,
     quotaUrgentCount,
     unscheduledItems,

@@ -8,6 +8,9 @@ import ShortcutHelp from './components/ShortcutHelp.vue'
 import { useGlobalShortcuts } from './composables/useGlobalShortcuts'
 import { catalogDef, PRIVACY_TOGGLE_ID } from './composables/shortcutCatalog'
 import { installShortcutListener, useShortcut } from './composables/useShortcuts'
+import { getCalendarSettings } from './api'
+import { currentLocale, setLocale } from './i18n'
+import { isSupportedLocale } from './i18n/locales'
 import { useAuthStore } from './stores/auth'
 import { useOfflineStore } from './stores/offline'
 import { usePrivacyStore } from './stores/privacy'
@@ -60,6 +63,23 @@ watch(
   (ok) => {
     if (!ok) handleUnauthenticatedRedirect()
   },
+)
+
+// The language is an account setting: once signed in, adopt the saved one on any device.
+watch(
+  () => auth.user?.id,
+  async (id) => {
+    if (!id) return
+    try {
+      const lang = (await getCalendarSettings()).language
+      if (isSupportedLocale(lang) && lang !== currentLocale()) {
+        await setLocale(lang, { persist: true })
+      }
+    } catch {
+      // Keep the locally detected language.
+    }
+  },
+  { immediate: true },
 )
 
 useShortcut(catalogDef(PRIVACY_TOGGLE_ID, () => privacy.toggle()))

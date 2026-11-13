@@ -24,4 +24,6 @@ type UserSettings struct {
 	// ExternalCalendarURLs is a JSON array, stored encrypted by the service layer.
 	ExternalCalendarURLs string `gorm:"type:text"`
 	StreakHolidayFreeze  bool   `gorm:"not null;default:false"`
+	// Language is the UI language ("en", "zh-CN"); empty means not chosen yet.
+	Language string `gorm:"size:16;not null;default:''"`
 }
