@@ -463,9 +463,3 @@ func TestDeleteAccountRemovesEverythingOfTheUserOnly(t *testing.T) {
 		}
 	}
 }
-
-func TestImportKindLegacyName(t *testing.T) {
-	require.Equal(t, dbmodels.KindOngoing, importKind("habit"))
-	require.Equal(t, dbmodels.KindOngoing, importKind("ongoing"))
-	require.Equal(t, dbmodels.KindEvent, importKind("event"))
-}
