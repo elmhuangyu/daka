@@ -28,8 +28,15 @@ const props = defineProps<{
   date?: string
   /** An offline check-in for this item is queued and not yet confirmed. */
   pending?: boolean
+  /** Show the drag handle for manual reordering. */
+  reorderable?: boolean
 }>()
-const emit = defineEmits<{ log: [CheckinInput]; remove: [number]; openDetails: [] }>()
+const emit = defineEmits<{
+  log: [CheckinInput]
+  remove: [number]
+  openDetails: []
+  dragStart: [PointerEvent]
+}>()
 
 const d = computed(() => props.vm.detail)
 const logs = computed(() => props.vm.logs)
@@ -233,6 +240,17 @@ function record(r: ValueRow) {
             @click="emit('openDetails')"
           >
             <Icon icon="lucide:pencil" class="size-3.5" aria-hidden="true" />
+          </button>
+          <button
+            v-if="reorderable"
+            type="button"
+            class="btn btn-ghost btn-xs btn-square cursor-grab touch-none select-none"
+            :aria-label="t('today.card.reorder')"
+            :title="t('today.card.reorder')"
+            data-testid="drag-handle"
+            @pointerdown="emit('dragStart', $event)"
+          >
+            <Icon icon="lucide:menu" class="size-3.5" aria-hidden="true" />
           </button>
         </div>
       </header>

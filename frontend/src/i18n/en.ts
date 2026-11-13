@@ -209,6 +209,7 @@ export const en = {
   'today.ring.todos': 'To-dos',
   'today.card.openProject': 'Open project',
   'today.card.details': 'Details',
+  'today.card.reorder': 'Drag to reorder',
   'today.modal.editItem': 'Item settings',
   'today.modal.dueDateSection': 'Due Date / Schedule',
   'today.modal.makeUndated': 'Clear (Make Undated)',

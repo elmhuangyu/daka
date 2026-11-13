@@ -44,6 +44,7 @@ const ICONS: Record<string, string> = {
     '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
   ),
   'lucide:check': wrap('<path d="M20 6 9 17l-5-5"/>'),
+  'lucide:menu': wrap('<path d="M4 6h16M4 12h16M4 18h16"/>'),
   'lucide:x': wrap('<path d="M18 6 6 18M6 6l12 12"/>'),
   'lucide:undo-2': wrap(
     '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/>',

@@ -202,6 +202,7 @@ const zhCN: Record<MessageKey, string> = {
   'today.ring.todos': '待办',
   'today.card.openProject': '打开项目',
   'today.card.details': '详情',
+  'today.card.reorder': '拖动排序',
   'today.modal.editItem': '事项设置',
   'today.modal.dueDateSection': '截止日期 / 排期',
   'today.modal.makeUndated': '清除日期（转为待办）',

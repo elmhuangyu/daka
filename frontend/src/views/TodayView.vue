@@ -16,6 +16,7 @@ import {
   createAdHocEvent,
   createScheduledEvent,
   createTodoItem,
+  moveItem,
   describeError,
   type CheckinInput,
 } from '../api'
@@ -373,6 +374,79 @@ function projectFor(c: CardVM) {
   return projectsStore.projectById.get(pid) ?? null
 }
 trackPointer()
+
+// Drag-to-reorder among siblings (same parent) via pointer events (mouse + touch).
+const drag = ref<{ id: number; beforeId: number | null; afterId: number | null } | null>(null)
+function clearDropMarks() {
+  document.querySelectorAll('.drop-before, .drop-after').forEach((el) => {
+    el.classList.remove('drop-before', 'drop-after')
+  })
+}
+function onDragStart(e: PointerEvent, c: CardVM) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return
+  const handle = e.currentTarget as HTMLElement
+  const li = handle.closest('li') as HTMLElement | null
+  const ul = li?.parentElement
+  if (!li || !ul) return
+  e.preventDefault()
+  const id = c.detail.id
+  const parent = String(c.detail.parent_id ?? '')
+  const project = String(c.detail.project_id ?? '')
+  const sibs = [...ul.children].filter(
+    (x) =>
+      x !== li &&
+      (x as HTMLElement).dataset.parent === parent &&
+      (x as HTMLElement).dataset.project === project,
+  ) as HTMLElement[]
+  if (!sibs.length) return
+  handle.setPointerCapture(e.pointerId)
+  drag.value = { id, beforeId: null, afterId: null }
+  li.classList.add('opacity-50')
+  const move = (ev: PointerEvent) => {
+    clearDropMarks()
+    const y = ev.clientY
+    let target: HTMLElement | null = null
+    let after = false
+    for (const s of sibs) {
+      const r = s.getBoundingClientRect()
+      if (y < r.top + r.height / 2) {
+        target = s
+        after = false
+        break
+      }
+      target = s
+      after = true
+    }
+    if (!target || !drag.value) return
+    target.classList.add(after ? 'drop-after' : 'drop-before')
+    const tid = Number(target.dataset.id)
+    drag.value.beforeId = after ? null : tid
+    drag.value.afterId = after ? tid : null
+  }
+  const end = async (ev: PointerEvent) => {
+    handle.removeEventListener('pointermove', move)
+    handle.removeEventListener('pointerup', end)
+    handle.removeEventListener('pointercancel', end)
+    if (handle.hasPointerCapture(ev.pointerId)) handle.releasePointerCapture(ev.pointerId)
+    clearDropMarks()
+    li.classList.remove('opacity-50')
+    const d = drag.value
+    drag.value = null
+    if (ev.type === 'pointercancel' || !d || (d.beforeId === null && d.afterId === null)) return
+    try {
+      await moveItem(
+        d.id,
+        d.beforeId !== null ? { before_id: d.beforeId } : { after_id: d.afterId as number },
+      )
+      await store.refresh(store.view?.date)
+    } catch (err) {
+      store.error = describeError(err)
+    }
+  }
+  handle.addEventListener('pointermove', move)
+  handle.addEventListener('pointerup', end)
+  handle.addEventListener('pointercancel', end)
+}
 const doneTotal = () => store.ring.done + store.todoRing.done + store.doneCards.length
 const allFinished = () =>
   store.ring.total + store.todoRing.total > 0 &&
@@ -1069,8 +1143,17 @@ watch(
             {{ t('common.countSuffix', { title: s.title, count: s.cards.length }) }}
           </h2>
           <ul class="space-y-2" :data-testid="`${s.id}-list`">
-            <li v-for="c in s.cards" :key="c.detail.id" :style="indent(c)">
+            <li
+              v-for="c in s.cards"
+              :key="c.detail.id"
+              :style="indent(c)"
+              :data-id="c.detail.id"
+              :data-parent="c.detail.parent_id ?? ''"
+              :data-project="c.detail.project_id ?? ''"
+            >
               <ItemCard
+                reorderable
+                @drag-start="onDragStart($event, c)"
                 :vm="c"
                 :category="cat(c)"
                 :project="projectFor(c)"
@@ -1113,8 +1196,17 @@ watch(
         </summary>
         <div class="px-4 pb-4">
           <ul class="space-y-2" data-testid="unscheduled-todos-list">
-            <li v-for="c in poolCards" :key="c.detail.id" :style="indent(c)">
+            <li
+              v-for="c in poolCards"
+              :key="c.detail.id"
+              :style="indent(c)"
+              :data-id="c.detail.id"
+              :data-parent="c.detail.parent_id ?? ''"
+              :data-project="c.detail.project_id ?? ''"
+            >
               <ItemCard
+                reorderable
+                @drag-start="onDragStart($event, c)"
                 :vm="c"
                 :category="cat(c)"
                 :project="projectFor(c)"
@@ -1289,3 +1381,12 @@ watch(
     </template>
   </section>
 </template>
+
+<style scoped>
+.drop-before {
+  box-shadow: 0 -2px 0 0 var(--color-primary);
+}
+.drop-after {
+  box-shadow: 0 2px 0 0 var(--color-primary);
+}
+</style>
