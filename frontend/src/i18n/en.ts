@@ -346,6 +346,9 @@ export const en = {
   'projects.tasks': 'Tasks',
   'projects.progress': 'Progress',
   'projects.back': 'Back to Projects',
+  'projects.ongoing': 'Ongoing',
+  'projects.ongoingHint':
+    'Recurring and quota items linked to this project. Check them in on Today.',
   'projects.noTasks': 'No tasks in this project yet',
   'projects.addTask': 'Add Task',
   'projects.addTaskPlaceholder': 'Add a task to this project...',

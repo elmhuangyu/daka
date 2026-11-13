@@ -203,6 +203,32 @@ describe('ProjectDetailView', () => {
     expect(w.find('[data-testid="task-item-102"]').text()).toContain('Astronaut Training')
   })
 
+  it('lists recurring items apart from the todo checklist', async () => {
+    currentTasks.push({
+      id: 201,
+      name: 'Daily Review',
+      tracker_type: 'boolean',
+      kind: 'ongoing',
+      polarity: 'positive',
+      project_id: 1,
+      category_id: 10,
+      effective_sensitive: false,
+      options: [],
+      current_rule: {
+        schedule_type: 'fixed_rrule',
+        rrule_string: 'FREQ=DAILY',
+        option_targets: {},
+      },
+      stats: { counts: { last_30_days: 3, this_year: 3, total: 3 } },
+    })
+    const { w } = await mountDetail()
+    expect(w.find('[data-testid="ongoing-item-201"]').text()).toContain('Daily Review')
+    expect(w.find('[data-testid="task-item-201"]').exists()).toBe(false)
+    expect(w.find('[data-testid="task-checkbox-201"]').exists()).toBe(false)
+    // Progress counts only the todos.
+    expect(w.find('[data-testid="project-progress-stats"]').text()).toContain('1 of 2')
+  })
+
   it('adds a task to the project', async () => {
     const { w } = await mountDetail()
 

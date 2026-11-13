@@ -339,6 +339,8 @@ const zhCN: Record<MessageKey, string> = {
   'projects.tasks': '任务',
   'projects.progress': '进度',
   'projects.back': '返回项目列表',
+  'projects.ongoing': '持续性事项',
+  'projects.ongoingHint': '关联到此项目的重复/配额事项,在今日页打卡。',
   'projects.noTasks': '该项目中暂无任务',
   'projects.addTask': '添加任务',
   'projects.addTaskPlaceholder': '为该项目添加任务...',

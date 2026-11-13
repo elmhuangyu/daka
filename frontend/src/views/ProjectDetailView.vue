@@ -7,6 +7,7 @@ import * as api from '../api'
 import type { Category, ItemDetail, Project, ProjectStatus, UpdateProjectRequest } from '../api'
 import DateInput from '../components/DateInput.vue'
 import { useI18n } from '../i18n'
+import { badgesOf, describeRule } from '../items/logic'
 import { formatCustomDate } from '../i18n/format'
 import { usePrivacyStore } from '../stores/privacy'
 import { useProjectsStore } from '../stores/projects'
@@ -22,7 +23,14 @@ const projectsStore = useProjectsStore()
 const projectId = computed(() => Number(route.params.id))
 const project = ref<Project | null>(null)
 const categories = ref<Category[]>([])
+// One-off todos (events) form the checklist; recurring items get their own section,
+// because a done/not-done checkbox means nothing for something that repeats.
 const tasks = ref<ItemDetail[]>([])
+const ongoing = ref<ItemDetail[]>([])
+function setItems(items: ItemDetail[]) {
+  tasks.value = items.filter((i) => i.kind !== 'ongoing')
+  ongoing.value = items.filter((i) => i.kind === 'ongoing')
+}
 
 const loading = ref(true)
 const error = ref('')
@@ -182,7 +190,7 @@ async function loadProject() {
     categories.value = (cats.categories ?? []).map((c) =>
       privacy.redact && c.is_sensitive ? { ...c, name: t('common.privateCategory'), icon: '' } : c,
     )
-    tasks.value = itemsRes.items
+    setItems(itemsRes.items)
   } catch (e) {
     if (my !== seq) return
     error.value = api.describeError(e)
@@ -218,7 +226,7 @@ watch(
     if (on) {
       seq++
       project.value = null
-      tasks.value = []
+      setItems([])
       categories.value = []
     }
     void loadProject()
@@ -432,7 +440,7 @@ async function handleAddSubtask() {
 async function refreshTasks() {
   if (!projectId.value) return
   const res = await api.listProjectItems(projectId.value, { redact: privacy.redact })
-  tasks.value = res.items
+  setItems(res.items)
 }
 
 // Task Management: Assign / change a due date
@@ -485,6 +493,15 @@ async function unlinkTask(task: ItemDetail) {
   try {
     await api.updateItem(task.id, { project_id: null })
     removeTaskLocally(task)
+  } catch (e) {
+    error.value = api.describeError(e)
+  }
+}
+
+async function unlinkOngoing(h: ItemDetail) {
+  try {
+    await api.updateItem(h.id, { project_id: null })
+    ongoing.value = ongoing.value.filter((x) => x.id !== h.id)
   } catch (e) {
     error.value = api.describeError(e)
   }
@@ -966,6 +983,58 @@ function taskDueDate(task: ItemDetail): string | null {
         </div>
       </div>
 
+      <!-- Recurring items linked to this project -->
+      <div v-if="ongoing.length" class="space-y-3" data-testid="project-ongoing">
+        <h2 class="text-lg font-bold text-base-content flex items-center gap-2">
+          <Icon icon="lucide:repeat" class="size-5 text-primary" />
+          <span>{{ t('projects.ongoing') }}</span>
+          <span class="badge badge-sm font-semibold">{{ ongoing.length }}</span>
+        </h2>
+        <p class="text-xs text-base-content/60">{{ t('projects.ongoingHint') }}</p>
+        <div class="space-y-2">
+          <div
+            v-for="h in ongoing"
+            :key="h.id"
+            class="rounded-xl border border-base-300 bg-base-100 p-3 sm:px-4 flex flex-wrap items-center gap-x-3 gap-y-1"
+            :data-testid="`ongoing-item-${h.id}`"
+          >
+            <div class="min-w-0 flex-1 basis-48">
+              <RouterLink
+                :to="`/items/${h.id}`"
+                class="text-sm font-medium truncate block hover:text-primary"
+              >
+                <span v-if="h.emoji" aria-hidden="true">{{ h.emoji }}</span>
+                {{ h.name }}
+              </RouterLink>
+              <div class="text-xs text-base-content/60 truncate">
+                {{ describeRule(h.current_rule) }}
+              </div>
+            </div>
+            <span
+              v-for="b in badgesOf(h)"
+              :key="b.text"
+              class="badge badge-sm"
+              :class="{
+                'badge-success': b.tone === 'ok',
+                'badge-warning': b.tone === 'warn',
+                'badge-error': b.tone === 'bad',
+              }"
+            >
+              {{ b.text }}
+            </span>
+            <button
+              type="button"
+              class="btn btn-xs btn-ghost btn-circle text-base-content/60 hover:text-warning"
+              :title="t('projects.unlinkTask')"
+              :data-testid="`btn-unlink-ongoing-${h.id}`"
+              @click="unlinkOngoing(h)"
+            >
+              <Icon icon="lucide:unlink" class="size-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Task Management Section -->
       <div class="space-y-4">
         <h2 class="text-lg font-bold text-base-content flex items-center gap-2">
@@ -1389,9 +1458,9 @@ function taskDueDate(task: ItemDetail): string | null {
           </div>
 
           <!-- If project has items, show unlink vs cascade choices -->
-          <div v-if="tasks.length > 0" class="space-y-3">
+          <div v-if="tasks.length + ongoing.length > 0" class="space-y-3">
             <p class="text-sm text-base-content/80">
-              {{ t('projects.deleteWithItemsPrompt', { count: tasks.length }) }}
+              {{ t('projects.deleteWithItemsPrompt', { count: tasks.length + ongoing.length }) }}
             </p>
             <div class="space-y-2">
               <label
