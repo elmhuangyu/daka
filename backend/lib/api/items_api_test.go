@@ -634,3 +634,39 @@ func TestItemProjectID(t *testing.T) {
 	itNormalFrozen := decode[itemResponse](t, w)
 	require.True(t, itNormalFrozen.IsSensitive, "leaving project whose category is sensitive freezes item")
 }
+
+func TestProjectCategoryInheritance(t *testing.T) {
+	e := newEnv(t)
+	cat := e.category("u1", false)
+	p := e.createProject("u1", m{"name": "P"})
+	mk := func(body m) itemResponse {
+		body["tracker_type"] = "boolean"
+		body["rule"] = m{"schedule_type": "none"}
+		w := e.do("POST", "/api/items", "u1", "", body)
+		require.Equal(t, 201, w.Code, w.Body.String())
+		return decode[itemResponse](t, w)
+	}
+	// Added before the project has a category.
+	old := mk(m{"name": "old", "project_id": p.ID})
+	require.Nil(t, old.CategoryID)
+
+	w := e.do("PATCH", fmt.Sprintf("/api/projects/%d", p.ID), "u1", "", m{"category_id": cat})
+	require.Equal(t, 200, w.Code, w.Body.String())
+	got := decode[itemResponse](t, e.do("GET", itemPath(old.ID), "u1", "", nil))
+	require.NotNil(t, got.CategoryID)
+	require.Equal(t, cat, *got.CategoryID)
+
+	// New items default to the project's category.
+	nu := mk(m{"name": "new", "project_id": p.ID})
+	require.NotNil(t, nu.CategoryID)
+	require.Equal(t, cat, *nu.CategoryID)
+
+	// Moving an uncategorized item in adopts it.
+	loose := mk(m{"name": "loose"})
+	require.Nil(t, loose.CategoryID)
+	w = e.do("PATCH", itemPath(loose.ID), "u1", "", m{"project_id": p.ID})
+	require.Equal(t, 200, w.Code, w.Body.String())
+	moved := decode[itemResponse](t, w)
+	require.NotNil(t, moved.CategoryID)
+	require.Equal(t, cat, *moved.CategoryID)
+}

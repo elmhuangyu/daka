@@ -483,6 +483,17 @@ func (s *server) patchProject(w http.ResponseWriter, r *http.Request) {
 			return result{}, err
 		}
 
+		// Items already in the project that have no category follow the project's.
+		if req.CategoryID.Set && p.CategoryID != nil {
+			if err := tx.Model(&dbmodels.Item{}).Where("user_id = ? AND project_id = ? AND category_id IS NULL", userID, p.ID).
+				Update("category_id", *p.CategoryID).Error; err != nil {
+				return result{}, err
+			}
+			if err := dbmodels.BumpStateVersion(tx, userID); err != nil {
+				return result{}, err
+			}
+		}
+
 		return jsonResult(http.StatusOK, newProjectResponse(p)), nil
 	})
 	if err != nil {

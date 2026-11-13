@@ -250,3 +250,36 @@ func TestKindRenameMigration(t *testing.T) {
 	require.NoError(t, g.Model(&Item{}).Where("kind = ?", "habit").Count(&n).Error)
 	require.EqualValues(t, 1, n)
 }
+
+func TestItemCategoryFromProjectMigration(t *testing.T) {
+	d := openTemp(t)
+	g := d.Write()
+	cat := uint(5)
+	withCat := Project{UserID: "u", Name: "A", CategoryID: &cat}
+	noCat := Project{UserID: "u", Name: "B"}
+	require.NoError(t, g.Create(&withCat).Error)
+	require.NoError(t, g.Create(&noCat).Error)
+	own := uint(9)
+	rows := []Item{
+		{UserID: "u", Name: "in A", Kind: KindEvent, ProjectID: &withCat.ID},
+		{UserID: "u", Name: "in A own", Kind: KindEvent, ProjectID: &withCat.ID, CategoryID: &own},
+		{UserID: "u", Name: "in B", Kind: KindEvent, ProjectID: &noCat.ID},
+		{UserID: "u", Name: "loose", Kind: KindEvent},
+	}
+	require.NoError(t, g.Create(&rows).Error)
+	require.NoError(t, g.Exec("DELETE FROM migrations").Error)
+
+	require.NoError(t, AutoMigrate(g))
+	var got []Item
+	require.NoError(t, g.Order("id").Find(&got).Error)
+	ids := func(c *uint) any {
+		if c == nil {
+			return nil
+		}
+		return *c
+	}
+	require.Equal(t, uint(5), ids(got[0].CategoryID))
+	require.Equal(t, uint(9), ids(got[1].CategoryID))
+	require.Nil(t, ids(got[2].CategoryID))
+	require.Nil(t, ids(got[3].CategoryID))
+}

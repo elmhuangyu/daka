@@ -456,6 +456,10 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 			}
 			pid := proj.ID
 			item.ProjectID = &pid
+			// An uncategorized item joining a categorized project adopts its category.
+			if item.CategoryID == nil && !req.CategoryID.Set {
+				item.CategoryID = proj.CategoryID
+			}
 			// DESIGN 4.1 rule 1: a sensitive project makes its items sensitive.
 			item.IsSensitive = item.IsSensitive || projSens(proj)
 		}

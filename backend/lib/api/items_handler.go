@@ -354,6 +354,10 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 			}
 			// DESIGN 4.1 rule 1: a sensitive project makes its items sensitive.
 			sensitive = sensitive || projSens(proj)
+			// Items without a category of their own take the project's.
+			if req.CategoryID == nil {
+				req.CategoryID = proj.CategoryID
+			}
 		}
 		if ver.QuotaMeasure == "" && st == dbmodels.ScheduleQuota {
 			ver.QuotaMeasure = schedule.EffectiveMeasure("", polarity)

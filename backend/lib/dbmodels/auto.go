@@ -35,5 +35,14 @@ func dataMigrations() []*gormigrate.Migration {
 				return tx.Model(&Item{}).Where("kind = ?", "habit").Update("kind", KindOngoing).Error
 			},
 		},
+		{
+			// Items now follow their project's category; backfill older ones that have none.
+			ID: "20261112_item_category_from_project",
+			Migrate: func(tx *gorm.DB) error {
+				return tx.Exec(`UPDATE items SET category_id = (SELECT p.category_id FROM projects p WHERE p.id = items.project_id)
+WHERE category_id IS NULL AND project_id IS NOT NULL
+AND EXISTS (SELECT 1 FROM projects p WHERE p.id = items.project_id AND p.category_id IS NOT NULL)`).Error
+			},
+		},
 	}
 }
