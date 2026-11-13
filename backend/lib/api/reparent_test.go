@@ -119,7 +119,7 @@ func TestReparent(t *testing.T) {
 		}, 400, nil},
 		{"kind is not restricted", func() (uint, m, string) {
 			par := e.item("u1", func(it *dbmodels.Item) { it.Kind = dbmodels.KindEvent })
-			return e.item("u1", func(it *dbmodels.Item) { it.Kind = dbmodels.KindHabit }), m{"parent_id": par}, ""
+			return e.item("u1", func(it *dbmodels.Item) { it.Kind = dbmodels.KindOngoing }), m{"parent_id": par}, ""
 		}, 200, nil},
 		{"sensitive parent makes subtree sensitive", func() (uint, m, string) {
 			par := e.item("u1", func(it *dbmodels.Item) { it.IsSensitive = true })

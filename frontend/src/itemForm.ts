@@ -29,7 +29,7 @@ export interface OptionForm {
 
 export interface ItemForm {
   name: string
-  kind: 'habit' | 'event'
+  kind: 'ongoing' | 'event'
   color: string
   emoji: string
   trackerType: TrackerType
@@ -74,7 +74,7 @@ export interface ItemForm {
 export function emptyForm(): ItemForm {
   return {
     name: '',
-    kind: 'habit',
+    kind: 'ongoing',
     color: '',
     emoji: '',
     trackerType: 'boolean',
@@ -356,7 +356,7 @@ export function formFromItem(it: ItemDto): ItemForm {
   const f = emptyForm()
   const r = it.current_rule
   f.name = it.name
-  f.kind = (it.kind as 'habit' | 'event') || 'habit'
+  f.kind = (it.kind as 'ongoing' | 'event') || 'ongoing'
   f.color = it.color ?? ''
   f.emoji = it.emoji ?? ''
   f.trackerType = it.tracker_type as TrackerType

@@ -73,7 +73,7 @@ func trimInvalid(err error) string {
 	return strings.TrimPrefix(err.Error(), ErrInvalid.Error()+": ")
 }
 
-// ItemSpec is the item-level input of ValidateItemRule. Empty Kind means habit
+// ItemSpec is the item-level input of ValidateItemRule. Empty Kind means ongoing
 // and empty Polarity means positive.
 type ItemSpec struct {
 	TrackerType dbmodels.TrackerType
@@ -114,9 +114,9 @@ func ValidateItemRule(item ItemSpec, rule dbmodels.ItemRuleVersion, options []Op
 		return reasonf(ReasonUnknownTracker, "tracker_type must be boolean, counter, maintenance or metric")
 	}
 	switch item.Kind {
-	case "", dbmodels.KindHabit, dbmodels.KindEvent:
+	case "", dbmodels.KindOngoing, dbmodels.KindEvent:
 	default:
-		return reasonf(ReasonUnknownKind, "kind must be habit or event")
+		return reasonf(ReasonUnknownKind, "kind must be ongoing or event")
 	}
 	polarity := item.Polarity
 	switch polarity {

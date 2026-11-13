@@ -77,7 +77,7 @@ func frozen(in Input, date string) bool {
 
 // Streak computes the current and longest streak (DESIGN 7.1).
 //
-// fixed_rrule habits (positive, non-maintenance, kind habit): the unit is a
+// fixed_rrule ongoing items (positive, non-maintenance, kind ongoing): the unit is a
 // DUE day. Walking the due days (holiday_mode applied via the calendar) from
 // the first fixed_rrule version up to today:
 //   - completed (DayCompletion with the version in effect that day): +1;
@@ -107,7 +107,7 @@ func Streak(in Input) (StreakResult, error) {
 		return StreakResult{}, nil
 	}
 	it := in.Item
-	if it.Kind != dbmodels.KindHabit || it.Polarity != dbmodels.PolarityPositive || it.TrackerType == dbmodels.TrackerMaintenance {
+	if it.Kind != dbmodels.KindOngoing || it.Polarity != dbmodels.PolarityPositive || it.TrackerType == dbmodels.TrackerMaintenance {
 		return StreakResult{}, nil
 	}
 	from := dailyStart(in.Versions)

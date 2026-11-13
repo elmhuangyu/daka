@@ -1,6 +1,6 @@
 # Daka
 
-A habit tracker with a Go backend and a Vue frontend.
+A check-in tracker with a Go backend and a Vue frontend.
 
 ## Layout
 

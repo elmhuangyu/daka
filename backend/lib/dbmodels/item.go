@@ -22,7 +22,7 @@ type Item struct {
 	MaxVal      *float64
 	WarningDays int
 
-	Kind     Kind     `gorm:"size:16;not null;default:habit"`
+	Kind     Kind     `gorm:"size:16;not null;default:ongoing"`
 	Polarity Polarity `gorm:"size:16;not null;default:positive"`
 	Color    string   `gorm:"size:32"`
 	// Emoji is an optional user-chosen icon (one emoji, possibly a ZWJ sequence); empty means none.

@@ -18,7 +18,7 @@ func tlog(id uint, date string, opt *uint, val float64, hour int) dbmodels.Check
 
 func TestComputeStatsCountsAndLast(t *testing.T) {
 	in := Input{
-		Item: habit(), Versions: []dbmodels.ItemRuleVersion{{ID: 1, ItemID: 1, EffectiveFrom: "2025-01-01", ScheduleType: dbmodels.ScheduleNone, StaleAfterDays: 1}},
+		Item: ongoingItem(), Versions: []dbmodels.ItemRuleVersion{{ID: 1, ItemID: 1, EffectiveFrom: "2025-01-01", ScheduleType: dbmodels.ScheduleNone, StaleAfterDays: 1}},
 		Settings: Settings{Timezone: "Asia/Shanghai", WeekStart: 1}, Today: "2026-11-07",
 		Logs: []dbmodels.CheckinLog{
 			tlog(1, "2025-12-31", nil, 0, 1),
@@ -57,7 +57,7 @@ func TestComputeStatsCountsAndLast(t *testing.T) {
 }
 
 func TestComputeStatsSummaryWording(t *testing.T) {
-	in := Input{Item: habit(), Versions: []dbmodels.ItemRuleVersion{{ID: 1, ItemID: 1, EffectiveFrom: "2025-01-01", ScheduleType: dbmodels.ScheduleNone}},
+	in := Input{Item: ongoingItem(), Versions: []dbmodels.ItemRuleVersion{{ID: 1, ItemID: 1, EffectiveFrom: "2025-01-01", ScheduleType: dbmodels.ScheduleNone}},
 		Today: "2026-11-07", Logs: []dbmodels.CheckinLog{tlog(1, "2026-11-07", nil, 0, 1)}}
 	s, _ := ComputeStats(in)
 	require.Equal(t, "Last: today (2026-11-07)", s.Summary)
@@ -68,7 +68,7 @@ func TestComputeStatsSummaryWording(t *testing.T) {
 
 func TestComputeStatsOptionsAndHeatmap(t *testing.T) {
 	one, two := uint(1), uint(2)
-	item := habit()
+	item := ongoingItem()
 	item.TrackerType = dbmodels.TrackerCounter
 	v := rrv(1, "2026-11-01", daily)
 	v.CompletionRule = dbmodels.CompletionAll
@@ -111,7 +111,7 @@ func TestComputeStatsOptionsAndHeatmap(t *testing.T) {
 }
 
 func TestCompletionRateFrozenExcluded(t *testing.T) {
-	in := Input{Item: habit(), Versions: []dbmodels.ItemRuleVersion{rrv(1, "2026-11-01", daily)}, Today: "2026-11-05",
+	in := Input{Item: ongoingItem(), Versions: []dbmodels.ItemRuleVersion{rrv(1, "2026-11-01", daily)}, Today: "2026-11-05",
 		Logs: blogs("2026-11-01", "2026-11-02"), Freezes: []dbmodels.FreezePeriod{freeze("2026-11-03", "2026-11-03")}}
 	s, err := ComputeStats(in)
 	require.NoError(t, err)
@@ -124,7 +124,7 @@ func TestCompletionRateFrozenExcluded(t *testing.T) {
 }
 
 func TestComputeStatsQuotaAndMaintenance(t *testing.T) {
-	it := habit()
+	it := ongoingItem()
 	it.Polarity = dbmodels.PolarityNegative
 	it.Kind = dbmodels.KindEvent
 	q := dbmodels.ItemRuleVersion{ID: 1, ItemID: 1, EffectiveFrom: "2026-01-01", ScheduleType: dbmodels.ScheduleQuota,
@@ -140,7 +140,7 @@ func TestComputeStatsQuotaAndMaintenance(t *testing.T) {
 	require.Equal(t, "2026-01-01", s.Quota.WindowStart)
 	require.True(t, s.Streak.Applicable)
 
-	m := habit()
+	m := ongoingItem()
 	m.TrackerType = dbmodels.TrackerMaintenance
 	m.WarningDays = 5
 	rv := dbmodels.ItemRuleVersion{ID: 1, ItemID: 1, EffectiveFrom: "2026-01-01", ScheduleType: dbmodels.ScheduleRolling,

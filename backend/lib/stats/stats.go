@@ -151,7 +151,7 @@ func ComputeStats(in Input) (Stats, error) {
 	}
 	switch cur.ScheduleType {
 	case dbmodels.ScheduleFixedRRule:
-		if isDailyHabit(in.Item) {
+		if isDailyOngoing(in.Item) {
 			if st.CompletionRate90, err = completionRate(in, today, byDate); err != nil {
 				return Stats{}, err
 			}
@@ -174,8 +174,8 @@ func ComputeStats(in Input) (Stats, error) {
 	return st, nil
 }
 
-func isDailyHabit(it dbmodels.Item) bool {
-	return it.Kind == dbmodels.KindHabit && it.Polarity == dbmodels.PolarityPositive && it.TrackerType != dbmodels.TrackerMaintenance
+func isDailyOngoing(it dbmodels.Item) bool {
+	return it.Kind == dbmodels.KindOngoing && it.Polarity == dbmodels.PolarityPositive && it.TrackerType != dbmodels.TrackerMaintenance
 }
 
 func derefDate(s *string) string {

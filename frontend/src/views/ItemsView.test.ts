@@ -26,7 +26,7 @@ const item = (id: number, name: string, extra: Record<string, unknown> = {}) => 
   id,
   name,
   tracker_type: 'boolean',
-  kind: 'habit',
+  kind: 'ongoing',
   polarity: 'positive',
   category_id: null,
   effective_sensitive: false,
@@ -149,7 +149,7 @@ describe('items panel', () => {
   it('lists items, groups pinned first and shows the quota badge', async () => {
     const { w } = await mountAt('/items')
     const itemCall = calls.find((c) => c.url.startsWith('/api/items?'))
-    expect(itemCall?.url).toContain('kind=habit')
+    expect(itemCall?.url).toContain('kind=ongoing')
     expect(w.get('[data-testid=group-pinned]').text()).toContain('Cola')
     expect(w.get('[data-testid=group-pinned] [data-testid=badge]').text()).toBe('1/4')
     expect(w.get('[data-testid=group-none]').text()).toContain('Run')
@@ -157,9 +157,12 @@ describe('items panel', () => {
   })
 
   it('excludes event items from the panel', async () => {
-    listed = [item(1, 'Habit 1', { kind: 'habit' }), item(2, 'One-off Event', { kind: 'event' })]
+    listed = [
+      item(1, 'Ongoing 1', { kind: 'ongoing' }),
+      item(2, 'One-off Event', { kind: 'event' }),
+    ]
     const { w } = await mountAt('/items')
-    expect(w.text()).toContain('Habit 1')
+    expect(w.text()).toContain('Ongoing 1')
     expect(w.text()).not.toContain('One-off Event')
     w.unmount()
   })
@@ -209,7 +212,7 @@ describe('items panel', () => {
     w.unmount()
   })
 
-  it('moves focus between habit rows with ArrowDown and ArrowUp', async () => {
+  it('moves focus between item rows with ArrowDown and ArrowUp', async () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const router = makeRouter(createMemoryHistory())

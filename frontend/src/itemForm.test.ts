@@ -21,7 +21,7 @@ function item(over: Partial<ItemDto> = {}): ItemDto {
     description: '',
     remind_time: null,
     tracker_type: 'boolean',
-    kind: 'habit',
+    kind: 'ongoing',
     polarity: 'positive',
     category_id: null,
     is_sensitive: false,

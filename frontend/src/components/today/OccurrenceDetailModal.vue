@@ -235,7 +235,7 @@ function logUnit(l: CheckinLog): string {
             data-testid="modal-item-link"
           >
             <Icon icon="lucide:sliders-horizontal" class="size-3.5" aria-hidden="true" />
-            <span>{{ t('today.modal.editHabit') }}</span>
+            <span>{{ t('today.modal.editItem') }}</span>
           </RouterLink>
           <button
             type="button"

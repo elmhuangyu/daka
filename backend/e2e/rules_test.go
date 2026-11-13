@@ -53,7 +53,7 @@ func (c *client) item(id uint) itemView {
 func TestRuleVersioningHistory(t *testing.T) {
 	s := startStack(t, "2025-09-01", stackOpts{})
 	c := s.newClient()
-	id := c.createItem(obj{"name": "Habit", "tracker_type": "boolean", "rule": fixedRule("FREQ=DAILY", "none")})
+	id := c.createItem(obj{"name": "Routine", "tracker_type": "boolean", "rule": fixedRule("FREQ=DAILY", "none")})
 
 	// Check in 09-01..09-03, miss Thursday 09-04, check in 09-05..09-08.
 	for _, d := range []string{"2025-09-01", "2025-09-02", "2025-09-03", "2025-09-05", "2025-09-06", "2025-09-07", "2025-09-08"} {

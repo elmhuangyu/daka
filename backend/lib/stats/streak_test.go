@@ -15,9 +15,9 @@ const (
 	weekdays = "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"
 )
 
-func habit() dbmodels.Item {
+func ongoingItem() dbmodels.Item {
 	return dbmodels.Item{ID: 1, UserID: "u", Name: "x", TrackerType: dbmodels.TrackerBoolean,
-		Kind: dbmodels.KindHabit, Polarity: dbmodels.PolarityPositive}
+		Kind: dbmodels.KindOngoing, Polarity: dbmodels.PolarityPositive}
 }
 
 func rrv(id uint, from, rule string) dbmodels.ItemRuleVersion {
@@ -64,7 +64,7 @@ func TestStreakDaily(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			r, err := Streak(Input{Item: habit(), Versions: v, Logs: tc.logs, Freezes: tc.freezes, Today: tc.today})
+			r, err := Streak(Input{Item: ongoingItem(), Versions: v, Logs: tc.logs, Freezes: tc.freezes, Today: tc.today})
 			require.NoError(t, err)
 			require.True(t, r.Applicable)
 			require.Equal(t, UnitDay, r.Unit)
@@ -78,7 +78,7 @@ func TestStreakDaily(t *testing.T) {
 // the streak breaks once the day passes.
 func TestStreakFreezeAndDayPassing(t *testing.T) {
 	v := []dbmodels.ItemRuleVersion{rrv(1, "2026-11-01", daily)}
-	in := Input{Item: habit(), Versions: v, Logs: blogs("2026-11-01", "2026-11-02", "2026-11-04"), Today: "2026-11-05"}
+	in := Input{Item: ongoingItem(), Versions: v, Logs: blogs("2026-11-01", "2026-11-02", "2026-11-04"), Today: "2026-11-05"}
 	r, _ := Streak(in)
 	require.Equal(t, 1, r.Current)
 	in.Freezes = []dbmodels.FreezePeriod{freeze("2026-11-03", "2026-11-03")}
@@ -93,7 +93,7 @@ func TestStreakFreezeAndDayPassing(t *testing.T) {
 func TestStreakNonDueDaysNeitherAddNorBreak(t *testing.T) {
 	// Fri 2026-11-06 .. Mon 2026-11-09: the weekend is not due.
 	v := []dbmodels.ItemRuleVersion{rrv(1, "2026-11-02", weekdays)}
-	in := Input{Item: habit(), Versions: v,
+	in := Input{Item: ongoingItem(), Versions: v,
 		Logs:  blogs("2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06", "2026-11-09"),
 		Today: "2026-11-09"}
 	r, err := Streak(in)
@@ -112,7 +112,7 @@ func TestStreakHolidayFreeze2025(t *testing.T) {
 	require.True(t, cal.IsStatutoryHoliday("2025-10-03"))
 
 	v := []dbmodels.ItemRuleVersion{rrv(1, "2025-09-29", daily)}
-	in := Input{Item: habit(), Versions: v, Calendar: cal, Today: "2025-10-09",
+	in := Input{Item: ongoingItem(), Versions: v, Calendar: cal, Today: "2025-10-09",
 		Logs: blogs("2025-09-29", "2025-09-30", "2025-10-09")}
 
 	// feature off: the National Day week breaks the streak
@@ -144,7 +144,7 @@ func TestStreakVersionChangeKeepsHistory(t *testing.T) {
 	// daily until 11-04, then Mondays only from 11-05; 11-05 and 11-06 are not
 	// due under v2 even though they would have been under v1.
 	v := []dbmodels.ItemRuleVersion{rrv(1, "2026-11-01", daily), rrv(2, "2026-11-05", "FREQ=WEEKLY;BYDAY=MO")}
-	in := Input{Item: habit(), Versions: v, Logs: blogs("2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"), Today: "2026-11-07"}
+	in := Input{Item: ongoingItem(), Versions: v, Logs: blogs("2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"), Today: "2026-11-07"}
 	r, err := Streak(in)
 	require.NoError(t, err)
 	require.Equal(t, 4, r.Current)
@@ -166,7 +166,7 @@ func TestStreakVersionChangeKeepsHistory(t *testing.T) {
 func TestStreakCompletionRuleAllAny(t *testing.T) {
 	one, two := uint(1), uint(2)
 	opts := []dbmodels.ItemOption{{ID: 1, ItemID: 1, Name: "a"}, {ID: 2, ItemID: 1, Name: "b"}}
-	item := habit()
+	item := ongoingItem()
 	item.TrackerType = dbmodels.TrackerCounter
 	mk := func(rule dbmodels.CompletionRule) []dbmodels.ItemRuleVersion {
 		v := rrv(1, "2026-11-01", daily)
@@ -198,7 +198,7 @@ func TestStreakCompletionRuleAllAny(t *testing.T) {
 
 func TestStreakNotApplicable(t *testing.T) {
 	base := func(mut func(*dbmodels.Item, *dbmodels.ItemRuleVersion)) Input {
-		it := habit()
+		it := ongoingItem()
 		v := rrv(1, "2026-11-01", daily)
 		mut(&it, &v)
 		return Input{Item: it, Versions: []dbmodels.ItemRuleVersion{v}, Logs: blogs("2026-11-01"), Today: "2026-11-02"}
@@ -217,7 +217,7 @@ func TestStreakNotApplicable(t *testing.T) {
 			v.ScheduleType, v.QuotaComparator, v.QuotaCount = dbmodels.ScheduleQuota, dbmodels.QuotaAtLeast, 3
 			v.QuotaPeriod, v.QuotaWindow = dbmodels.QuotaWeek, dbmodels.QuotaWindowRolling
 		}),
-		"no version": {Item: habit(), Today: "2026-11-02"},
+		"no version": {Item: ongoingItem(), Today: "2026-11-02"},
 	}
 	for name, in := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -234,7 +234,7 @@ func TestStreakQuotaCalendar(t *testing.T) {
 		QuotaComparator: dbmodels.QuotaAtLeast, QuotaCount: 2, QuotaPeriod: dbmodels.QuotaWeek,
 		QuotaWindow: dbmodels.QuotaWindowCalendar, QuotaMeasure: dbmodels.QuotaMeasureOccurrences}
 	// weeks (Mon start): 10-12 miss, 10-19 ok, 10-26 ok, 11-02 in progress (1 so far)
-	in := Input{Item: habit(), Versions: []dbmodels.ItemRuleVersion{v}, Settings: Settings{WeekStart: 1}, Today: "2026-11-07",
+	in := Input{Item: ongoingItem(), Versions: []dbmodels.ItemRuleVersion{v}, Settings: Settings{WeekStart: 1}, Today: "2026-11-07",
 		Logs: blogs("2026-10-13", "2026-10-20", "2026-10-21", "2026-10-27", "2026-10-28", "2026-11-03")}
 	r, err := Streak(in)
 	require.NoError(t, err)
@@ -250,7 +250,7 @@ func TestStreakQuotaCalendar(t *testing.T) {
 }
 
 func TestStreakNegativeQuota(t *testing.T) {
-	it := habit()
+	it := ongoingItem()
 	it.Polarity = dbmodels.PolarityNegative
 	it.Kind = dbmodels.KindEvent
 	v := dbmodels.ItemRuleVersion{ID: 1, ItemID: 1, EffectiveFrom: "2026-01-01", ScheduleType: dbmodels.ScheduleQuota,

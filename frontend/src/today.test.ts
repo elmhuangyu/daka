@@ -19,7 +19,7 @@ const rule = (o: object = {}) => ({ schedule_type: 'fixed_rrule', option_targets
 function detail(o: Partial<ItemDetail> & { id: number; name: string }): ItemDetail {
   return {
     tracker_type: 'boolean',
-    kind: 'habit',
+    kind: 'ongoing',
     polarity: 'positive',
     category_id: null,
     effective_sensitive: false,
@@ -83,7 +83,7 @@ beforeEach(() => {
           id: 99,
           name: body.name,
           tracker_type: body.tracker_type || 'boolean',
-          kind: body.kind || 'habit',
+          kind: body.kind || 'ongoing',
           polarity: body.polarity || 'positive',
           category_id: body.category_id ?? null,
           effective_sensitive: false,
@@ -214,7 +214,7 @@ describe('logic', () => {
     expect(matchesFilter(2, 1)).toBe(false)
   })
 
-  it('ring counts only positive fixed_rrule non-maintenance habits', () => {
+  it('ring counts only positive fixed_rrule non-maintenance ongoing items', () => {
     const mk = (d: ItemDetail, done: boolean) => ({
       detail: d,
       today: tItem(d.id, d.name, { done }) as never,
@@ -946,7 +946,7 @@ describe('Today page', () => {
     expect(badge.text()).toContain('Work')
   })
 
-  it('increments an existing unscheduled counter habit with delta mode from pinned quick log', async () => {
+  it('increments an existing unscheduled counter item with delta mode from pinned quick log', async () => {
     world.items = [
       detail({
         id: 50,

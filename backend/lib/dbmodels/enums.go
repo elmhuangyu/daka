@@ -23,8 +23,8 @@ const (
 type Kind string
 
 const (
-	KindHabit Kind = "habit"
-	KindEvent Kind = "event"
+	KindOngoing Kind = "ongoing"
+	KindEvent   Kind = "event"
 )
 
 type Polarity string

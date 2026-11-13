@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for AI coding agents working on Daka, a habit tracker (Go backend, Vue 3 frontend).
+Guidance for AI coding agents working on Daka, a check-in tracker (Go backend, Vue 3 frontend).
 
 ## Conventions
 
@@ -40,6 +40,7 @@ Before finishing a change, run `just fmt lint build test`.
 - `Item` + immutable `ItemRuleVersion` (effective from a date; ties go to the highest id) + `CheckinLog`. Changing a rule only ever inserts a new version; never edit or delete history.
 - Dates are local `YYYY-MM-DD` computed with `UserSettings.timezone`. Timestamps are stored in UTC.
 - There are no DB foreign keys. Cascades live in the service layer. A new user-owned or item-owned table must be added to `dbmodels/registry.go` so export, import, and account deletion cover it.
+- Schema changes come from the GORM models (`AutoMigrate`). Data changes that need to run once (renaming an enum value, backfills) go in `dataMigrations` in `dbmodels/auto.go` (gormigrate): append only, never edit shipped IDs, and cover it with a test.
 - Each item has a single quota. Schedules use RRULE (rrule-go) plus `holiday_mode`.
 
 ## Privacy and security rules

@@ -299,7 +299,7 @@ const showHoliday = computed(() => holidayAllowed(form))
           {{ t('items.editor.section.basic') }}
         </h2>
 
-        <!-- Habit Name -->
+        <!-- Item name -->
         <label class="flex flex-col gap-1.5">
           <span class="text-sm font-medium">{{ t('items.editor.name') }}</span>
           <input
@@ -307,7 +307,7 @@ const showHoliday = computed(() => holidayAllowed(form))
             class="input input-bordered w-full text-base font-medium"
             maxlength="200"
             autocomplete="off"
-            :placeholder="t('items.editor.namePlaceholderHabit')"
+            :placeholder="t('items.editor.namePlaceholderOngoing')"
             data-testid="f-name"
           />
         </label>

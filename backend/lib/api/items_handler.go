@@ -215,7 +215,7 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 
 	kind := dbmodels.Kind(req.Kind)
 	if kind == "" {
-		kind = dbmodels.KindHabit
+		kind = dbmodels.KindOngoing
 	}
 	polarity := dbmodels.Polarity(req.Polarity)
 	if polarity == "" {

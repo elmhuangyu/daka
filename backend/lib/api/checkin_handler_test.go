@@ -59,7 +59,7 @@ func userHeaderAuth(next http.Handler) http.Handler {
 func (e *env) item(userID string, mut func(*dbmodels.Item)) uint {
 	e.t.Helper()
 	it := dbmodels.Item{UserID: userID, Name: "Secret Medication", TrackerType: dbmodels.TrackerBoolean,
-		Kind: dbmodels.KindHabit, Polarity: dbmodels.PolarityPositive}
+		Kind: dbmodels.KindOngoing, Polarity: dbmodels.PolarityPositive}
 	if mut != nil {
 		mut(&it)
 	}

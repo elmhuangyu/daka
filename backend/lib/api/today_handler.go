@@ -301,7 +301,7 @@ func (s *server) today(db *gorm.DB, userID string, requestedDate string, redact,
 }
 
 // countsInProgress implements the completion-ring rule (DESIGN 2): positive,
-// non-maintenance habits governed by a fixed_rrule rule today. Events are
+// non-maintenance ongoing items governed by a fixed_rrule rule today. Events are
 // excluded as well (DESIGN 11.3 / completion-ring note).
 func countsInProgress(it dbmodels.Item, versions []dbmodels.ItemRuleVersion, date string) bool {
 	if it.Polarity != dbmodels.PolarityPositive || it.TrackerType == dbmodels.TrackerMaintenance || it.Kind == dbmodels.KindEvent {
@@ -312,7 +312,7 @@ func countsInProgress(it dbmodels.Item, versions []dbmodels.ItemRuleVersion, dat
 }
 
 // isDailyFixedRule identifies rules that repeat every single day. Daily recurring
-// habits already belong on the daily Today dashboard and must not flood the
+// items already belong on the daily Today dashboard and must not flood the
 // Upcoming schedule with duplicate entries for every day.
 func isDailyFixedRule(v *dbmodels.ItemRuleVersion) bool {
 	if v == nil || v.ScheduleType != dbmodels.ScheduleFixedRRule {

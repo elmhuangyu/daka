@@ -141,7 +141,7 @@ func mustTime(t *testing.T, s string) time.Time {
 
 func (e *env) item(name string, mut func(*dbmodels.Item), rule dbmodels.ItemRuleVersion) uint {
 	e.t.Helper()
-	it := dbmodels.Item{UserID: "u1", Name: name, TrackerType: dbmodels.TrackerBoolean, Kind: dbmodels.KindHabit,
+	it := dbmodels.Item{UserID: "u1", Name: name, TrackerType: dbmodels.TrackerBoolean, Kind: dbmodels.KindOngoing,
 		Polarity: dbmodels.PolarityPositive}
 	if mut != nil {
 		mut(&it)
@@ -717,7 +717,7 @@ func TestPerUserBotSetupAndDelivery(t *testing.T) {
 		Now:          func() time.Time { return e.now },
 	}
 	e.tg.reset()
-	e.item("Habit", nil, dbmodels.ItemRuleVersion{})
+	e.item("Routine", nil, dbmodels.ItemRuleVersion{})
 	sched.Tick(context.Background())
 	msgs = e.tg.messages()
 	require.NotEmpty(t, msgs)

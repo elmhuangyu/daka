@@ -44,7 +44,7 @@ func TestValidateItemRuleMatrix(t *testing.T) {
 	trackers := []dbmodels.TrackerType{dbmodels.TrackerBoolean, dbmodels.TrackerCounter, dbmodels.TrackerMaintenance, dbmodels.TrackerMetric}
 	schedules := []dbmodels.ScheduleType{dbmodels.ScheduleFixedRRule, dbmodels.ScheduleRolling, dbmodels.ScheduleQuota, dbmodels.ScheduleNone}
 	pols := []dbmodels.Polarity{dbmodels.PolarityPositive, dbmodels.PolarityNegative}
-	kinds := []dbmodels.Kind{dbmodels.KindHabit, dbmodels.KindEvent}
+	kinds := []dbmodels.Kind{dbmodels.KindOngoing, dbmodels.KindEvent}
 	// DESIGN 2 matrix.
 	allowed := map[dbmodels.TrackerType]map[dbmodels.ScheduleType]bool{
 		dbmodels.TrackerBoolean:     {"fixed_rrule": true, "rolling": true, "quota": true, "none": true},

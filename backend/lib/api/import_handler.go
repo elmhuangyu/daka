@@ -335,7 +335,7 @@ func validateImportItem(where string, it *exportItem) (map[uint]bool, *importFai
 		return nil, &importFail{status: http.StatusRequestEntityTooLarge, msg: "invalid import: " + importErrCodeTooLarge}
 	}
 	spec := schedule.ItemSpec{
-		TrackerType: dbmodels.TrackerType(it.TrackerType), Kind: dbmodels.Kind(it.Kind), Polarity: dbmodels.Polarity(it.Polarity),
+		TrackerType: dbmodels.TrackerType(it.TrackerType), Kind: importKind(it.Kind), Polarity: dbmodels.Polarity(it.Polarity),
 		Unit: it.Unit, Step: it.Step, MinVal: it.MinVal, MaxVal: it.MaxVal,
 		Aggregate: dbmodels.Aggregate(it.Aggregate), WarningDays: it.WarningDays,
 	}
@@ -509,7 +509,7 @@ func (p *importPlan) write(tx *gorm.DB, userID string) error {
 			UserID: userID, Name: strings.TrimSpace(it.Name), Emoji: it.Emoji, Description: it.Description,
 			TrackerType: dbmodels.TrackerType(it.TrackerType), Unit: it.Unit, Aggregate: dbmodels.Aggregate(it.Aggregate),
 			Step: it.Step, MinVal: it.MinVal, MaxVal: it.MaxVal, WarningDays: it.WarningDays,
-			Kind: dbmodels.Kind(it.Kind), Polarity: dbmodels.Polarity(it.Polarity), Pinned: it.Pinned,
+			Kind: importKind(it.Kind), Polarity: dbmodels.Polarity(it.Polarity), Pinned: it.Pinned,
 			IsSensitive: it.IsSensitive, RemindTime: it.RemindTime, SortOrder: it.SortOrder, Archived: it.Archived,
 		}
 		if it.CategoryID != nil {
@@ -636,4 +636,13 @@ func (p *importPlan) write(tx *gorm.DB, userID string) error {
 		return fmt.Errorf("bump state version: %w", err)
 	}
 	return nil
+}
+
+// importKind maps an exported kind to the current value. Exports made before
+// the rename carry the old name for ongoing items.
+func importKind(k string) dbmodels.Kind {
+	if k == "habit" {
+		return dbmodels.KindOngoing
+	}
+	return dbmodels.Kind(k)
 }

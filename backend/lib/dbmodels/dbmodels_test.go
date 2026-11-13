@@ -111,7 +111,7 @@ func TestRoundTrip(t *testing.T) {
 	mn, mx := 0.0, 100.0
 	it := Item{UserID: "u1", CategoryID: &c.ID, Name: "Run", Description: "d", TrackerType: TrackerMetric,
 		Unit: "km", Aggregate: AggregateSum, Step: 0.5, MinVal: &mn, MaxVal: &mx, WarningDays: 3,
-		Kind: KindHabit, Polarity: PolarityNegative, Pinned: true, IsSensitive: true, RemindTime: &rt, SortOrder: 1, Archived: true}
+		Kind: KindOngoing, Polarity: PolarityNegative, Pinned: true, IsSensitive: true, RemindTime: &rt, SortOrder: 1, Archived: true}
 	require.NoError(t, w.Create(&it).Error)
 	var gi Item
 	require.NoError(t, r.First(&gi, it.ID).Error)
@@ -228,4 +228,25 @@ func TestUserOwnedTablesComplete(t *testing.T) {
 	for typ := range owned {
 		require.True(t, all[typ], "%s is in UserOwnedTables but not AllModels", typ)
 	}
+}
+
+func TestKindRenameMigration(t *testing.T) {
+	d := openTemp(t)
+	g := d.Write()
+	require.NoError(t, g.Create(&Item{UserID: "u", Name: "old", Kind: "habit"}).Error)
+	require.NoError(t, g.Create(&Item{UserID: "u", Name: "todo", Kind: KindEvent}).Error)
+	// Simulate a database from before the rename: the migration has not run yet.
+	require.NoError(t, g.Exec("DELETE FROM migrations").Error)
+
+	require.NoError(t, AutoMigrate(g))
+	var kinds []string
+	require.NoError(t, g.Model(&Item{}).Order("id").Pluck("kind", &kinds).Error)
+	require.Equal(t, []string{"ongoing", "event"}, kinds)
+
+	// Applied once: a later "habit" row is left alone.
+	require.NoError(t, g.Create(&Item{UserID: "u", Name: "x", Kind: "habit"}).Error)
+	require.NoError(t, AutoMigrate(g))
+	var n int64
+	require.NoError(t, g.Model(&Item{}).Where("kind = ?", "habit").Count(&n).Error)
+	require.EqualValues(t, 1, n)
 }

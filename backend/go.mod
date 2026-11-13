@@ -4,6 +4,7 @@ go 1.27
 
 require (
 	github.com/coreos/go-oidc/v3 v3.21.0
+	github.com/go-gormigrate/gormigrate/v2 v2.1.7
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/goccy/go-yaml v1.19.2
 	github.com/libtnb/sqlite v1.2.2

@@ -283,7 +283,7 @@ func minimalDoc() m {
 		"schema": "daka.export", "version": 1,
 		"categories": []m{{"id": 1, "name": "C"}},
 		"items": []m{{
-			"id": 7, "category_id": 1, "name": "SecretItem", "tracker_type": "boolean", "kind": "habit", "polarity": "positive",
+			"id": 7, "category_id": 1, "name": "SecretItem", "tracker_type": "boolean", "kind": "ongoing", "polarity": "positive",
 			"options": []m{},
 			"rule_versions": []m{{"effective_from": "2026-01-01", "schedule_type": "fixed_rrule", "dtstart": "2026-01-01",
 				"rrule_string": "FREQ=DAILY", "holiday_mode": "none"}},
@@ -462,4 +462,10 @@ func TestDeleteAccountRemovesEverythingOfTheUserOnly(t *testing.T) {
 			require.Equal(t, int64(1), e.rowsOf(m, "user_id = ?", "u2"), "%T of other user", m)
 		}
 	}
+}
+
+func TestImportKindLegacyName(t *testing.T) {
+	require.Equal(t, dbmodels.KindOngoing, importKind("habit"))
+	require.Equal(t, dbmodels.KindOngoing, importKind("ongoing"))
+	require.Equal(t, dbmodels.KindEvent, importKind("event"))
 }

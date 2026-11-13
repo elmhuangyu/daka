@@ -16,7 +16,7 @@ const todoTotal = computed(() => props.todoTotal ?? 0)
 const allDone = computed(() => props.done + todoDone.value)
 const allTotal = computed(() => props.total + todoTotal.value)
 const pct = computed(() => percent(allDone.value, allTotal.value))
-// Outer ring: habit check-ins. Inner ring: to-dos (a different colour so one cannot hide the other).
+// Outer ring: ongoing check-ins. Inner ring: to-dos (a different colour so one cannot hide the other).
 const R1 = 44
 const R2 = 32
 const C1 = 2 * Math.PI * R1
@@ -108,7 +108,7 @@ watch(pct, (n, o) => {
         <template v-else>
           <p class="flex items-center gap-2 text-sm sm:text-base font-semibold">
             <span class="size-2.5 rounded-full bg-primary shrink-0" aria-hidden="true"></span>
-            {{ t('today.ring.habits') }}
+            {{ t('today.ring.ongoing') }}
             <span data-testid="progress">{{ done }}/{{ total }}</span>
           </p>
           <p class="flex items-center gap-2 text-sm sm:text-base font-semibold">

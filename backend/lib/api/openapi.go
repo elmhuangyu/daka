@@ -34,7 +34,7 @@ func openAPIOps() []openAPIOp {
 		{Path: "/api/items", ID: "listItems", Summary: "List or search items. Sensitive items are never returned to read tokens.",
 			Params: []openAPIParam{
 				{Name: "q", In: "query", Type: "string", Description: "Search by name: case-insensitive; every whitespace-separated term (max 8) must appear in the name, in any order."},
-				{Name: "kind", In: "query", Type: "string", Description: "habit or event."},
+				{Name: "kind", In: "query", Type: "string", Description: "ongoing or event."},
 				{Name: "polarity", In: "query", Type: "string", Description: "positive or negative."},
 				{Name: "category_id", In: "query", Type: "integer", Description: "Filter by category id."},
 				{Name: "project_id", In: "query", Type: "integer", Description: "Only items of this project (see GET /api/projects). Items carry project_id and parent_id (sub-task of another item)."},

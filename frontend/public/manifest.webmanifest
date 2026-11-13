@@ -1,7 +1,7 @@
 {
   "name": "Daka",
   "short_name": "Daka",
-  "description": "Habit and check-in tracker",
+  "description": "Check-in tracker",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

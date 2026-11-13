@@ -39,7 +39,7 @@ func TestCreateItemDefaults(t *testing.T) {
 	e := newEnv(t)
 	code, it := e.createItem("", rruleItem("Water plants", "FREQ=DAILY;INTERVAL=3"))
 	require.Equal(t, 201, code)
-	require.Equal(t, "habit", it.Kind)
+	require.Equal(t, "ongoing", it.Kind)
 	require.Equal(t, "positive", it.Polarity)
 	require.Equal(t, "2026-11-07", it.CurrentRule.DtStart)
 	require.Equal(t, "2026-11-07", it.CurrentRule.EffectiveFrom)
@@ -301,7 +301,7 @@ func TestTodayOverdueEventAndUpcoming(t *testing.T) {
 	// Create an upcoming item due on 2026-11-09.
 	code, up := e.createItem("", m{
 		"name":         "Upcoming item",
-		"kind":         "habit",
+		"kind":         "ongoing",
 		"tracker_type": "boolean",
 		"rule": m{
 			"schedule_type": "fixed_rrule",
@@ -312,10 +312,10 @@ func TestTodayOverdueEventAndUpcoming(t *testing.T) {
 	})
 	require.Equal(t, 201, code)
 
-	// Create a daily habit which must NOT appear in Upcoming.
-	code, dailyHabit := e.createItem("", m{
+	// Create a daily ongoing item which must NOT appear in Upcoming.
+	code, dailyOngoing := e.createItem("", m{
 		"name":         "Daily water",
-		"kind":         "habit",
+		"kind":         "ongoing",
 		"tracker_type": "counter",
 		"rule": m{
 			"schedule_type": "fixed_rrule",
@@ -356,7 +356,7 @@ func TestTodayOverdueEventAndUpcoming(t *testing.T) {
 	require.Equal(t, 2, foundUp.DaysUntil)
 
 	for _, item := range resp.Upcoming {
-		require.NotEqual(t, dailyHabit.ID, item.ID, "daily recurring habit must not appear in upcoming")
+		require.NotEqual(t, dailyOngoing.ID, item.ID, "daily recurring item must not appear in upcoming")
 	}
 
 	// After checking in the overdue event on 2026-11-07, it should be marked done.

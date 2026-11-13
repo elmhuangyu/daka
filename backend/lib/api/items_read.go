@@ -113,7 +113,7 @@ func currentOrLatest(vs []dbmodels.ItemRuleVersion, date string) (dbmodels.ItemR
 }
 
 // effectiveVersionsFor returns the rule versions to evaluate for an item.
-// For KindHabit, rule history is preserved intact.
+// For KindOngoing, rule history is preserved intact.
 // For KindEvent, it is a one-off Todo whose schedule is governed by its
 // latest ItemRuleVersion, even if later rescheduled, undated, or retroactively dated.
 func effectiveVersionsFor(it dbmodels.Item, vs []dbmodels.ItemRuleVersion) []dbmodels.ItemRuleVersion {
@@ -284,7 +284,7 @@ func (s *server) listItems(w http.ResponseWriter, r *http.Request) {
 	}
 	switch v := q.Get("kind"); v {
 	case "":
-	case string(dbmodels.KindHabit), string(dbmodels.KindEvent):
+	case string(dbmodels.KindOngoing), string(dbmodels.KindEvent):
 		tx = tx.Where("kind = ?", v)
 	default:
 		bad("invalid kind")

@@ -134,7 +134,7 @@ const matchingUnscheduled = computed(() => {
   return store.unscheduledItems.filter((it) => it.name.toLowerCase().includes(q))
 })
 
-const pinnedUnscheduledHabits = computed(() =>
+const pinnedUnscheduledOngoing = computed(() =>
   store.unscheduledItems.filter((it) => it.kind !== 'event' && it.pinned),
 )
 
@@ -319,8 +319,8 @@ const sections = computed(
         cards: grouped(store.todoCards.filter((c) => c.detail.kind === 'event')),
       },
       {
-        id: 'habits',
-        title: t('today.section.habits'),
+        id: 'ongoing',
+        title: t('today.section.ongoing'),
         icon: 'lucide:repeat',
         variant: 'todo',
         cards: grouped([
@@ -962,9 +962,9 @@ watch(
             </template>
           </div>
 
-          <!-- Pinned unscheduled habits for one-tap logging -->
+          <!-- Pinned unscheduled ongoing items for one-tap logging -->
           <div
-            v-if="pinnedUnscheduledHabits.length && !store.isFuture"
+            v-if="pinnedUnscheduledOngoing.length && !store.isFuture"
             class="flex flex-wrap items-center gap-1.5 pt-1 border-t border-base-200/80"
             data-testid="pinned-quick-logs"
           >
@@ -973,7 +973,7 @@ watch(
               {{ t('today.pinnedQuickLog') }}:
             </span>
             <button
-              v-for="u in pinnedUnscheduledHabits"
+              v-for="u in pinnedUnscheduledOngoing"
               :key="u.id"
               type="button"
               class="btn btn-xs btn-outline gap-1.5 h-7 min-h-7"

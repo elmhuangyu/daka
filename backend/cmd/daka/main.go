@@ -1,4 +1,4 @@
-// Command daka is the entry point of the Daka habit tracker backend.
+// Command daka is the entry point of the Daka check-in tracker backend.
 package main
 
 import (

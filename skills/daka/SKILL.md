@@ -1,6 +1,6 @@
 ---
 name: daka
-description: Query a user's Daka check-in data (habits, maintenance tasks, counters) through its read-only HTTP API. Use when the user asks things like "when did I last change the water filter" or "how many times did I drink cola this year".
+description: Query a user's Daka check-in data (recurring items, maintenance tasks, counters) through its read-only HTTP API. Use when the user asks things like "when did I last change the water filter" or "how many times did I drink cola this year".
 ---
 
 # Daka read-only API

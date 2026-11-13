@@ -50,7 +50,7 @@ beforeEach(() => {
         id: 6,
         name: 'Gym',
         tracker_type: 'boolean',
-        kind: 'habit',
+        kind: 'ongoing',
         polarity: 'positive',
         category_id: null,
         project_id: 42,
@@ -129,9 +129,9 @@ describe('ItemEditorView', () => {
 
   it('shows counter limit hint when counter tracker is selected', async () => {
     const { w } = await mountAt('/items/new')
-    expect(w.text()).not.toContain('Counters only track positive habits')
+    expect(w.text()).not.toContain('Counters only track positive actions')
     await w.get('[data-testid=tracker-counter]').trigger('click')
-    expect(w.text()).toContain('Counters only track positive habits')
+    expect(w.text()).toContain('Counters only track positive actions')
   })
 
   it('shows client validation and server reason codes in English', async () => {
@@ -194,9 +194,9 @@ describe('ItemEditorView', () => {
     }
   })
 
-  it('renders strictly habit-only with no kind tabs and collapsed more settings', async () => {
+  it('renders strictly ongoing-only with no kind tabs and collapsed more settings', async () => {
     const { w } = await mountAt('/items/new')
-    expect(w.find('[data-testid=kind-habit]').exists()).toBe(false)
+    expect(w.find('[data-testid=kind-ongoing]').exists()).toBe(false)
     expect(w.find('[data-testid=kind-event]').exists()).toBe(false)
     const details = w.findAll('details')
     expect(details.length).toBeGreaterThan(0)

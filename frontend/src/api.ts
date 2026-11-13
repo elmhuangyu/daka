@@ -384,7 +384,7 @@ export interface ItemDetail {
   color?: string
   emoji?: string
   tracker_type: 'boolean' | 'counter' | 'maintenance' | 'metric' | string
-  kind: 'habit' | 'event' | string
+  kind: 'ongoing' | 'event' | string
   polarity: 'positive' | 'negative' | string
   category_id: number | null
   project_id?: number | null
@@ -1080,7 +1080,7 @@ export function listItemsPanel(opts: {
   archived?: boolean
   redact: boolean
 }): Promise<{ items: ItemDetail[] }> {
-  const p = new URLSearchParams({ include: 'stats', kind: 'habit' })
+  const p = new URLSearchParams({ include: 'stats', kind: 'ongoing' })
   if (opts.q) p.set('q', opts.q)
   if (opts.archived) p.set('archived', 'true')
   if (opts.redact) p.set('redact', '1')

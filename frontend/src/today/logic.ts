@@ -22,7 +22,7 @@ export function matchesFilter(categoryId: number | null, filter: CategoryFilter)
   return categoryId === filter
 }
 
-/** Completion-ring rule (DESIGN 2): positive, non-maintenance habit on a fixed_rrule schedule. */
+/** Completion-ring rule (DESIGN 2): positive, non-maintenance ongoing item on a fixed_rrule schedule. */
 export function countsInRing(d: ItemDetail): boolean {
   return (
     d.polarity === 'positive' &&

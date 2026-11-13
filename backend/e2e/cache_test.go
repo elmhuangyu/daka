@@ -28,7 +28,7 @@ func (c *client) addFreeze(start, end string) uint {
 func TestStatsCacheInvalidation(t *testing.T) {
 	s := startStack(t, "2025-09-01", stackOpts{})
 	c := s.newClient()
-	id := c.createItem(obj{"name": "Habit", "tracker_type": "boolean", "rule": fixedRule("FREQ=DAILY", "none")})
+	id := c.createItem(obj{"name": "Routine", "tracker_type": "boolean", "rule": fixedRule("FREQ=DAILY", "none")})
 	for _, d := range []string{"2025-09-01", "2025-09-02", "2025-09-03"} { // 09-04 is missed
 		s.clk.Set(shanghaiNoon(d))
 		c.checkin(id, "")
@@ -85,7 +85,7 @@ func TestStatsCacheInvalidatedBySettings(t *testing.T) {
 	s := startStack(t, "2025-09-01", stackOpts{})
 	c := s.newClient()
 	c.setCalendar(obj{"holiday_region": "CN"})
-	id := c.createItem(obj{"name": "Work habit", "tracker_type": "boolean",
+	id := c.createItem(obj{"name": "Work routine", "tracker_type": "boolean",
 		"rule": fixedRule("FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR", "workdays_only")})
 	// Done on the make-up Sunday 09-28, 09-29, 09-30 and after the National Day holiday.
 	for _, d := range []string{"2025-09-28", "2025-09-29", "2025-09-30", "2025-10-09", "2025-10-10"} {
