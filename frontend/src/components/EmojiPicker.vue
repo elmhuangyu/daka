@@ -37,7 +37,8 @@ function onDocKeydown(e: KeyboardEvent) {
 /**
  * The full Unicode set (search, skin tones, recents) comes from emoji-picker-element. Both the
  * element and its data are loaded only when the picker is first opened, and the data ships with the
- * app (no third-party requests), so it also works offline once cached.
+ * app (no third-party requests), so it also works offline once cached. The Chinese data also carries
+ * the English names (see emojiDataPlugin.ts), so English search works in both languages.
  */
 async function ensurePicker() {
   if (picker || !host.value) return
@@ -47,7 +48,7 @@ async function ensurePicker() {
     const [{ Picker }, source, strings] = await Promise.all([
       import('emoji-picker-element'),
       zh
-        ? import('emoji-picker-element-data/zh/cldr/data.json?url')
+        ? import('virtual:emoji-zh-en-data')
         : import('emoji-picker-element-data/en/cldr/data.json?url'),
       zh ? import('emoji-picker-element/i18n/zh_CN') : import('emoji-picker-element/i18n/en'),
     ])

@@ -23,6 +23,7 @@
   "devDependencies": {
     "@catppuccin/daisyui": "^2.1.1",
     "@tailwindcss/vite": "^4.3.5",
+    "@types/node": "^26.6.6",
     "@vitejs/plugin-vue": "^6.0.10",
     "@vue/test-utils": "^2.5.1",
     "daisyui": "^5.7.50",

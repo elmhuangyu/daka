@@ -1,9 +1,10 @@
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
+import { emojiZhEnData } from './emojiDataPlugin'
 
 export default defineConfig({
-  plugins: [vue(), tailwindcss()],
+  plugins: [vue(), tailwindcss(), emojiZhEnData()],
   server: {
     proxy: {
       '/api': 'http://127.0.0.1:8080',

@@ -186,11 +186,6 @@ function record(r: ValueRow) {
             }"
             @click="emit('openDetails')"
           >
-            <span
-              v-if="d.color"
-              class="size-2.5 rounded-full shrink-0"
-              :style="{ backgroundColor: d.color }"
-            />
             <span v-if="d.emoji" aria-hidden="true" class="shrink-0">{{ d.emoji }}</span>
             {{ d.name }}
           </h3>

@@ -176,9 +176,9 @@ watch(
                   :data-testid="`row-${it.id}`"
                 >
                   <span
-                    v-if="it.color"
                     class="size-2 rounded-full shrink-0"
-                    :style="{ backgroundColor: it.color }"
+                    :class="{ 'border border-base-content': !it.color }"
+                    :style="it.color ? { backgroundColor: it.color } : {}"
                   />
                   <span v-if="it.emoji" aria-hidden="true" class="shrink-0">{{ it.emoji }}</span>
                   <span class="truncate">{{ it.name }}</span>
