@@ -7,6 +7,7 @@ import { usePrivacyStore } from '../stores/privacy'
 import { useProjectsStore } from '../stores/projects'
 import { useTodayStore } from '../stores/today'
 import { findCategory, groupByTree, type CardVM } from '../today/logic'
+import { celebrate, celebrateAll, trackPointer } from '../composables/useCelebration'
 import CompletionRing from '../components/today/CompletionRing.vue'
 import CategoryFilter from '../components/today/CategoryFilter.vue'
 import ItemCard from '../components/today/ItemCard.vue'
@@ -370,7 +371,26 @@ function projectFor(c: CardVM) {
   if (!pid) return null
   return projectsStore.projectById.get(pid) ?? null
 }
-const log = (input: CheckinInput) => store.submit(input)
+trackPointer()
+const doneTotal = () => store.ring.done + store.todoRing.done + store.doneCards.length
+const allFinished = () =>
+  store.ring.total + store.todoRing.total > 0 &&
+  store.ring.done + store.todoRing.done >= store.ring.total + store.todoRing.total
+const moodPct = computed(() => {
+  const total = store.ring.total + store.todoRing.total
+  return total ? Math.round(((store.ring.done + store.todoRing.done) / total) * 100) : 0
+})
+const mood = computed(() =>
+  moodPct.value >= 100 ? 'full' : moodPct.value >= 50 ? 'mid' : moodPct.value > 0 ? 'low' : 'idle',
+)
+async function log(input: CheckinInput) {
+  const before = doneTotal()
+  const wasFinished = allFinished()
+  await store.submit(input)
+  if (input.mode === 'unset' || doneTotal() <= before) return
+  if (!wasFinished && allFinished()) celebrateAll()
+  else celebrate()
+}
 
 const detailItemId = ref<number | null>(null)
 const allCards = computed<CardVM[]>(() => [
@@ -504,7 +524,13 @@ watch(
 </script>
 
 <template>
-  <section ref="rootEl" class="mx-auto max-w-2xl space-y-4 p-4">
+  <div
+    class="mood-bg"
+    :class="`mood-${mood}`"
+    :style="{ '--p': String(moodPct) }"
+    aria-hidden="true"
+  ></div>
+  <section ref="rootEl" class="relative z-[1] mx-auto max-w-2xl space-y-4 p-4">
     <header v-if="store.view" class="flex items-center justify-between gap-3 pb-1">
       <div class="flex items-center gap-1 sm:gap-1.5 flex-nowrap shrink-0">
         <button

@@ -95,3 +95,50 @@ summary::-webkit-details-marker {
   border-inline-end-width: calc(var(--border, 1px) * var(--join-v));
   border-block-end-width: calc(var(--border, 1px) * var(--join-h));
 }
+
+/* Ambient Today background: a soft glow that grows warmer and brighter with progress. */
+.mood-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: calc(0.25 + var(--p, 0) / 100 * 0.75);
+  background:
+    radial-gradient(60% 45% at 15% 0%, var(--mood-a, transparent), transparent 70%),
+    radial-gradient(55% 45% at 90% 100%, var(--mood-b, transparent), transparent 70%);
+  background-size: 140% 140%;
+  transition:
+    opacity 1.2s ease,
+    background-color 1.2s ease;
+  animation: mood-drift 14s ease-in-out infinite alternate;
+}
+.mood-idle {
+  --mood-a: color-mix(in oklab, var(--color-neutral) 10%, transparent);
+  --mood-b: color-mix(in oklab, var(--color-neutral) 8%, transparent);
+}
+.mood-low {
+  --mood-a: color-mix(in oklab, var(--color-info) 22%, transparent);
+  --mood-b: color-mix(in oklab, var(--color-secondary) 16%, transparent);
+}
+.mood-mid {
+  --mood-a: color-mix(in oklab, var(--color-primary) 26%, transparent);
+  --mood-b: color-mix(in oklab, var(--color-accent) 20%, transparent);
+}
+.mood-full {
+  --mood-a: color-mix(in oklab, var(--color-success) 34%, transparent);
+  --mood-b: color-mix(in oklab, var(--color-warning) 26%, transparent);
+  animation-duration: 6s;
+}
+@keyframes mood-drift {
+  from {
+    background-position: 0% 0%;
+  }
+  to {
+    background-position: 100% 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mood-bg {
+    animation: none;
+  }
+}
