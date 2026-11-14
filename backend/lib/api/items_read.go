@@ -85,6 +85,8 @@ func internalError(w http.ResponseWriter, err error, msg string) {
 // itemStatsSummary is the compact stats attached by GET /api/items?include=stats.
 type itemStatsSummary struct {
 	LastAt        *string              `json:"last_at"`
+	LastDate      *string              `json:"last_date,omitempty"`
+	LastBy        *projectUserInfo     `json:"last_by,omitempty"`
 	DaysSinceLast *int                 `json:"days_since_last"`
 	Counts        stats.Counts         `json:"counts"`
 	Quota         *stats.QuotaProgress `json:"quota"`
@@ -392,22 +394,53 @@ func (s *server) listItems(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	for i := range resps {
-		if withStats {
+	if withStats {
+		vals := make([]stats.Stats, len(items))
+		uidSet := map[string]struct{}{}
+		for i := range resps {
 			val, err := s.cachedStats(db, userID, items[i])
 			if err != nil {
 				internalError(w, err, "list items stats failed")
 				return
 			}
+			vals[i] = val
+			if val.LastByUserID != nil && *val.LastByUserID != "" {
+				uidSet[*val.LastByUserID] = struct{}{}
+			}
+		}
+		var userMap map[string]projectUserInfo
+		if len(uidSet) > 0 {
+			uids := make([]string, 0, len(uidSet))
+			for uid := range uidSet {
+				uids = append(uids, uid)
+			}
+			userMap, err = buildUserInfoMap(db, uids)
+			if err != nil {
+				internalError(w, err, "list items stats failed")
+				return
+			}
+		}
+		for i := range resps {
+			val := vals[i]
+			var lastBy *projectUserInfo
+			if val.LastByUserID != nil {
+				if u, ok := userMap[*val.LastByUserID]; ok {
+					lastBy = &u
+				}
+			}
 			resps[i].Stats = &itemStatsSummary{
-				LastAt: val.LastAt, DaysSinceLast: val.DaysSinceLast, Counts: val.Counts,
+				LastAt: val.LastAt, LastDate: val.LastDate, LastBy: lastBy,
+				DaysSinceLast: val.DaysSinceLast, Counts: val.Counts,
 				Quota: val.Quota, Maintenance: val.Maintenance, Summary: val.Summary,
 			}
 		}
+	}
+	for i := range resps {
 		if redact && sens(items[i]) {
 			redactItem(&resps[i])
 			if resps[i].Stats != nil {
 				resps[i].Stats.Summary = ""
+				resps[i].Stats.LastBy = nil
 			}
 		}
 	}

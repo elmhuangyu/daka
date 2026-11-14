@@ -1557,4 +1557,33 @@ describe('Project sharing', () => {
     )
     expect(router.currentRoute.value.path).toBe('/projects')
   })
+
+  it('shows checked-in date, avatar tooltip on shared project, and mobile expand toggle', async () => {
+    currentProject = sampleProject({
+      is_owner: true,
+      shares: [
+        { user_id: 'u2', email: 'bob@example.com', name: 'Bob', avatar_url: '', created_at: '' },
+      ],
+    })
+    currentTasks[0] = {
+      ...currentTasks[0]!,
+      stats: {
+        last_date: '2026-11-12',
+        last_by: { id: 'u2', email: 'bob@example.com', name: 'Bob', avatar_url: '' },
+        counts: { last_30_days: 1, this_year: 1, total: 1 },
+      },
+    }
+    const { w: wrapper } = await mountDetail()
+
+    expect(wrapper.find('[data-testid="task-checked-date-101"]').exists()).toBe(true)
+    const avatar = wrapper.get('[data-testid="task-checked-by-101"]')
+    expect(avatar.attributes('title')).toBe('Bob')
+    expect(avatar.text()).toBe('B')
+
+    expect(wrapper.find('[data-testid="task-mobile-meta-101"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="btn-toggle-task-meta-101"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="task-mobile-meta-101"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="task-mobile-meta-101"]').text()).toContain('Bob')
+  })
 })

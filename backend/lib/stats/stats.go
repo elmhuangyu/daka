@@ -94,6 +94,7 @@ type Stats struct {
 	// LastAt is the RFC 3339 time of the latest log in the user's timezone.
 	LastAt        *string `json:"last_at"`
 	LastDate      *string `json:"last_date"`
+	LastByUserID  *string `json:"last_by_user_id,omitempty"`
 	DaysSinceLast *int    `json:"days_since_last"`
 	Summary       string  `json:"summary"`
 	// Counts are log entries (occurrences); ActiveDays are distinct days with logs.
@@ -137,7 +138,8 @@ func ComputeStats(in Input) (Stats, error) {
 	last := lastLog(in.Logs)
 	if last != nil {
 		at := last.CheckinTime.In(loc).Format(time.RFC3339)
-		st.LastAt, st.LastDate = &at, &last.CheckinDate
+		uid := last.UserID
+		st.LastAt, st.LastDate, st.LastByUserID = &at, &last.CheckinDate, &uid
 		lt, _ := time.Parse(dbmodels.DateLayout, last.CheckinDate)
 		d := int(today.Sub(lt).Hours() / 24)
 		if d < 0 {

@@ -371,6 +371,8 @@ export interface MaintenanceInfo {
 
 export interface ItemStatsSummary {
   last_at?: string | null
+  last_date?: string | null
+  last_by?: ProjectUserInfo | null
   days_since_last?: number | null
   counts?: { last_30_days: number; this_year: number; total: number }
   quota?: QuotaProgress | null

@@ -150,6 +150,20 @@ func TestSharedProjectItemsAndCheckinsAndOCC(t *testing.T) {
 	w = e.doRaw("POST", "/api/checkins", "u2", fmt.Sprintf(`{"item_id":%d,"mode":"set","date":"2026-01-10"}`, createdItem.ID))
 	require.Equal(t, 200, w.Code, w.Body.String())
 
+	w = e.doRaw("GET", fmt.Sprintf("/api/items?project_id=%d&include=stats", p.ID), "u1", "")
+	require.Equal(t, 200, w.Code, w.Body.String())
+	var itemsWithStats struct {
+		Items []itemResponse `json:"items"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &itemsWithStats))
+	require.Len(t, itemsWithStats.Items, 1)
+	require.NotNil(t, itemsWithStats.Items[0].Stats)
+	require.NotNil(t, itemsWithStats.Items[0].Stats.LastDate)
+	require.Equal(t, "2026-01-10", *itemsWithStats.Items[0].Stats.LastDate)
+	require.NotNil(t, itemsWithStats.Items[0].Stats.LastBy)
+	require.Equal(t, "u2", itemsWithStats.Items[0].Stats.LastBy.ID)
+	require.Equal(t, "Collab", itemsWithStats.Items[0].Stats.LastBy.Name)
+
 	w = e.doRaw("GET", fmt.Sprintf("/api/checkins?item_id=%d", createdItem.ID), "u1", "")
 	require.Equal(t, 200, w.Code, w.Body.String())
 	require.Contains(t, w.Body.String(), "2026-01-10")

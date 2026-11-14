@@ -806,6 +806,30 @@ function taskDueDate(task: ItemDetail): string | null {
   return null
 }
 
+const isSharedProject = computed(
+  () => project.value?.is_owner === false || (project.value?.shares?.length ?? 0) > 0,
+)
+
+function taskCheckedDate(task: ItemDetail): string | null {
+  if ((task.stats?.counts?.total ?? 0) <= 0) return null
+  if (task.stats?.last_date) return task.stats.last_date
+  if (task.stats?.last_at) return task.stats.last_at.slice(0, 10)
+  return null
+}
+
+function userInitial(u: api.ProjectUserInfo): string {
+  return (u.name || u.email || '?').trim().charAt(0).toUpperCase()
+}
+
+const expandedTaskIds = ref<Set<number>>(new Set())
+
+function toggleTaskExpand(id: number) {
+  const next = new Set(expandedTaskIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  expandedTaskIds.value = next
+}
+
 // Share / Unshare / Leave handlers
 function openShareModal() {
   shareEmail.value = ''
@@ -1325,6 +1349,52 @@ onUnmounted(() => {
                   <span v-if="row.task.emoji" aria-hidden="true">{{ row.task.emoji }}</span>
                   {{ row.task.name }}
                 </span>
+
+                <!-- Desktop: checked-in date & who checked it off -->
+                <span
+                  v-if="taskCheckedDate(row.task)"
+                  class="hidden sm:inline-flex items-center gap-1 text-xs text-base-content/60 bg-base-200/80 px-2 py-0.5 rounded-md shrink-0"
+                  :data-testid="`task-checked-date-${row.task.id}`"
+                >
+                  <Icon icon="lucide:check" class="size-3 text-success" />
+                  <span>{{ formatCustomDate(taskCheckedDate(row.task)!) }}</span>
+                </span>
+                <span
+                  v-if="taskCheckedDate(row.task) && isSharedProject && row.task.stats?.last_by"
+                  class="inline-flex items-center shrink-0"
+                  :title="row.task.stats.last_by.name || row.task.stats.last_by.email"
+                  :data-testid="`task-checked-by-${row.task.id}`"
+                >
+                  <img
+                    v-if="row.task.stats.last_by.avatar_url"
+                    :src="row.task.stats.last_by.avatar_url"
+                    :alt="row.task.stats.last_by.name || row.task.stats.last_by.email"
+                    class="size-5 rounded-full object-cover ring-1 ring-base-300"
+                  />
+                  <span
+                    v-else
+                    class="size-5 rounded-full bg-primary/15 text-primary text-[11px] font-semibold inline-flex items-center justify-center ring-1 ring-primary/20"
+                  >
+                    {{ userInitial(row.task.stats.last_by) }}
+                  </span>
+                </span>
+
+                <!-- Mobile: expand toggle for checked-in date -->
+                <button
+                  v-if="taskCheckedDate(row.task)"
+                  type="button"
+                  class="sm:hidden btn btn-xs btn-ghost btn-circle text-base-content/50 shrink-0"
+                  :aria-expanded="expandedTaskIds.has(row.task.id)"
+                  :title="t('projects.toggleDetails')"
+                  :data-testid="`btn-toggle-task-meta-${row.task.id}`"
+                  @click.stop="toggleTaskExpand(row.task.id)"
+                >
+                  <Icon
+                    icon="lucide:chevron-down"
+                    class="size-3.5 transition-transform"
+                    :class="{ 'rotate-180': expandedTaskIds.has(row.task.id) }"
+                  />
+                </button>
               </div>
 
               <div class="flex items-center gap-1.5 shrink-0 ml-auto">
@@ -1368,6 +1438,28 @@ onUnmounted(() => {
                 >
                   <Icon icon="lucide:trash-2" class="size-3.5" />
                 </button>
+              </div>
+
+              <!-- Mobile expanded checked-in date -->
+              <div
+                v-if="taskCheckedDate(row.task) && expandedTaskIds.has(row.task.id)"
+                class="sm:hidden w-full pl-7 pt-1 flex items-center gap-2 text-xs text-base-content/60"
+                :data-testid="`task-mobile-meta-${row.task.id}`"
+              >
+                <Icon icon="lucide:check" class="size-3 text-success shrink-0" />
+                <span>{{
+                  t('projects.checkedAt', { date: formatCustomDate(taskCheckedDate(row.task)!) })
+                }}</span>
+                <span
+                  v-if="isSharedProject && row.task.stats?.last_by"
+                  class="text-base-content/50"
+                >
+                  {{
+                    t('projects.checkedBy', {
+                      name: row.task.stats.last_by.name || row.task.stats.last_by.email,
+                    })
+                  }}
+                </span>
               </div>
             </div>
 
