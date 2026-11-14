@@ -34,4 +34,5 @@ type Item struct {
 	RemindTime *string `gorm:"size:5"`
 	SortOrder  int     `gorm:"not null;default:0"`
 	Archived   bool    `gorm:"not null;default:false"`
+	Version    int64   `gorm:"not null;default:1"`
 }

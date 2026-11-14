@@ -119,6 +119,8 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("PATCH /api/projects/{id}", s.patchProject)
 	mux.HandleFunc("PUT /api/projects/{id}", s.patchProject)
 	mux.Handle("DELETE /api/projects/{id}", http.HandlerFunc(s.deleteProject))
+	mux.HandleFunc("POST /api/projects/{id}/shares", s.postProjectShare)
+	mux.HandleFunc("DELETE /api/projects/{id}/shares/{userId}", s.deleteProjectShare)
 	mux.HandleFunc("GET /api/freezes", s.listFreezes)
 	mux.HandleFunc("POST /api/freezes", s.postFreeze)
 	mux.HandleFunc("DELETE /api/freezes/{id}", s.deleteFreeze)

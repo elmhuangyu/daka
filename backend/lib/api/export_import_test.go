@@ -407,6 +407,7 @@ func (e *env) seedEveryTable(user string) uint {
 	require.NoError(e.t, w.Create(&cat).Error)
 	proj := dbmodels.Project{UserID: user, Name: "p"}
 	require.NoError(e.t, w.Create(&proj).Error)
+	require.NoError(e.t, w.Create(&dbmodels.ProjectShare{ProjectID: proj.ID + 1000, UserID: user}).Error)
 	id := e.item(user, nil)
 	require.NoError(e.t, w.Create(&dbmodels.ItemOption{ItemID: id, Name: "o"}).Error)
 	require.NoError(e.t, w.Create(&dbmodels.CheckinLog{UserID: user, ItemID: id, CheckinDate: "2026-01-01", CheckinTime: fixedNow}).Error)

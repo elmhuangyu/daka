@@ -100,6 +100,8 @@ type patchItemRequest struct {
 
 	Rule *patchRule `json:"rule"`
 
+	Version *int64 `json:"version"`
+
 	// confirmExposure comes from ?confirm_exposure=1, never from the body.
 	confirmExposure bool
 
@@ -292,6 +294,26 @@ func (s *server) patchItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRequest) (result, error) {
+	item, isOwner, found, err := loadAccessibleItem(tx, userID, id)
+	if err != nil {
+		return result{}, err
+	}
+	if !found {
+		return errResult(http.StatusNotFound, "item not found"), nil
+	}
+	if req.Version != nil && *req.Version != item.Version {
+		return errResult(http.StatusConflict, "conflict: item was modified, please refresh"), nil
+	}
+	if !isOwner {
+		if req.CategoryID.Set {
+			return errResult(http.StatusForbidden, "only the owner can change item category"), nil
+		}
+		if req.ProjectID.Set && (req.ProjectID.Null || item.ProjectID == nil || req.ProjectID.Val != *item.ProjectID) {
+			return errResult(http.StatusForbidden, "only the owner can move item between projects"), nil
+		}
+	}
+	ownerID := item.UserID
+
 	// Row locks (PostgreSQL; SQLite serializes writers anyway) so a concurrent
 	// category freeze cannot be overwritten by this read-modify-write, and so
 	// concurrent reparents cannot form a cycle. See lockItemTree.
@@ -303,19 +325,16 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 	if req.move != nil {
 		scope = &siblingScope{parentSet: req.ParentID.Set, parent: newParent}
 	}
-	subtree, locked, err := lockItemTree(tx, userID, id, newParent, scope)
+	subtree, locked, err := lockItemTree(tx, ownerID, id, newParent, scope)
 	if err != nil {
 		return result{}, err
 	}
 	if !locked {
 		return errResult(http.StatusConflict, "the item tree changed concurrently, retry"), nil
 	}
-	item, found, err := loadOwnedItem(tx, userID, id)
-	if err != nil {
+	// Reload after acquiring row locks.
+	if err := tx.Where("id = ?", id).Take(&item).Error; err != nil {
 		return result{}, err
-	}
-	if !found {
-		return errResult(http.StatusNotFound, "item not found"), nil
 	}
 	if (req.TrackerType != nil && *req.TrackerType != string(item.TrackerType)) ||
 		(req.Polarity != nil && *req.Polarity != string(item.Polarity)) {
@@ -420,7 +439,7 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 	}
 	origParent := item.ParentID
 	if req.ParentID.Set {
-		if res, bad, err := s.applyReparent(tx, userID, &item, subtree, req); err != nil {
+		if res, bad, err := s.applyReparent(tx, ownerID, &item, subtree, req); err != nil {
 			return result{}, err
 		} else if bad {
 			return res, nil
@@ -478,7 +497,7 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 	if req.move != nil {
 		parentChanged := (origParent == nil) != (item.ParentID == nil) ||
 			(origParent != nil && *origParent != *item.ParentID)
-		res, bad, noop, err := s.applyMoveOrder(tx, userID, &item, req.move, parentChanged)
+		res, bad, noop, err := s.applyMoveOrder(tx, ownerID, &item, req.move, parentChanged)
 		if err != nil {
 			return result{}, err
 		}
@@ -564,14 +583,15 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 
 	if len(subtree) > 0 && (req.move == nil || req.ParentID.Set) {
 		// Sub-items follow their parent's project and sensitivity.
-		if err := tx.Model(&dbmodels.Item{}).Where("user_id = ? AND id IN ?", userID, subtree).
+		if err := tx.Model(&dbmodels.Item{}).Where("user_id = ? AND id IN ?", ownerID, subtree).
 			Updates(map[string]any{"project_id": item.ProjectID, "is_sensitive": gorm.Expr("is_sensitive OR ?", item.IsSensitive)}).Error; err != nil {
 			return result{}, err
 		}
 	}
+	item.Version++
 	if err := tx.Model(&dbmodels.Item{}).Where("id = ?", item.ID).Select(
 		"Name", "Description", "Color", "Emoji", "Kind", "CategoryID", "ProjectID", "ParentID", "IsSensitive", "Pinned", "SortOrder", "Archived", "RemindTime",
-		"Unit", "Step", "MinVal", "MaxVal", "Aggregate", "WarningDays").Updates(&item).Error; err != nil {
+		"Unit", "Step", "MinVal", "MaxVal", "Aggregate", "WarningDays", "Version").Updates(&item).Error; err != nil {
 		return result{}, err
 	}
 	if newVer != nil {
@@ -579,7 +599,7 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 			return result{}, err
 		}
 	}
-	if err := dbmodels.BumpStateVersion(tx, userID); err != nil {
+	if err := dbmodels.BumpStateVersion(tx, ownerID); err != nil {
 		return result{}, err
 	}
 	resp, err := s.itemResponseOf(tx, userID, item)
@@ -610,7 +630,7 @@ func (s *server) deleteItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := s.txResult(func(tx *gorm.DB) (result, error) {
-		_, found, err := loadOwnedItem(tx, userID, id)
+		item, _, found, err := loadAccessibleItem(tx, userID, id)
 		if err != nil {
 			return result{}, err
 		}
@@ -618,12 +638,12 @@ func (s *server) deleteItem(w http.ResponseWriter, r *http.Request) {
 			return errResult(http.StatusNotFound, "item not found"), nil
 		}
 		// Sub-items are deleted together with their parent.
-		ids, err := itemDescendants(tx, userID, id)
+		ids, err := itemDescendants(tx, item.UserID, id)
 		if err != nil {
 			return result{}, err
 		}
 		ids = append(ids, id)
-		if err := tx.Where("item_id IN ? AND user_id = ?", ids, userID).Delete(&dbmodels.CheckinLog{}).Error; err != nil {
+		if err := tx.Where("item_id IN ?", ids).Delete(&dbmodels.CheckinLog{}).Error; err != nil {
 			return result{}, err
 		}
 		if err := tx.Where("item_id IN ?", ids).Delete(&dbmodels.ItemRuleVersion{}).Error; err != nil {
@@ -632,10 +652,10 @@ func (s *server) deleteItem(w http.ResponseWriter, r *http.Request) {
 		if err := tx.Where("item_id IN ?", ids).Delete(&dbmodels.ItemOption{}).Error; err != nil {
 			return result{}, err
 		}
-		if err := tx.Where("id IN ? AND user_id = ?", ids, userID).Delete(&dbmodels.Item{}).Error; err != nil {
+		if err := tx.Where("id IN ?", ids).Delete(&dbmodels.Item{}).Error; err != nil {
 			return result{}, err
 		}
-		if err := dbmodels.BumpStateVersion(tx, userID); err != nil {
+		if err := dbmodels.BumpStateVersion(tx, item.UserID); err != nil {
 			return result{}, err
 		}
 		return jsonResult(http.StatusOK, map[string]bool{"ok": true}), nil

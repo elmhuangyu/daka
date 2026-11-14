@@ -193,13 +193,12 @@ func (s *server) applyCheckin(tx *gorm.DB, userID string, req checkinRequest) (r
 		return errResult(http.StatusBadRequest, "date is in the future"), nil
 	}
 
-	var item dbmodels.Item
-	err = tx.Where("id = ? AND user_id = ?", req.ItemID, userID).Take(&item).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return errResult(http.StatusNotFound, "item not found"), nil
-	}
+	item, _, found, err := loadAccessibleItem(tx, userID, req.ItemID)
 	if err != nil {
 		return result{}, err
+	}
+	if !found {
+		return errResult(http.StatusNotFound, "item not found"), nil
 	}
 	if item.Archived {
 		return errResult(http.StatusBadRequest, "item is archived"), nil
@@ -224,7 +223,7 @@ func (s *server) applyCheckin(tx *gorm.DB, userID string, req checkinRequest) (r
 	// concurrent first-time sets (or deltas racing the non-negative guard)
 	// could both pass without this lock. Plain appends need no guard.
 	if needsAdvisoryLock(tx.Name()) && req.Mode != "append" {
-		lockKey := fmt.Sprintf("%s|%d|%s", userID, item.ID, date)
+		lockKey := fmt.Sprintf("%d|%s", item.ID, date)
 		if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?))", lockKey).Error; err != nil {
 			return result{}, err
 		}
@@ -238,7 +237,7 @@ func (s *server) applyCheckin(tx *gorm.DB, userID string, req checkinRequest) (r
 	}
 
 	var logs []dbmodels.CheckinLog
-	err = tx.Where("user_id = ? AND item_id = ? AND checkin_date = ?", userID, item.ID, date).
+	err = tx.Where("item_id = ? AND checkin_date = ?", item.ID, date).
 		Order("id").Find(&logs).Error
 	if err != nil {
 		return result{}, err
@@ -247,7 +246,7 @@ func (s *server) applyCheckin(tx *gorm.DB, userID string, req checkinRequest) (r
 	if req.Mode == "unset" {
 		var n int64
 		if len(logs) > 0 {
-			tr := tx.Where("user_id = ? AND item_id = ? AND checkin_date = ?", userID, item.ID, date).
+			tr := tx.Where("item_id = ? AND checkin_date = ?", item.ID, date).
 				Delete(&dbmodels.CheckinLog{})
 			if tr.Error != nil {
 				return result{}, tr.Error
@@ -255,7 +254,7 @@ func (s *server) applyCheckin(tx *gorm.DB, userID string, req checkinRequest) (r
 			n = tr.RowsAffected
 		} else if item.Kind == dbmodels.KindEvent {
 			var eventLogs []dbmodels.CheckinLog
-			if err := tx.Where("user_id = ? AND item_id = ? AND checkin_date >= ?", userID, item.ID, date).
+			if err := tx.Where("item_id = ? AND checkin_date >= ?", item.ID, date).
 				Order("id DESC").Find(&eventLogs).Error; err == nil && len(eventLogs) > 0 {
 				tr := tx.Where("id = ?", eventLogs[0].ID).Delete(&dbmodels.CheckinLog{})
 				if tr.Error != nil {
@@ -284,7 +283,7 @@ func (s *server) applyCheckin(tx *gorm.DB, userID string, req checkinRequest) (r
 			return result{}, err
 		}
 		if len(logs) > 1 { // heal legacy duplicates
-			if err := tx.Where("id <> ? AND user_id = ? AND item_id = ? AND checkin_date = ?", row.ID, userID, item.ID, date).
+			if err := tx.Where("id <> ? AND item_id = ? AND checkin_date = ?", row.ID, item.ID, date).
 				Delete(&dbmodels.CheckinLog{}).Error; err != nil {
 				return result{}, err
 			}
@@ -310,16 +309,23 @@ func (s *server) deleteCheckin(w http.ResponseWriter, r *http.Request) {
 	var itemID uint
 	res, err := s.txResult(func(tx *gorm.DB) (result, error) {
 		var row dbmodels.CheckinLog
-		err := tx.Where("id = ? AND user_id = ?", id, u.ID).Take(&row).Error
+		err := tx.Where("id = ?", id).Take(&row).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errResult(http.StatusNotFound, "check-in not found"), nil
 		}
 		if err != nil {
 			return result{}, err
 		}
+		if row.UserID != u.ID {
+			if _, _, ok, err := loadAccessibleItem(tx, u.ID, row.ItemID); err != nil {
+				return result{}, err
+			} else if !ok {
+				return errResult(http.StatusNotFound, "check-in not found"), nil
+			}
+		}
 		itemID = row.ItemID
 		if needsAdvisoryLock(tx.Name()) {
-			lockKey := fmt.Sprintf("%s|%d|%s", u.ID, row.ItemID, row.CheckinDate)
+			lockKey := fmt.Sprintf("%d|%s", row.ItemID, row.CheckinDate)
 			if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?))", lockKey).Error; err != nil {
 				return result{}, err
 			}
@@ -334,7 +340,7 @@ func (s *server) deleteCheckin(w http.ResponseWriter, r *http.Request) {
 			if item.TrackerType == dbmodels.TrackerCounter {
 				var sum float64
 				q := optionEq(tx.Model(&dbmodels.CheckinLog{}).
-					Where("user_id = ? AND item_id = ? AND checkin_date = ?", u.ID, row.ItemID, row.CheckinDate), row.OptionID)
+					Where("item_id = ? AND checkin_date = ?", row.ItemID, row.CheckinDate), row.OptionID)
 				if err := q.Select("COALESCE(SUM(value), 0)").Scan(&sum).Error; err != nil {
 					return result{}, err
 				}
@@ -343,7 +349,7 @@ func (s *server) deleteCheckin(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		if err := tx.Where("id = ? AND user_id = ?", id, u.ID).Delete(&dbmodels.CheckinLog{}).Error; err != nil {
+		if err := tx.Where("id = ?", id).Delete(&dbmodels.CheckinLog{}).Error; err != nil {
 			return result{}, err
 		}
 		return jsonResult(http.StatusOK, map[string]bool{"ok": true}), nil
@@ -401,13 +407,21 @@ func (s *server) patchCheckin(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var row dbmodels.CheckinLog
-		err := tx.Where("id = ? AND user_id = ?", id, u.ID).Take(&row).Error
+		err := tx.Where("id = ?", id).Take(&row).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			res = errResult(http.StatusNotFound, "checkin not found")
 			return nil
 		}
 		if err != nil {
 			return err
+		}
+		if row.UserID != u.ID {
+			if _, _, ok, err := loadAccessibleItem(tx, u.ID, row.ItemID); err != nil {
+				return err
+			} else if !ok {
+				res = errResult(http.StatusNotFound, "checkin not found")
+				return nil
+			}
 		}
 		itemID = row.ItemID
 
@@ -577,7 +591,7 @@ func (s *server) applyDelta(tx *gorm.DB, userID string, item dbmodels.Item, opt 
 	}
 	var sum float64
 	q := optionEq(tx.Model(&dbmodels.CheckinLog{}).
-		Where("user_id = ? AND item_id = ? AND checkin_date = ?", userID, item.ID, date), optID)
+		Where("item_id = ? AND checkin_date = ?", item.ID, date), optID)
 	if err := q.Select("COALESCE(SUM(value), 0)").Scan(&sum).Error; err != nil {
 		return result{}, err
 	}

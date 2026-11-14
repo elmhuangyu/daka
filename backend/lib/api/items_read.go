@@ -180,11 +180,17 @@ func buildItemResponses(db *gorm.DB, items []dbmodels.Item, today string) ([]ite
 	for _, o := range opts {
 		optBy[o.ItemID] = append(optBy[o.ItemID], o)
 	}
-	sens, err := sensitiveFn(db, items[0].UserID)
-	if err != nil {
-		return nil, err
-	}
+	sensMap := map[string]func(dbmodels.Item) bool{}
 	for i, it := range items {
+		sens, ok := sensMap[it.UserID]
+		if !ok {
+			var err error
+			sens, err = sensitiveFn(db, it.UserID)
+			if err != nil {
+				return nil, err
+			}
+			sensMap[it.UserID] = sens
+		}
 		cur, _ := currentOrLatest(vsBy[it.ID], today)
 		targets := optionTargetsOf(cur)
 		resp := itemResponse{
@@ -197,6 +203,7 @@ func buildItemResponses(db *gorm.DB, items []dbmodels.Item, today string) ([]ite
 			Aggregate: string(it.Aggregate), WarningDays: it.WarningDays,
 			Options:     make([]optionResponse, len(optBy[it.ID])),
 			CurrentRule: newRuleResponse(cur),
+			Version:     it.Version,
 		}
 		for j, o := range optBy[it.ID] {
 			resp.Options[j] = newOptionResponse(o, targets)
@@ -270,7 +277,7 @@ func (s *server) listItems(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	db := s.db.Read()
-	tx := db.Model(&dbmodels.Item{}).Where("user_id = ?", userID)
+	tx := accessibleItemsScope(db.Model(&dbmodels.Item{}), userID)
 	bad := func(msg string) { errResult(http.StatusBadRequest, msg).write(w) }
 	if v := q.Get("q"); v != "" {
 		terms, ok := searchTerms(v)
@@ -422,7 +429,7 @@ func (s *server) getItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db := s.db.Read()
-	item, found, err := loadOwnedItem(db, userID, id)
+	item, _, found, err := loadAccessibleItem(db, userID, id)
 	if err != nil {
 		internalError(w, err, "get item failed")
 		return
@@ -432,7 +439,7 @@ func (s *server) getItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if isReadToken(r) {
-		sens, err := sensitiveFn(db, userID)
+		sens, err := sensitiveFn(db, item.UserID)
 		if err != nil {
 			internalError(w, err, "get item failed")
 			return
@@ -448,7 +455,7 @@ func (s *server) getItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if redact {
-		sens, err := sensitiveFn(db, userID)
+		sens, err := sensitiveFn(db, item.UserID)
 		if err != nil {
 			internalError(w, err, "get item failed")
 			return

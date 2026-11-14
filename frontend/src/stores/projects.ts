@@ -147,6 +147,22 @@ export const useProjectsStore = defineStore('projects', () => {
     }
   }
 
+  async function shareProject(id: number, email: string) {
+    const updated = await api.shareProject(id, email)
+    upsertProject(updated)
+    return updated
+  }
+
+  async function unshareProject(id: number, userId: string) {
+    const res = await api.unshareProject(id, userId)
+    if ('unshared' in res && res.unshared) {
+      projects.value = projects.value.filter((p) => p.id !== id)
+    } else if ('id' in res) {
+      upsertProject(res)
+    }
+    return res
+  }
+
   return {
     projects,
     loading,
@@ -160,6 +176,8 @@ export const useProjectsStore = defineStore('projects', () => {
     createProject,
     updateProject,
     deleteProject,
+    shareProject,
+    unshareProject,
     clear,
   }
 })

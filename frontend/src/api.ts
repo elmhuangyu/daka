@@ -1004,6 +1004,21 @@ export function removeCategory(
 
 export type ProjectStatus = 'active' | 'completed' | 'archived'
 
+export interface ProjectUserInfo {
+  id: string
+  email: string
+  name: string
+  avatar_url: string
+}
+
+export interface ProjectShareMember {
+  user_id: string
+  email: string
+  name: string
+  avatar_url: string
+  created_at: string
+}
+
 export interface Project {
   id: number
   category_id: number | null
@@ -1015,6 +1030,10 @@ export interface Project {
   target_date: string | null
   is_sensitive: boolean
   sort_order: number
+  version?: number
+  is_owner?: boolean
+  owner?: ProjectUserInfo
+  shares?: ProjectShareMember[]
   created_at: string
   updated_at: string
 }
@@ -1041,6 +1060,7 @@ export interface UpdateProjectRequest {
   category_id?: number | null
   is_sensitive?: boolean
   sort_order?: number
+  version?: number
 }
 
 export function listProjects(params?: {
@@ -1089,6 +1109,20 @@ export function deleteProject(
   return request<{ deleted: boolean }>(`/api/projects/${id}${qs ? `?${qs}` : ''}`, {
     method: 'DELETE',
   })
+}
+
+export function shareProject(id: number, email: string): Promise<Project> {
+  return request<Project>(`/api/projects/${id}/shares`, jsonInit('POST', { email }))
+}
+
+export function unshareProject(
+  id: number,
+  userId: string,
+): Promise<Project | { unshared: boolean }> {
+  return request<Project | { unshared: boolean }>(
+    `/api/projects/${id}/shares/${encodeURIComponent(userId)}`,
+    { method: 'DELETE' },
+  )
 }
 
 export function listProjectItems(

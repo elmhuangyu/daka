@@ -142,6 +142,7 @@ type itemResponse struct {
 	WarningDays        int              `json:"warning_days,omitempty"`
 	Options            []optionResponse `json:"options"`
 	CurrentRule        ruleResponse     `json:"current_rule"`
+	Version            int64            `json:"version"`
 	// Stats is only set by GET /api/items?include=stats.
 	Stats *itemStatsSummary `json:"stats,omitempty"`
 }
@@ -309,17 +310,17 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 			// DESIGN 4.1 rule 1: a sensitive category makes its items sensitive.
 			sensitive = sensitive || cat.IsSensitive
 		}
+		itemOwnerID := userID
 		if req.ParentID != nil {
-			var parent dbmodels.Item
-			err := tx.Where("id = ? AND user_id = ?", *req.ParentID, userID).Take(&parent).Error
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				out = errResult(http.StatusBadRequest, "invalid parent")
-				return nil
-			}
+			parent, _, found, err := loadAccessibleItem(tx, userID, *req.ParentID)
 			if err != nil {
 				return err
 			}
-			anc, err := itemAncestors(tx, userID, parent.ID)
+			if !found {
+				out = errResult(http.StatusBadRequest, "invalid parent")
+				return nil
+			}
+			anc, err := itemAncestors(tx, parent.UserID, parent.ID)
 			if err != nil {
 				return err
 			}
@@ -333,14 +334,15 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 				return nil
 			}
 			req.ProjectID = parent.ProjectID
-			sensFn, err := sensitiveFn(tx, userID)
+			sensFn, err := sensitiveFn(tx, parent.UserID)
 			if err != nil {
 				return err
 			}
 			sensitive = sensitive || sensFn(parent)
+			itemOwnerID = parent.UserID
 		}
 		if req.ProjectID != nil {
-			proj, found, err := loadOwnedProject(tx, userID, *req.ProjectID)
+			proj, isProjOwner, _, found, err := loadAccessibleProject(tx, userID, *req.ProjectID)
 			if err != nil {
 				return err
 			}
@@ -348,14 +350,18 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 				out = errResult(http.StatusBadRequest, "invalid project")
 				return nil
 			}
-			projSens, err := projectSensitiveFn(tx, userID)
+			projSens, err := projectSensitiveFn(tx, proj.UserID)
 			if err != nil {
 				return err
 			}
 			// DESIGN 4.1 rule 1: a sensitive project makes its items sensitive.
 			sensitive = sensitive || projSens(proj)
-			// Items without a category of their own take the project's.
-			if req.CategoryID == nil {
+			itemOwnerID = proj.UserID
+			if !isProjOwner {
+				// Collaborators do not attach their own category to the owner's item.
+				req.CategoryID = proj.CategoryID
+			} else if req.CategoryID == nil {
+				// Items without a category of their own take the project's.
 				req.CategoryID = proj.CategoryID
 			}
 		}
@@ -366,10 +372,11 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 			ver.QuotaWindow = dbmodels.QuotaWindowCalendar
 		}
 		item := dbmodels.Item{
-			UserID: userID, CategoryID: req.CategoryID, ProjectID: req.ProjectID, ParentID: req.ParentID, Name: name, Color: req.Color, Emoji: emoji,
+			UserID: itemOwnerID, CategoryID: req.CategoryID, ProjectID: req.ProjectID, ParentID: req.ParentID, Name: name, Color: req.Color, Emoji: emoji,
 			TrackerType: tracker, Kind: kind, Polarity: polarity, IsSensitive: sensitive,
 			Unit: req.Unit, Step: req.Step, MinVal: req.MinVal, MaxVal: req.MaxVal,
 			Aggregate: dbmodels.Aggregate(req.Aggregate), WarningDays: req.WarningDays,
+			Version: 1,
 		}
 		if err := tx.Create(&item).Error; err != nil {
 			return err
@@ -413,6 +420,7 @@ func (s *server) createItem(userID string, req createItemRequest) (result, error
 			Aggregate: string(item.Aggregate), WarningDays: item.WarningDays,
 			Options:     make([]optionResponse, len(opts)),
 			CurrentRule: newRuleResponse(ver),
+			Version:     item.Version,
 		}
 		for i, o := range opts {
 			resp.Options[i] = optionResponse{

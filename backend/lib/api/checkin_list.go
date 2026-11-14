@@ -66,7 +66,8 @@ func (s *server) listCheckins(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	bad := func(msg string) { errResult(http.StatusBadRequest, msg).write(w) }
 	db := s.db.Read()
-	tx := db.Model(&dbmodels.CheckinLog{}).Where("user_id = ?", userID)
+	accessibleIDs := accessibleItemsScope(db.Model(&dbmodels.Item{}).Select("id"), userID)
+	tx := db.Model(&dbmodels.CheckinLog{}).Where("item_id IN (?)", accessibleIDs)
 	readTok := isReadToken(r)
 	if readTok {
 		// Logs of sensitive items are excluded in SQL so pagination stays exact.
@@ -175,7 +176,7 @@ func (s *server) listCheckins(w http.ResponseWriter, r *http.Request) {
 			ids = append(ids, l.ItemID)
 		}
 		var items []dbmodels.Item
-		if err := db.Where("user_id = ? AND id IN ?", userID, ids).Find(&items).Error; err != nil {
+		if err := db.Where("id IN ?", ids).Find(&items).Error; err != nil {
 			internalError(w, err, "list checkins failed")
 			return
 		}

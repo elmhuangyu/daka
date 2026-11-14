@@ -30,6 +30,10 @@ type projectResponse struct {
 	TargetDate  *string                `json:"target_date"`
 	IsSensitive bool                   `json:"is_sensitive"`
 	SortOrder   int                    `json:"sort_order"`
+	Version     int64                  `json:"version"`
+	IsOwner     bool                   `json:"is_owner"`
+	Owner       *projectUserInfo       `json:"owner,omitempty"`
+	Shares      []projectShareResponse `json:"shares"`
 	CreatedAt   time.Time              `json:"created_at"`
 	UpdatedAt   time.Time              `json:"updated_at"`
 }
@@ -46,6 +50,8 @@ func newProjectResponse(p dbmodels.Project) projectResponse {
 		TargetDate:  p.TargetDate,
 		IsSensitive: p.IsSensitive,
 		SortOrder:   p.SortOrder,
+		Version:     p.Version,
+		Shares:      []projectShareResponse{},
 		CreatedAt:   p.CreatedAt,
 		UpdatedAt:   p.UpdatedAt,
 	}
@@ -99,7 +105,24 @@ func (s *server) listProjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	tx := s.db.Read().Where("user_id = ?", userID)
+	var myShareRows []dbmodels.ProjectShare
+	if err := s.db.Read().Where("user_id = ?", userID).Find(&myShareRows).Error; err != nil {
+		internalError(w, err, "list projects failed")
+		return
+	}
+	myShares := make(map[uint]dbmodels.ProjectShare, len(myShareRows))
+	sharedIDs := make([]uint, 0, len(myShareRows))
+	for _, sh := range myShareRows {
+		myShares[sh.ProjectID] = sh
+		sharedIDs = append(sharedIDs, sh.ProjectID)
+	}
+
+	tx := s.db.Read().Model(&dbmodels.Project{})
+	if len(sharedIDs) > 0 {
+		tx = tx.Where("user_id = ? OR id IN ?", userID, sharedIDs)
+	} else {
+		tx = tx.Where("user_id = ?", userID)
+	}
 
 	if st := q.Get("status"); st != "" {
 		switch dbmodels.ProjectStatus(st) {
@@ -110,19 +133,34 @@ func (s *server) listProjects(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	var catFilter *uint
 	if v := q.Get("category_id"); v != "" {
 		cid, err := strconv.ParseUint(v, 10, 32)
 		if err != nil {
 			errResult(http.StatusBadRequest, "invalid category_id").write(w)
 			return
 		}
-		tx = tx.Where("category_id = ?", cid)
+		u := uint(cid)
+		catFilter = &u
 	}
 
 	var projs []dbmodels.Project
 	if err := tx.Order("sort_order ASC, id ASC").Find(&projs).Error; err != nil {
 		internalError(w, err, "list projects failed")
 		return
+	}
+	if catFilter != nil {
+		kept := projs[:0]
+		for _, p := range projs {
+			if p.UserID == userID {
+				if p.CategoryID != nil && *p.CategoryID == *catFilter {
+					kept = append(kept, p)
+				}
+			} else if sh, ok := myShares[p.ID]; ok && sh.CategoryID != nil && *sh.CategoryID == *catFilter {
+				kept = append(kept, p)
+			}
+		}
+		projs = kept
 	}
 
 	var isSens func(dbmodels.Project) bool
@@ -146,12 +184,10 @@ func (s *server) listProjects(w http.ResponseWriter, r *http.Request) {
 		projs = kept
 	}
 
-	out := make([]projectResponse, len(projs))
-	for i, p := range projs {
-		out[i] = newProjectResponse(p)
-		if redact && isSens(p) {
-			redactProject(&out[i])
-		}
+	out, err := enrichProjectResponses(s.db.Read(), userID, projs, myShares, redact, isSens)
+	if err != nil {
+		internalError(w, err, "list projects failed")
+		return
 	}
 	jsonResult(http.StatusOK, out).write(w)
 }
@@ -166,6 +202,7 @@ type createProjectRequest struct {
 	CategoryID  *uint                   `json:"category_id"`
 	IsSensitive *bool                   `json:"is_sensitive"`
 	SortOrder   *int                    `json:"sort_order"`
+	Version     *int64                  `json:"version"`
 }
 
 // POST /api/projects
@@ -270,6 +307,7 @@ func (s *server) postProject(w http.ResponseWriter, r *http.Request) {
 		TargetDate:  targetDate,
 		IsSensitive: isSensitive,
 		SortOrder:   sortOrder,
+		Version:     1,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -278,7 +316,12 @@ func (s *server) postProject(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err, "create project failed")
 		return
 	}
-	jsonResult(http.StatusCreated, newProjectResponse(p)).write(w)
+	enriched, err := enrichProjectResponses(s.db.Read(), userID, []dbmodels.Project{p}, nil, false, nil)
+	if err != nil {
+		internalError(w, err, "create project failed")
+		return
+	}
+	jsonResult(http.StatusCreated, enriched[0]).write(w)
 }
 
 // GET /api/projects/{id}
@@ -295,7 +338,7 @@ func (s *server) getProject(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p, found, err := loadOwnedProject(s.db.Read(), userID, id)
+	p, isOwner, sh, found, err := loadAccessibleProject(s.db.Read(), userID, id)
 	if err != nil {
 		internalError(w, err, "get project failed")
 		return
@@ -305,22 +348,28 @@ func (s *server) getProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := newProjectResponse(p)
+	var myShares map[uint]dbmodels.ProjectShare
+	if !isOwner && sh != nil {
+		myShares = map[uint]dbmodels.ProjectShare{p.ID: *sh}
+	}
+	var isSens func(dbmodels.Project) bool
 	if redact || isReadToken(r) {
-		isSens, err := projectSensitiveFn(s.db.Read(), userID)
+		isSens, err = projectSensitiveFn(s.db.Read(), p.UserID)
 		if err != nil {
 			internalError(w, err, "get project failed")
 			return
 		}
-		if isSens(p) {
-			if isReadToken(r) { // indistinguishable from a missing project
-				errResult(http.StatusNotFound, "project not found").write(w)
-				return
-			}
-			redactProject(&resp)
+		if isSens(p) && isReadToken(r) { // indistinguishable from a missing project
+			errResult(http.StatusNotFound, "project not found").write(w)
+			return
 		}
 	}
-	jsonResult(http.StatusOK, resp).write(w)
+	enriched, err := enrichProjectResponses(s.db.Read(), userID, []dbmodels.Project{p}, myShares, redact, isSens)
+	if err != nil {
+		internalError(w, err, "get project failed")
+		return
+	}
+	jsonResult(http.StatusOK, enriched[0]).write(w)
 }
 
 type patchProjectRequest struct {
@@ -333,6 +382,7 @@ type patchProjectRequest struct {
 	CategoryID  nullable[uint]          `json:"category_id"`
 	IsSensitive *bool                   `json:"is_sensitive"`
 	SortOrder   *int                    `json:"sort_order"`
+	Version     *int64                  `json:"version"`
 }
 
 // PATCH /api/projects/{id}
@@ -352,21 +402,29 @@ func (s *server) patchProject(w http.ResponseWriter, r *http.Request) {
 	confirm := r.URL.Query().Get("confirm_exposure") == "1"
 
 	res, err := s.txResult(func(tx *gorm.DB) (result, error) {
-		p, found, err := loadOwnedProject(tx, userID, id)
+		p, isOwner, sh, found, err := loadAccessibleProject(tx, userID, id)
 		if err != nil {
 			return result{}, err
 		}
 		if !found {
 			return errResult(http.StatusNotFound, "project not found"), nil
 		}
-
-		// Check sensitivity transition (DESIGN 4.1 rule 3).
-		// wasSensitive MUST be captured before mutating p.CategoryID or p.IsSensitive.
-		isSensFn, err := projectSensitiveFn(tx, userID)
-		if err != nil {
-			return result{}, err
+		if req.Version != nil && *req.Version != p.Version {
+			return errResult(http.StatusConflict, "conflict: project was modified, please refresh"), nil
 		}
-		wasSensitive := isSensFn(p)
+		if !isOwner && req.IsSensitive != nil {
+			return errResult(http.StatusForbidden, "only the project owner can change sensitivity"), nil
+		}
+
+		// Check sensitivity transition (DESIGN 4.1 rule 3) for owner only.
+		var wasSensitive bool
+		if isOwner {
+			isSensFn, err := projectSensitiveFn(tx, userID)
+			if err != nil {
+				return result{}, err
+			}
+			wasSensitive = isSensFn(p)
+		}
 
 		if req.Name != nil {
 			n := strings.TrimSpace(*req.Name)
@@ -418,73 +476,109 @@ func (s *server) patchProject(w http.ResponseWriter, r *http.Request) {
 
 		var targetCat *dbmodels.Category
 		if req.CategoryID.Set {
-			if req.CategoryID.Null {
-				p.CategoryID = nil
-			} else {
-				cat, found, err := loadOwnedCategory(tx, userID, req.CategoryID.Val)
+			if isOwner {
+				if req.CategoryID.Null {
+					p.CategoryID = nil
+				} else {
+					cat, found, err := loadOwnedCategory(tx, userID, req.CategoryID.Val)
+					if err != nil {
+						return result{}, err
+					}
+					if !found {
+						return errResult(http.StatusBadRequest, "invalid category"), nil
+					}
+					cid := req.CategoryID.Val
+					p.CategoryID = &cid
+					targetCat = &cat
+				}
+			} else if sh != nil {
+				// Collaborators set their own personal category on ProjectShare.
+				if req.CategoryID.Null {
+					sh.CategoryID = nil
+				} else {
+					cat, found, err := loadOwnedCategory(tx, userID, req.CategoryID.Val)
+					if err != nil {
+						return result{}, err
+					}
+					if !found {
+						return errResult(http.StatusBadRequest, "invalid category"), nil
+					}
+					if cat.IsSensitive {
+						return errResult(http.StatusBadRequest, "shared projects cannot be placed in a sensitive category"), nil
+					}
+					cid := req.CategoryID.Val
+					sh.CategoryID = &cid
+				}
+				if err := tx.Save(sh).Error; err != nil {
+					return result{}, err
+				}
+			}
+		}
+
+		if isOwner {
+			targetSensitive := p.IsSensitive
+			if req.IsSensitive != nil {
+				targetSensitive = *req.IsSensitive
+			}
+
+			targetCatSensitive := false
+			if p.CategoryID != nil {
+				if targetCat != nil && targetCat.ID == *p.CategoryID {
+					targetCatSensitive = targetCat.IsSensitive
+				} else {
+					var n int64
+					if err := tx.Model(&dbmodels.Category{}).Where("id = ? AND user_id = ? AND is_sensitive = ?", *p.CategoryID, userID, true).Count(&n).Error; err != nil {
+						return result{}, err
+					}
+					targetCatSensitive = n > 0
+				}
+			}
+
+			// DESIGN 4.1 rule 1: inheriting sensitivity from category
+			if targetCatSensitive {
+				targetSensitive = true
+			}
+
+			willBeSensitive := targetSensitive || targetCatSensitive
+			if willBeSensitive {
+				sc, err := projectShareCount(tx, p.ID)
 				if err != nil {
 					return result{}, err
 				}
-				if !found {
-					return errResult(http.StatusBadRequest, "invalid category"), nil
+				if sc > 0 {
+					return errResult(http.StatusBadRequest, "shared projects cannot be marked sensitive"), nil
 				}
-				cid := req.CategoryID.Val
-				p.CategoryID = &cid
-				targetCat = &cat
 			}
-		}
 
-		targetSensitive := p.IsSensitive
-		if req.IsSensitive != nil {
-			targetSensitive = *req.IsSensitive
-		}
-
-		targetCatSensitive := false
-		if p.CategoryID != nil {
-			if targetCat != nil && targetCat.ID == *p.CategoryID {
-				targetCatSensitive = targetCat.IsSensitive
-			} else {
-				var n int64
-				if err := tx.Model(&dbmodels.Category{}).Where("id = ? AND user_id = ? AND is_sensitive = ?", *p.CategoryID, userID, true).Count(&n).Error; err != nil {
+			if wasSensitive && !willBeSensitive {
+				// Lock items of the project first to maintain lock ordering (items before projects)
+				// and prevent deadlocks with category operations that lock items then projects.
+				if err := lockProjectItems(tx, userID, p.ID); err != nil {
 					return result{}, err
 				}
-				targetCatSensitive = n > 0
-			}
-		}
-
-		// DESIGN 4.1 rule 1: inheriting sensitivity from category
-		if targetCatSensitive {
-			targetSensitive = true
-		}
-
-		willBeSensitive := targetSensitive || targetCatSensitive
-
-		if wasSensitive && !willBeSensitive {
-			// Lock items of the project first to maintain lock ordering (items before projects)
-			// and prevent deadlocks with category operations that lock items then projects.
-			if err := lockProjectItems(tx, userID, p.ID); err != nil {
-				return result{}, err
-			}
-			if !confirm {
-				if err := tx.Model(&dbmodels.Item{}).Where("user_id = ? AND project_id = ? AND is_sensitive = ?", userID, p.ID, false).
-					Update("is_sensitive", true).Error; err != nil {
-					return result{}, err
+				if !confirm {
+					if err := tx.Model(&dbmodels.Item{}).Where("user_id = ? AND project_id = ? AND is_sensitive = ?", userID, p.ID, false).
+						Update("is_sensitive", true).Error; err != nil {
+						return result{}, err
+					}
 				}
 			}
+
+			p.IsSensitive = targetSensitive
 		}
 
-		p.IsSensitive = targetSensitive
 		if req.SortOrder != nil {
 			p.SortOrder = *req.SortOrder
 		}
+		p.Version++
 		p.UpdatedAt = s.now().UTC()
 
 		if err := tx.Save(&p).Error; err != nil {
 			return result{}, err
 		}
 
-		// Items already in the project that have no category follow the project's.
-		if req.CategoryID.Set && p.CategoryID != nil {
+		// Items already in the project that have no category follow the owner's project category.
+		if isOwner && req.CategoryID.Set && p.CategoryID != nil {
 			if err := tx.Model(&dbmodels.Item{}).Where("user_id = ? AND project_id = ? AND category_id IS NULL", userID, p.ID).
 				Update("category_id", *p.CategoryID).Error; err != nil {
 				return result{}, err
@@ -494,7 +588,15 @@ func (s *server) patchProject(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		return jsonResult(http.StatusOK, newProjectResponse(p)), nil
+		var myShares map[uint]dbmodels.ProjectShare
+		if !isOwner && sh != nil {
+			myShares = map[uint]dbmodels.ProjectShare{p.ID: *sh}
+		}
+		enriched, err := enrichProjectResponses(tx, userID, []dbmodels.Project{p}, myShares, false, nil)
+		if err != nil {
+			return result{}, err
+		}
+		return jsonResult(http.StatusOK, enriched[0]), nil
 	})
 	if err != nil {
 		internalError(w, err, "update project failed")
@@ -524,12 +626,15 @@ func (s *server) deleteProject(w http.ResponseWriter, r *http.Request) {
 
 	var deletedItemIDs []uint
 	res, err := s.txResult(func(tx *gorm.DB) (result, error) {
-		p, found, err := loadOwnedProject(tx, userID, id)
+		p, isOwner, _, found, err := loadAccessibleProject(tx, userID, id)
 		if err != nil {
 			return result{}, err
 		}
 		if !found {
 			return errResult(http.StatusNotFound, "project not found"), nil
+		}
+		if !isOwner {
+			return errResult(http.StatusForbidden, "only the project owner can delete a project"), nil
 		}
 
 		if err := lockProjectItems(tx, userID, id); err != nil {
@@ -570,7 +675,7 @@ func (s *server) deleteProject(w http.ResponseWriter, r *http.Request) {
 				return result{}, err
 			}
 			if len(deletedItemIDs) > 0 {
-				if err := tx.Where("user_id = ? AND item_id IN ?", userID, deletedItemIDs).Delete(&dbmodels.CheckinLog{}).Error; err != nil {
+				if err := tx.Where("item_id IN ?", deletedItemIDs).Delete(&dbmodels.CheckinLog{}).Error; err != nil {
 					return result{}, err
 				}
 				if err := tx.Where("item_id IN ?", deletedItemIDs).Delete(&dbmodels.ItemRuleVersion{}).Error; err != nil {
@@ -588,6 +693,9 @@ func (s *server) deleteProject(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		if err := tx.Where("project_id = ?", p.ID).Delete(&dbmodels.ProjectShare{}).Error; err != nil {
+			return result{}, err
+		}
 		if err := tx.Where("id = ? AND user_id = ?", p.ID, userID).Delete(&dbmodels.Project{}).Error; err != nil {
 			return result{}, err
 		}

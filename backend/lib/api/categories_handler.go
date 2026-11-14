@@ -199,6 +199,20 @@ func (s *server) putCategory(w http.ResponseWriter, r *http.Request) {
 			return errResult(http.StatusNotFound, "category not found"), nil
 		}
 		var affected *int64
+		if req.IsSensitive != nil && !c.IsSensitive && *req.IsSensitive {
+			var sharedOwned int64
+			ownedProjIDs := tx.Model(&dbmodels.Project{}).Select("id").Where("user_id = ? AND category_id = ?", userID, id)
+			if err := tx.Model(&dbmodels.ProjectShare{}).Where("project_id IN (?)", ownedProjIDs).Count(&sharedOwned).Error; err != nil {
+				return result{}, err
+			}
+			var sharedReceived int64
+			if err := tx.Model(&dbmodels.ProjectShare{}).Where("user_id = ? AND category_id = ?", userID, id).Count(&sharedReceived).Error; err != nil {
+				return result{}, err
+			}
+			if sharedOwned > 0 || sharedReceived > 0 {
+				return errResult(http.StatusBadRequest, "cannot mark category sensitive while it contains shared projects"), nil
+			}
+		}
 		if req.IsSensitive != nil && c.IsSensitive && !*req.IsSensitive {
 			if err := lockCategoryItems(tx, userID, id); err != nil {
 				return result{}, err
@@ -324,6 +338,14 @@ func (s *server) deleteCategory(w http.ResponseWriter, r *http.Request) {
 				Update("category_id", moveTo).Error; err != nil {
 				return result{}, err
 			}
+		}
+		shareMoveTo := moveTo
+		if moveTo != nil && target.IsSensitive {
+			shareMoveTo = nil
+		}
+		if err := tx.Model(&dbmodels.ProjectShare{}).Where("user_id = ? AND category_id = ?", userID, id).
+			Update("category_id", shareMoveTo).Error; err != nil {
+			return result{}, err
 		}
 		if moveTo != nil {
 			if err := tx.Model(&dbmodels.ApiToken{}).Where("user_id = ? AND category_id = ?", userID, id).

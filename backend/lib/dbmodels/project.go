@@ -22,6 +22,7 @@ type Project struct {
 	TargetDate  *string       `gorm:"size:10"` // YYYY-MM-DD
 	IsSensitive bool          `gorm:"not null;default:false"`
 	SortOrder   int           `gorm:"not null;default:0"`
+	Version     int64         `gorm:"not null;default:1"`
 	CreatedAt   time.Time     `gorm:"not null"`
 	UpdatedAt   time.Time     `gorm:"not null"`
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import EmojiPicker from '../components/EmojiPicker.vue'
@@ -54,6 +54,24 @@ const showDeleteModal = ref(false)
 const deleteMode = ref<'unlink' | 'cascade'>('unlink')
 const deleting = ref(false)
 const deleteError = ref('')
+
+// Share Project Modal State
+const showShareModal = ref(false)
+const shareEmail = ref('')
+const shareSaving = ref(false)
+const shareError = ref('')
+const unsharingId = ref<string | null>(null)
+
+// Leave Shared Project Modal State
+const showLeaveModal = ref(false)
+const leaving = ref(false)
+const leaveError = ref('')
+
+const editableCategories = computed(() =>
+  project.value?.is_owner === false
+    ? categories.value.filter((c) => !c.is_sensitive)
+    : categories.value,
+)
 
 // Quick Add Task State
 const newTaskName = ref('')
@@ -243,13 +261,21 @@ function goBack() {
 async function updateStatus(newStatus: ProjectStatus) {
   if (!project.value) return
   try {
-    const updated = await projectsStore.updateProject(project.value.id, { status: newStatus })
+    const updated = await projectsStore.updateProject(project.value.id, {
+      status: newStatus,
+      version: project.value.version,
+    })
     if (privacy.redact) {
       await loadProject()
     } else {
       project.value = updated
     }
   } catch (e) {
+    if (e instanceof api.ApiError && e.status === 409) {
+      error.value = t('projects.conflictRefresh')
+      await loadProject()
+      return
+    }
     error.value = api.describeError(e)
   }
 }
@@ -296,7 +322,10 @@ async function handleSaveEdit() {
       emoji: editForm.emoji,
       category_id: editForm.category_id,
       target_date: editForm.target_date || null,
-      is_sensitive: editForm.is_sensitive,
+      version: project.value.version,
+    }
+    if (project.value.is_owner !== false) {
+      req.is_sensitive = editForm.is_sensitive
     }
     const updated = await projectsStore.updateProject(project.value.id, req)
     if (privacy.redact) {
@@ -306,6 +335,11 @@ async function handleSaveEdit() {
     }
     closeEditModal()
   } catch (e) {
+    if (e instanceof api.ApiError && e.status === 409) {
+      editError.value = t('projects.conflictRefresh')
+      await loadProject()
+      return
+    }
     editError.value = api.describeError(e)
   } finally {
     editSaving.value = false
@@ -771,6 +805,99 @@ function taskDueDate(task: ItemDetail): string | null {
   }
   return null
 }
+
+// Share / Unshare / Leave handlers
+function openShareModal() {
+  shareEmail.value = ''
+  shareError.value = ''
+  showShareModal.value = true
+  void nextTick(() =>
+    document.querySelector<HTMLInputElement>('[data-testid="input-share-email"]')?.focus(),
+  )
+}
+
+function closeShareModal() {
+  showShareModal.value = false
+  shareError.value = ''
+}
+
+async function handleShareProject() {
+  if (!project.value) return
+  const email = shareEmail.value.trim()
+  if (!email) return
+  shareSaving.value = true
+  shareError.value = ''
+  try {
+    const updated = await projectsStore.shareProject(project.value.id, email)
+    project.value = updated
+    shareEmail.value = ''
+  } catch (e) {
+    shareError.value = api.describeError(e)
+  } finally {
+    shareSaving.value = false
+  }
+}
+
+async function handleUnshare(userId: string) {
+  if (!project.value) return
+  unsharingId.value = userId
+  shareError.value = ''
+  try {
+    const res = await projectsStore.unshareProject(project.value.id, userId)
+    if ('id' in res) {
+      project.value = res
+    }
+  } catch (e) {
+    shareError.value = api.describeError(e)
+  } finally {
+    unsharingId.value = null
+  }
+}
+
+function openLeaveModal() {
+  leaveError.value = ''
+  showLeaveModal.value = true
+}
+
+function closeLeaveModal() {
+  showLeaveModal.value = false
+  leaveError.value = ''
+}
+
+async function handleLeaveProject() {
+  if (!project.value) return
+  leaving.value = true
+  leaveError.value = ''
+  try {
+    await projectsStore.unshareProject(project.value.id, 'me')
+    closeLeaveModal()
+    router.push('/projects')
+  } catch (e) {
+    leaveError.value = api.describeError(e)
+  } finally {
+    leaving.value = false
+  }
+}
+
+function onVisibilityChange() {
+  if (
+    document.visibilityState === 'visible' &&
+    !showEditModal.value &&
+    !showDeleteModal.value &&
+    !showShareModal.value &&
+    !showLeaveModal.value
+  ) {
+    void loadProject()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
 </script>
 
 <template>
@@ -849,6 +976,24 @@ function taskDueDate(task: ItemDetail): string | null {
                   <Icon icon="lucide:lock" class="size-3 text-warning" />
                   <span>{{ t('projects.sensitive') }}</span>
                 </span>
+
+                <!-- Shared Badge -->
+                <span
+                  v-if="project.is_owner === false || (project.shares && project.shares.length > 0)"
+                  class="badge badge-info/20 text-info gap-1 text-xs py-2.5 px-2.5"
+                  data-testid="project-shared-badge"
+                >
+                  <Icon icon="lucide:users" class="size-3" />
+                  <span v-if="project.is_owner === false && project.owner">
+                    {{
+                      t('projects.sharedBy', { name: project.owner.name || project.owner.email })
+                    }}
+                  </span>
+                  <span v-else>
+                    {{ t('projects.sharedWith') }}:
+                    {{ project.shares?.map((s) => s.name || s.email).join(', ') }}
+                  </span>
+                </span>
               </div>
 
               <!-- Description -->
@@ -907,6 +1052,22 @@ function taskDueDate(task: ItemDetail): string | null {
                 <span>{{ t('projects.archive') }}</span>
               </button>
 
+              <!-- Share (owner only) -->
+              <button
+                v-if="project.is_owner !== false"
+                type="button"
+                class="btn btn-sm btn-ghost gap-1.5 text-base-content/70 hover:text-primary"
+                :disabled="project.is_sensitive"
+                :title="
+                  project.is_sensitive ? t('projects.sensitiveCannotShare') : t('projects.share')
+                "
+                data-testid="btn-share-project"
+                @click="openShareModal"
+              >
+                <Icon icon="lucide:share-2" class="size-4" />
+                <span>{{ t('projects.share') }}</span>
+              </button>
+
               <!-- Edit -->
               <button
                 type="button"
@@ -918,8 +1079,21 @@ function taskDueDate(task: ItemDetail): string | null {
                 <span>{{ t('projects.edit') }}</span>
               </button>
 
-              <!-- Delete -->
+              <!-- Leave (collaborator only) -->
               <button
+                v-if="project.is_owner === false"
+                type="button"
+                class="btn btn-sm btn-ghost gap-1.5 text-warning hover:bg-warning/10"
+                data-testid="btn-leave-project"
+                @click="openLeaveModal"
+              >
+                <Icon icon="lucide:log-out" class="size-4" />
+                <span>{{ t('projects.leave') }}</span>
+              </button>
+
+              <!-- Delete (owner only) -->
+              <button
+                v-if="project.is_owner !== false"
                 type="button"
                 class="btn btn-sm btn-ghost gap-1.5 text-error hover:bg-error/10"
                 data-testid="btn-delete-project"
@@ -1380,7 +1554,7 @@ function taskDueDate(task: ItemDetail): string | null {
                 data-testid="select-edit-project-category"
               >
                 <option :value="null">{{ t('projects.noCategory') }}</option>
-                <option v-for="c in categories" :key="c.id" :value="c.id">
+                <option v-for="c in editableCategories" :key="c.id" :value="c.id">
                   {{ c.name }}
                 </option>
               </select>
@@ -1398,13 +1572,14 @@ function taskDueDate(task: ItemDetail): string | null {
               />
             </div>
 
-            <!-- Sensitive Toggle -->
-            <div class="form-control pt-1">
+            <!-- Sensitive Toggle (owner only) -->
+            <div v-if="project.is_owner !== false" class="form-control pt-1">
               <label class="label cursor-pointer justify-start gap-3 py-1">
                 <input
                   v-model="editForm.is_sensitive"
                   type="checkbox"
                   class="checkbox checkbox-primary checkbox-sm"
+                  :disabled="(project.shares?.length ?? 0) > 0"
                   data-testid="input-edit-project-sensitive"
                 />
                 <span class="label-text font-medium flex items-center gap-1.5">
@@ -1412,6 +1587,9 @@ function taskDueDate(task: ItemDetail): string | null {
                   {{ t('projects.sensitive') }}
                 </span>
               </label>
+              <p v-if="(project.shares?.length ?? 0) > 0" class="text-xs text-base-content/60 pl-7">
+                {{ t('projects.sharedCannotBeSensitive') }}
+              </p>
             </div>
 
             <!-- Dialog Actions -->
@@ -1519,6 +1697,143 @@ function taskDueDate(task: ItemDetail): string | null {
           </div>
         </div>
         <div class="modal-backdrop bg-black/40" @click="closeDeleteModal" />
+      </div>
+
+      <!-- Share Project Modal -->
+      <div
+        v-if="showShareModal"
+        class="modal modal-open"
+        role="dialog"
+        aria-modal="true"
+        data-testid="modal-share-project"
+        @keydown.esc.prevent="closeShareModal"
+      >
+        <div class="modal-box max-w-md p-6 space-y-4">
+          <div class="flex items-center justify-between pb-2 border-b border-base-200">
+            <h3 class="text-lg font-bold flex items-center gap-2">
+              <Icon icon="lucide:users" class="size-5 text-primary" />
+              <span>{{ t('projects.shareTitle') }}</span>
+            </h3>
+            <button type="button" class="btn btn-sm btn-ghost btn-circle" @click="closeShareModal">
+              <Icon icon="lucide:x" class="size-4" />
+            </button>
+          </div>
+
+          <div
+            v-if="shareError"
+            class="alert alert-error text-xs shadow-xs py-2"
+            data-testid="share-error"
+          >
+            <span>{{ shareError }}</span>
+          </div>
+
+          <form class="flex gap-2" @submit.prevent="handleShareProject">
+            <input
+              v-model="shareEmail"
+              type="email"
+              class="input input-bordered input-sm flex-1"
+              :placeholder="t('projects.shareEmailPlaceholder')"
+              data-testid="input-share-email"
+              required
+            />
+            <button
+              type="submit"
+              class="btn btn-primary btn-sm"
+              :disabled="shareSaving || !shareEmail.trim()"
+              data-testid="btn-confirm-share"
+            >
+              <span v-if="shareSaving" class="loading loading-spinner loading-xs" />
+              <span>{{ t('projects.shareAdd') }}</span>
+            </button>
+          </form>
+
+          <div class="space-y-2 pt-2">
+            <p class="text-xs font-medium text-base-content/70">{{ t('projects.sharedWith') }}</p>
+            <p
+              v-if="!project.shares || project.shares.length === 0"
+              class="text-sm text-base-content/50 py-2"
+              data-testid="no-shares-text"
+            >
+              {{ t('projects.noShares') }}
+            </p>
+            <ul v-else class="divide-y divide-base-200" data-testid="shares-list">
+              <li
+                v-for="sh in project.shares"
+                :key="sh.user_id"
+                class="flex items-center justify-between py-2 gap-2"
+                :data-testid="`share-row-${sh.user_id}`"
+              >
+                <div class="min-w-0">
+                  <p class="text-sm font-medium truncate">{{ sh.name || sh.email }}</p>
+                  <p v-if="sh.name && sh.email" class="text-xs text-base-content/60 truncate">
+                    {{ sh.email }}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-xs btn-ghost text-error hover:bg-error/10 shrink-0"
+                  :disabled="unsharingId === sh.user_id"
+                  :data-testid="`btn-unshare-${sh.user_id}`"
+                  @click="handleUnshare(sh.user_id)"
+                >
+                  <span
+                    v-if="unsharingId === sh.user_id"
+                    class="loading loading-spinner loading-xs"
+                  />
+                  <span>{{ t('projects.unshare') }}</span>
+                </button>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="modal-backdrop bg-black/40" @click="closeShareModal" />
+      </div>
+
+      <!-- Leave Shared Project Modal -->
+      <div
+        v-if="showLeaveModal"
+        class="modal modal-open"
+        role="dialog"
+        aria-modal="true"
+        data-testid="modal-leave-project"
+        @keydown.esc.prevent="closeLeaveModal"
+      >
+        <div class="modal-box max-w-md p-6 space-y-4">
+          <div class="flex items-center justify-between pb-2 border-b border-base-200">
+            <h3 class="text-lg font-bold flex items-center gap-2 text-warning">
+              <Icon icon="lucide:log-out" class="size-5" />
+              <span>{{ t('projects.leave') }}</span>
+            </h3>
+            <button type="button" class="btn btn-sm btn-ghost btn-circle" @click="closeLeaveModal">
+              <Icon icon="lucide:x" class="size-4" />
+            </button>
+          </div>
+
+          <div v-if="leaveError" class="alert alert-error text-xs shadow-xs py-2">
+            <span>{{ leaveError }}</span>
+          </div>
+
+          <p class="text-sm text-base-content/80">
+            {{ t('projects.leaveConfirm') }}
+          </p>
+
+          <div class="modal-action pt-4 border-t border-base-200">
+            <button type="button" class="btn btn-ghost" @click="closeLeaveModal">
+              {{ t('common.cancel') }}
+            </button>
+            <button
+              type="button"
+              class="btn btn-warning gap-2"
+              :disabled="leaving"
+              data-testid="btn-confirm-leave-project"
+              @click="handleLeaveProject"
+            >
+              <span v-if="leaving" class="loading loading-spinner loading-xs" />
+              <span>{{ t('projects.leave') }}</span>
+            </button>
+          </div>
+        </div>
+        <div class="modal-backdrop bg-black/40" @click="closeLeaveModal" />
       </div>
     </template>
   </div>

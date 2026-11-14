@@ -1,7 +1,6 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -49,20 +48,19 @@ func (s *server) getItemStats(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) itemStats(userID string, itemID uint, redact, hideSensitive bool) (result, error) {
 	db := s.db.Read()
-	var item dbmodels.Item
-	err := db.Where("id = ? AND user_id = ?", itemID, userID).Take(&item).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return errResult(http.StatusNotFound, "item not found"), nil
-	}
+	item, _, found, err := loadAccessibleItem(db, userID, itemID)
 	if err != nil {
 		return result{}, err
+	}
+	if !found {
+		return errResult(http.StatusNotFound, "item not found"), nil
 	}
 	val, err := s.cachedStats(db, userID, item)
 	if err != nil {
 		return result{}, err
 	}
 
-	sens, err := sensitiveFn(db, userID)
+	sens, err := sensitiveFn(db, item.UserID)
 	if err != nil {
 		return result{}, err
 	}
@@ -122,7 +120,7 @@ func (s *server) cachedStats(db *gorm.DB, userID string, item dbmodels.Item) (st
 		if err := db.Where("item_id = ?", itemID).Order("sort_order, id").Find(&in.Options).Error; err != nil {
 			return stats.Stats{}, err
 		}
-		if err := db.Where("item_id = ? AND user_id = ?", itemID, userID).Find(&in.Logs).Error; err != nil {
+		if err := db.Where("item_id = ?", itemID).Find(&in.Logs).Error; err != nil {
 			return stats.Stats{}, err
 		}
 		if err := db.Where("user_id = ?", userID).Find(&in.Freezes).Error; err != nil {

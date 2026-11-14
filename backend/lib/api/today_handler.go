@@ -115,7 +115,7 @@ func (s *server) today(db *gorm.DB, userID string, requestedDate string, redact,
 	}
 
 	var items []dbmodels.Item
-	if err := db.Where("user_id = ? AND archived = ?", userID, false).
+	if err := accessibleItemsScope(db.Where("archived = ?", false), userID).
 		Order("sort_order, id").Find(&items).Error; err != nil {
 		return nil, err
 	}
@@ -138,7 +138,7 @@ func (s *server) today(db *gorm.DB, userID string, requestedDate string, redact,
 	}
 
 	var logs []dbmodels.CheckinLog
-	if err := db.Where("user_id = ? AND checkin_date = ? AND item_id IN ?", userID, date, ids).
+	if err := db.Where("checkin_date = ? AND item_id IN ?", date, ids).
 		Order("id").Find(&logs).Error; err != nil {
 		return nil, err
 	}
@@ -190,7 +190,7 @@ func (s *server) today(db *gorm.DB, userID string, requestedDate string, redact,
 				lastDue := pastDates[len(pastDates)-1]
 				var logCount int64
 				if err := db.Model(&dbmodels.CheckinLog{}).
-					Where("user_id = ? AND item_id = ? AND checkin_date >= ?", userID, it.ID, pastDates[0]).
+					Where("item_id = ? AND checkin_date >= ?", it.ID, pastDates[0]).
 					Count(&logCount).Error; err == nil {
 					if logCount == 0 {
 						due = true
@@ -205,7 +205,7 @@ func (s *server) today(db *gorm.DB, userID string, requestedDate string, redact,
 			// If an event is due on this date, but has no logs on this date, check if it was completed on a later date.
 			if due && !hasLogsToday {
 				var l dbmodels.CheckinLog
-				if err := db.Where("user_id = ? AND item_id = ? AND checkin_date >= ?", userID, it.ID, date).
+				if err := db.Where("item_id = ? AND checkin_date >= ?", it.ID, date).
 					Order("checkin_date ASC, id ASC").First(&l).Error; err == nil {
 					eventCompletedLog = &l
 				}

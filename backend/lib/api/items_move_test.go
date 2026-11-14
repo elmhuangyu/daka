@@ -107,9 +107,9 @@ func TestMoveResponseShape(t *testing.T) {
 	k := e.kids("u1", nil, nil, 0, 0)
 	w := e.moveItem("u1", k[0], "", m{"after_id": k[1]})
 	require.Equal(t, 200, w.Code)
-	p := e.patchItem("u1", k[0], "", m{})
-	require.Equal(t, 200, p.Code)
-	require.JSONEq(t, p.Body.String(), w.Body.String())
+	g := e.doRaw("GET", fmt.Sprintf("/api/items/%d", k[0]), "u1", "")
+	require.Equal(t, 200, g.Code)
+	require.JSONEq(t, g.Body.String(), w.Body.String())
 }
 
 func TestMoveAcrossParents(t *testing.T) {

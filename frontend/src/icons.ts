@@ -133,6 +133,12 @@ const ICONS: Record<string, string> = {
   'lucide:unlink': wrap(
     '<path d="m18.84 12.25 1.72-1.71a4.5 4.5 0 0 0-6.36-6.36l-1.72 1.71"/><path d="m5.16 11.75-1.72 1.71a4.5 4.5 0 0 0 6.36 6.36l1.72-1.71"/><line x1="2" x2="22" y1="2" y2="22"/>',
   ),
+  'lucide:users': wrap(
+    '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  ),
+  'lucide:share-2': wrap(
+    '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/>',
+  ),
 }
 
 for (const [name, body] of Object.entries(ICONS)) addIcon(name, { body, width: 24, height: 24 })

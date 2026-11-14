@@ -14,6 +14,7 @@ func AllModels() []any {
 		&UserSettings{},
 		&Category{},
 		&Project{},
+		&ProjectShare{},
 		&Item{},
 		&ItemOption{},
 		&ItemRuleVersion{},
@@ -36,6 +37,7 @@ func UserOwnedTables() []any {
 		&UserSettings{},
 		&Category{},
 		&Project{},
+		&ProjectShare{},
 		&Item{},
 		&CheckinLog{},
 		&FreezePeriod{},
@@ -70,6 +72,10 @@ func DeleteUserData(tx *gorm.DB, userID string) error {
 		if err := tx.Where("item_id IN (?)", items).Delete(m).Error; err != nil {
 			return fmt.Errorf("delete %T: %w", m, err)
 		}
+	}
+	projects := tx.Model(&Project{}).Select("id").Where("user_id = ?", userID)
+	if err := tx.Where("project_id IN (?)", projects).Delete(&ProjectShare{}).Error; err != nil {
+		return fmt.Errorf("delete %T by project: %w", &ProjectShare{}, err)
 	}
 	for _, m := range UserOwnedTables() {
 		if err := tx.Where("user_id = ?", userID).Delete(m).Error; err != nil {

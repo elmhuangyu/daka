@@ -451,7 +451,7 @@ func (s *server) loadCalendarData(db *gorm.DB, userID, start, end, today string,
 		logs: map[uint]map[string][]dbmodels.CheckinLog{}, rollingDates: map[uint][]string{},
 		eventLogs: map[uint][]dbmodels.CheckinLog{},
 	}
-	q := db.Where("user_id = ?", userID)
+	q := accessibleItemsScope(db.Model(&dbmodels.Item{}), userID)
 	if onlyItem != 0 {
 		q = q.Where("id = ?", onlyItem) // an explicitly requested item may be archived
 	} else {
@@ -482,7 +482,7 @@ func (s *server) loadCalendarData(db *gorm.DB, userID, start, end, today string,
 	}
 	if len(eventIDs) > 0 {
 		var evLogs []dbmodels.CheckinLog
-		if err := db.Where("user_id = ? AND item_id IN ?", userID, eventIDs).
+		if err := db.Where("item_id IN ?", eventIDs).
 			Order("checkin_date ASC, id ASC").Find(&evLogs).Error; err != nil {
 			return nil, err
 		}
@@ -504,7 +504,7 @@ func (s *server) loadCalendarData(db *gorm.DB, userID, start, end, today string,
 		d.options[o.ItemID] = append(d.options[o.ItemID], o)
 	}
 	var logs []dbmodels.CheckinLog
-	if err := db.Where("user_id = ? AND item_id IN ? AND checkin_date >= ? AND checkin_date <= ?", userID, ids, start, end).
+	if err := db.Where("item_id IN ? AND checkin_date >= ? AND checkin_date <= ?", ids, start, end).
 		Order("id").Find(&logs).Error; err != nil {
 		return nil, err
 	}
@@ -520,7 +520,7 @@ func (s *server) loadCalendarData(db *gorm.DB, userID, start, end, today string,
 			CheckinDate string
 		}
 		if err := db.Model(&dbmodels.CheckinLog{}).Select("item_id, checkin_date").
-			Where("user_id = ? AND item_id IN ?", userID, rolling).Group("item_id, checkin_date").Scan(&rows).Error; err != nil {
+			Where("item_id IN ?", rolling).Group("item_id, checkin_date").Scan(&rows).Error; err != nil {
 			return nil, err
 		}
 		for _, r := range rows {

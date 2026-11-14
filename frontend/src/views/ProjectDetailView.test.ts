@@ -115,6 +115,34 @@ beforeEach(() => {
       Object.assign(currentProject, b)
       return jsonRes(currentProject)
     }
+    if (url === '/api/projects/1/shares' && method === 'POST') {
+      const b = calls.at(-1)!.body as { email: string }
+      currentProject = {
+        ...currentProject,
+        shares: [
+          ...(currentProject.shares ?? []),
+          {
+            user_id: 'u2',
+            email: b.email,
+            name: 'Bob',
+            avatar_url: '',
+            created_at: '2026-11-10T00:00:00Z',
+          },
+        ],
+      }
+      return jsonRes(currentProject)
+    }
+    if (url.startsWith('/api/projects/1/shares/') && method === 'DELETE') {
+      const target = url.split('/').pop()
+      if (target === 'me') {
+        return jsonRes({ unshared: true })
+      }
+      currentProject = {
+        ...currentProject,
+        shares: (currentProject.shares ?? []).filter((s) => s.user_id !== target),
+      }
+      return jsonRes(currentProject)
+    }
     if (url.startsWith('/api/projects/1') && method === 'DELETE') {
       return jsonRes({ deleted: true })
     }
@@ -1468,5 +1496,65 @@ describe('ProjectDetailView keyboard', () => {
     helpOpen.value = false
     help.unmount()
     w.unmount()
+  })
+})
+
+describe('Project sharing', () => {
+  it('owner can share by email, see who it is shared with, and unshare', async () => {
+    currentProject = sampleProject({ is_owner: true, shares: [] })
+    const { w: wrapper } = await mountDetail()
+
+    await wrapper.get('[data-testid="btn-share-project"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="modal-share-project"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="no-shares-text"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="input-share-email"]').setValue('bob@example.com')
+    await wrapper.get('[data-testid="modal-share-project"] form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="share-row-u2"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="project-shared-badge"]').text()).toContain('Bob')
+
+    await wrapper.get('[data-testid="btn-unshare-u2"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="share-row-u2"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="no-shares-text"]').exists()).toBe(true)
+  })
+
+  it('disables share button for sensitive projects', async () => {
+    currentProject = sampleProject({ is_owner: true, is_sensitive: true, shares: [] })
+    const { w: wrapper } = await mountDetail()
+
+    const shareBtn = wrapper.get('[data-testid="btn-share-project"]')
+    expect((shareBtn.element as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('collaborator sees shared badge and leave button, not share or delete, and can leave', async () => {
+    currentProject = sampleProject({
+      is_owner: false,
+      owner: { id: 'u1', email: 'alice@example.com', name: 'Alice', avatar_url: '' },
+      shares: [
+        { user_id: 'u2', email: 'bob@example.com', name: 'Bob', avatar_url: '', created_at: '' },
+      ],
+    })
+    const { w: wrapper, router } = await mountDetail()
+
+    expect(wrapper.find('[data-testid="btn-share-project"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="btn-delete-project"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="project-shared-badge"]').text()).toContain('Alice')
+
+    await wrapper.get('[data-testid="btn-leave-project"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="modal-leave-project"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="btn-confirm-leave-project"]').trigger('click')
+    await flushPromises()
+
+    expect(calls.some((c) => c.method === 'DELETE' && c.url === '/api/projects/1/shares/me')).toBe(
+      true,
+    )
+    expect(router.currentRoute.value.path).toBe('/projects')
   })
 })

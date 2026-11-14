@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import EmojiPicker from '../components/EmojiPicker.vue'
@@ -115,8 +115,19 @@ async function loadData() {
   await Promise.all([projectsStore.fetchProjects(), loadCategories()])
 }
 
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    void loadData()
+  }
+}
+
 onMounted(() => {
   loadData()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 
 watch(
@@ -355,6 +366,22 @@ useShortcut([
             </h2>
 
             <div class="flex items-center gap-1.5">
+              <span
+                v-if="p.is_owner === false || (p.shares && p.shares.length > 0)"
+                class="badge badge-xs badge-info/20 text-info gap-1 text-[11px] py-2 px-2"
+                :title="
+                  p.is_owner === false && p.owner
+                    ? t('projects.sharedBy', { name: p.owner.name || p.owner.email })
+                    : t('projects.shared')
+                "
+                data-testid="project-shared-badge"
+              >
+                <Icon icon="lucide:users" class="size-3" />
+                <span v-if="p.is_owner === false && p.owner">
+                  {{ t('projects.sharedBy', { name: p.owner.name || p.owner.email }) }}
+                </span>
+                <span v-else> {{ t('projects.shared') }} ({{ p.shares?.length ?? 0 }}) </span>
+              </span>
               <span
                 v-if="p.is_sensitive"
                 class="badge badge-xs badge-neutral gap-1 text-[11px] py-2 px-2"

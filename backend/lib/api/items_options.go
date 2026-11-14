@@ -52,7 +52,7 @@ func (s *server) listOptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db := s.db.Read()
-	item, found, err := loadOwnedItem(db, userID, id)
+	item, _, found, err := loadAccessibleItem(db, userID, id)
 	if err != nil {
 		internalError(w, err, "list options failed")
 		return
@@ -114,7 +114,7 @@ type optionCtx struct {
 // today and the current rule; user state_version is bumped on success.
 func (s *server) optionTx(userID string, itemID uint, fn func(c *optionCtx) (result, error)) (result, error) {
 	res, err := s.txResult(func(tx *gorm.DB) (result, error) {
-		item, found, err := loadOwnedItem(tx, userID, itemID)
+		item, _, found, err := loadAccessibleItem(tx, userID, itemID)
 		if err != nil {
 			return result{}, err
 		}
