@@ -101,6 +101,15 @@ export const useProjectsStore = defineStore('projects', () => {
     }
   }
 
+  function upsertProject(p: Project) {
+    const idx = projects.value.findIndex((existing) => existing.id === p.id)
+    if (idx >= 0) {
+      projects.value[idx] = p
+    } else {
+      projects.value.push(p)
+    }
+  }
+
   async function updateProject(id: number, req: UpdateProjectRequest, confirmExposure?: boolean) {
     loading.value = true
     error.value = null
@@ -110,12 +119,7 @@ export const useProjectsStore = defineStore('projects', () => {
         await fetchProjects()
         return updated
       }
-      const idx = projects.value.findIndex((p) => p.id === id)
-      if (idx >= 0) {
-        projects.value[idx] = updated
-      } else {
-        projects.value.push(updated)
-      }
+      upsertProject(updated)
       return updated
     } catch (e) {
       error.value = api.describeError(e)
@@ -152,6 +156,7 @@ export const useProjectsStore = defineStore('projects', () => {
     archivedProjects,
     projectById,
     fetchProjects,
+    upsertProject,
     createProject,
     updateProject,
     deleteProject,

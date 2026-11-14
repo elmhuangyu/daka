@@ -187,6 +187,7 @@ async function loadProject() {
     ])
     if (my !== seq) return
     project.value = proj
+    projectsStore.upsertProject(proj)
     categories.value = (cats.categories ?? []).map((c) =>
       privacy.redact && c.is_sensitive ? { ...c, name: t('common.privateCategory'), icon: '' } : c,
     )

@@ -60,26 +60,43 @@ async function signOut() {
     <button
       ref="trigger"
       type="button"
-      class="btn btn-circle btn-sm btn-primary overflow-hidden p-0"
+      class="inline-flex items-center gap-2 rounded-full border border-base-300/70 bg-base-200/40 hover:bg-base-200/80 p-1 sm:pr-2.5 text-sm font-medium transition-colors cursor-pointer shadow-2xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       aria-haspopup="menu"
       :aria-expanded="open"
       :aria-label="t('layout.accountMenu')"
       data-testid="avatar-button"
       @click="open = !open"
     >
-      <img
-        v-if="showImage"
-        :src="auth.user!.avatar_url"
-        :alt="auth.user!.name"
-        class="h-full w-full object-cover"
-        data-testid="avatar-image"
-        @error="onImgError"
+      <span
+        class="size-7 shrink-0 overflow-hidden rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-xs shadow-2xs"
+      >
+        <img
+          v-if="showImage"
+          :src="auth.user!.avatar_url"
+          :alt="auth.user!.name"
+          class="h-full w-full object-cover"
+          data-testid="avatar-image"
+          @error="onImgError"
+        />
+        <span v-else data-testid="avatar-initial">{{ initial }}</span>
+      </span>
+      <span
+        v-if="auth.user?.name"
+        class="hidden sm:inline max-w-28 truncate text-xs font-medium text-base-content/90"
+      >
+        {{ auth.user.name }}
+      </span>
+      <Icon
+        v-if="auth.user?.name"
+        icon="lucide:chevron-down"
+        class="hidden sm:inline size-3.5 text-base-content/50 transition-transform duration-150"
+        :class="{ 'rotate-180': open }"
+        aria-hidden="true"
       />
-      <span v-else data-testid="avatar-initial">{{ initial }}</span>
     </button>
     <div
       v-if="open"
-      class="menu absolute right-0 z-30 mt-2 w-56 rounded-box bg-base-100 p-2 shadow"
+      class="menu absolute right-0 z-30 mt-2 w-60 rounded-xl border border-base-300/80 bg-base-100/95 backdrop-blur-md p-2 shadow-lg"
       role="menu"
       data-testid="avatar-menu"
     >

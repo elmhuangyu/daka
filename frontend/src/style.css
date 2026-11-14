@@ -104,7 +104,8 @@ summary::-webkit-details-marker {
   pointer-events: none;
   opacity: calc(0.25 + var(--p, 0) / 100 * 0.75);
   background:
-    radial-gradient(60% 45% at 15% 0%, var(--mood-a, transparent), transparent 70%),
+    radial-gradient(65% 45% at 15% 0%, var(--mood-a, transparent), transparent 70%),
+    radial-gradient(50% 35% at 75% 0%, var(--mood-b, transparent), transparent 70%),
     radial-gradient(55% 45% at 90% 100%, var(--mood-b, transparent), transparent 70%);
   background-size: 140% 140%;
   transition:

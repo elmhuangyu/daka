@@ -167,4 +167,90 @@ describe('layout', () => {
     expect(w.find('input[type=password]').exists()).toBe(true)
     w.unmount()
   })
+
+  it('topbar shows contextual Today date pill, Settings sub-crumb, and shortcuts button', async () => {
+    const { w, router } = await mountAt('/')
+    expect(w.find('[data-testid=topbar-today-date]').text()).toContain('2026-11-07')
+    expect(w.find('[data-testid=shortcut-help]').exists()).toBe(false)
+    await w.get('[data-testid=topbar-shortcuts]').trigger('click')
+    expect(w.find('[data-testid=shortcut-help]').exists()).toBe(true)
+    await w.get('[data-testid=shortcut-help-close]').trigger('click')
+    expect(w.find('[data-testid=shortcut-help]').exists()).toBe(false)
+
+    await router.push('/settings?tab=categories')
+    await flushPromises()
+    expect(w.get('[data-testid=topbar-subcrumb]').text()).toBe('Categories')
+    w.unmount()
+  })
+
+  it('topbar sub-crumb clears sensitive item name synchronously when privacy guard turns on', async () => {
+    let resolveRedactedItem!: (r: Response) => void
+    const redactedItemDeferred = new Promise<Response>((resolve) => {
+      resolveRedactedItem = resolve
+    })
+    const itemPayload = (name: string) => ({
+      id: 42,
+      name,
+      description: '',
+      remind_time: null,
+      tracker_type: 'boolean',
+      kind: 'ongoing',
+      polarity: 'positive',
+      category_id: null,
+      is_sensitive: true,
+      effective_sensitive: true,
+      options: [],
+      current_rule: {
+        id: 1,
+        effective_from: '2026-01-01',
+        rrule_string: 'FREQ=DAILY',
+        holiday_mode: 'NORMAL',
+        option_targets: {},
+      },
+    })
+    const statsPayload = (name: string) => ({
+      item_id: 42,
+      name,
+      today: '2026-11-07',
+      last_at: null,
+      last_date: null,
+      days_since_last: null,
+      summary: '',
+      counts: { last_30_days: 0, this_year: 0, total: 0 },
+      active_days: { last_30_days: 0, this_year: 0, total: 0 },
+      options: [],
+      streak: { applicable: false, current: 0, longest: 0 },
+      completion_rate_90: null,
+      heatmap: [],
+      quota: null,
+      maintenance: null,
+    })
+
+    const baseFetch = fetchMock as unknown as (url: string) => Promise<Response>
+    fetchMock = vi.fn<(url: string) => Promise<Response>>(async (url: string) => {
+      if (url === '/api/items/42') return jsonRes(itemPayload('Secret Journal'))
+      if (url === '/api/items/42?redact=1') return redactedItemDeferred
+      if (url.startsWith('/api/items/42/stats')) {
+        return jsonRes(statsPayload(url.includes('redact=1') ? 'Private item' : 'Secret Journal'))
+      }
+      if (url.startsWith('/api/checkins')) return jsonRes({ checkins: [], next_cursor: '' })
+      if (url.startsWith('/api/view/calendar')) {
+        return jsonRes({ today: '2026-11-07', week_start: 1, days: [] })
+      }
+      return baseFetch(url)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { w } = await mountAt('/items/42')
+    expect(w.get('[data-testid=topbar-subcrumb]').text()).toBe('Secret Journal')
+
+    // Plaintext crumb disappears before the ?redact=1 refetch resolves
+    await w.get('[data-testid=redact-toggle]').trigger('click')
+    expect(w.find('[data-testid=topbar-subcrumb]').exists()).toBe(false)
+
+    resolveRedactedItem(jsonRes(itemPayload('Private item')))
+    await flushPromises()
+    expect(w.get('[data-testid=topbar-subcrumb]').text()).toBe('Private item')
+    w.unmount()
+  })
 })
