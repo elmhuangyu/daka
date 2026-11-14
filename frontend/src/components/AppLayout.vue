@@ -284,7 +284,7 @@ const todayPct = computed(() =>
         <div class="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            class="btn btn-sm rounded-full border border-base-300/70 bg-base-200/40 hover:bg-base-200/80 text-xs font-medium gap-1.5 px-2.5 shadow-2xs"
+            class="hidden md:inline-flex btn btn-sm rounded-full border border-base-300/70 bg-base-200/40 hover:bg-base-200/80 text-xs font-medium gap-1.5 px-2.5 shadow-2xs"
             :title="t('shortcuts.title')"
             :aria-label="t('shortcuts.title')"
             data-testid="topbar-shortcuts"
