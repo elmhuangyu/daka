@@ -170,6 +170,12 @@ function todayCount(it: { id: number; tracker_type?: string }): number | null {
   return itemLogs.length
 }
 
+/**
+ * New names typed on today become todos that the user checks off. Only a past day
+ * can log a brand-new name as done (backfilling history); a future day schedules it.
+ */
+const canLogNewAsDone = computed(() => !store.isToday && !store.isFuture)
+
 watch(quickLogQuery, () => {
   quickLogIndex.value = -1
 })
@@ -187,7 +193,7 @@ const quickLogOptions = computed(() => {
         }),
     })
     if (
-      store.isFuture ||
+      canLogNewAsDone.value &&
       !matchingUnscheduled.value.some((it) => it.name.toLowerCase() === q.toLowerCase())
     ) {
       opts.push({
@@ -1067,8 +1073,9 @@ watch(
                 <span>{{ store.isFuture ? t('today.addFutureEvent') : t('today.addTodo') }}</span>
               </button>
 
-              <!-- Quick Log as Done button -->
+              <!-- Quick Log as Done button (past days only) -->
               <button
+                v-if="canLogNewAsDone"
                 type="button"
                 class="btn btn-sm btn-outline shadow-xs h-8 min-h-8 px-2.5 gap-1"
                 :disabled="!quickLogQuery.trim() || quickLogBusy"
@@ -1077,9 +1084,7 @@ watch(
                 @click="submitQuickLog({ name: quickLogQuery })"
               >
                 <Icon icon="lucide:check" class="size-4 text-success" />
-                <span class="hidden sm:inline">{{
-                  store.isFuture ? t('today.addFutureEvent') : t('today.logNow')
-                }}</span>
+                <span class="hidden sm:inline">{{ t('today.logNow') }}</span>
               </button>
             </div>
           </div>
@@ -1107,17 +1112,21 @@ watch(
               "
             >
               <Icon icon="lucide:check-square" class="size-4 shrink-0" />
-              <span>{{ t('today.createTodo', { name: quickLogQuery.trim() }) }}</span>
+              <span>{{
+                store.isFuture
+                  ? t('today.createFutureEvent', { name: quickLogQuery.trim() })
+                  : t('today.createTodo', { name: quickLogQuery.trim() })
+              }}</span>
             </button>
 
             <!-- Create new option (Log Done immediately) -->
             <button
               v-if="
                 quickLogQuery.trim() &&
-                (store.isFuture ||
-                  !matchingUnscheduled.some(
-                    (it) => it.name.toLowerCase() === quickLogQuery.trim().toLowerCase(),
-                  ))
+                canLogNewAsDone &&
+                !matchingUnscheduled.some(
+                  (it) => it.name.toLowerCase() === quickLogQuery.trim().toLowerCase(),
+                )
               "
               type="button"
               class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-base-200 text-base-content/80 font-medium flex items-center gap-2 cursor-pointer"
@@ -1125,11 +1134,7 @@ watch(
               @mousedown.prevent="submitQuickLog({ name: quickLogQuery })"
             >
               <Icon icon="lucide:sparkles" class="size-4 shrink-0" />
-              <span>{{
-                store.isFuture
-                  ? t('today.createFutureEvent', { name: quickLogQuery.trim() })
-                  : t('today.createAndLog', { name: quickLogQuery.trim() })
-              }}</span>
+              <span>{{ t('today.createAndLog', { name: quickLogQuery.trim() }) }}</span>
             </button>
 
             <!-- Matching existing unscheduled items (today or past dates) -->

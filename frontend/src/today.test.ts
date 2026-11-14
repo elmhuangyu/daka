@@ -624,6 +624,18 @@ describe('Today page', () => {
     expect(w.html()).not.toContain('STALE')
   })
 
+  it('quick input only adds todos today; logging a new name as done is for past days', async () => {
+    const w = await mountApp()
+    await w.get('[data-testid=quick-log-input]').setValue('Call mom')
+    expect(w.find('[data-testid=quick-log-submit]').exists()).toBe(false)
+    expect(w.find('[data-testid=quick-todo-submit]').exists()).toBe(true)
+
+    await w.get('[data-testid="prev-day"]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid=quick-log-input]').setValue('Call mom')
+    expect(w.find('[data-testid=quick-log-submit]').exists()).toBe(true)
+  })
+
   it('supports date picker and schedules future events without check-in', async () => {
     const w = await mountApp()
     expect(w.find('[data-testid=open-date-picker]').exists()).toBe(true)
@@ -636,7 +648,8 @@ describe('Today page', () => {
 
     // Quick log on future date creates scheduled event
     await w.get('[data-testid=quick-log-input]').setValue('Dentist')
-    await w.get('[data-testid=quick-log-submit]').trigger('click')
+    expect(w.find('[data-testid=quick-log-submit]').exists()).toBe(false)
+    await w.get('[data-testid=quick-todo-submit]').trigger('click')
     await flushPromises()
 
     const itemPost = fetchMock.mock.calls.find((c) => {
@@ -1033,14 +1046,14 @@ describe('Today page', () => {
       true,
     )
 
-    // Pick Category 1 ("Life") in quick add and quick-log an ad-hoc event
+    // Pick Category 1 ("Life") in quick add and add an undated todo
     await w.get('[data-testid="quick-category-chip"]').trigger('click')
     expect(w.get('[data-testid="quick-category-dropdown"]').isVisible()).toBe(true)
     await w.get('[data-testid="quick-category-option-1"]').trigger('click')
     expect(w.get('[data-testid="quick-category-chip"]').text()).toContain('Life')
 
     await w.get('[data-testid="quick-log-input"]').setValue('Vet visit')
-    await w.get('[data-testid="quick-log-submit"]').trigger('click')
+    await w.get('[data-testid="quick-todo-submit"]').trigger('click')
     await flushPromises()
 
     const itemPosts = fetchMock.mock.calls.filter(
