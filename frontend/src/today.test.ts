@@ -98,15 +98,30 @@ beforeEach(() => {
         const id = Number(url.split('/').pop())
         const body = JSON.parse(init.body as string)
         const it = world.items.find((x) => x.id === id)
-        if (it && body.rule) {
-          it.current_rule = { ...it.current_rule, ...body.rule }
-          if (body.rule.schedule_type === 'fixed_rrule') {
-            world.today.push(tItem(id, it.name, { due: true, done: false }))
-          } else if (body.rule.schedule_type === 'none') {
-            world.today = world.today.filter((x: any) => x.id !== id)
+        if (it) {
+          if (body.category_id !== undefined) it.category_id = body.category_id
+          if (body.kind !== undefined) {
+            it.kind = body.kind
+            const t = world.today.find((x: any) => x.id === id) as any
+            if (t) t.kind = body.kind
+          }
+          if (body.rule) {
+            it.current_rule = { ...it.current_rule, ...body.rule }
+            if (body.rule.schedule_type === 'fixed_rrule') {
+              world.today.push(tItem(id, it.name, { due: true, done: false }))
+            } else if (body.rule.schedule_type === 'none') {
+              world.today = world.today.filter((x: any) => x.id !== id)
+            }
           }
         }
         return jsonRes({ id, ...body })
+      }
+      if (url.startsWith('/api/items/') && init?.method === 'DELETE') {
+        const id = Number(url.split('/').pop())
+        world.items = world.items.filter((x) => x.id !== id)
+        world.today = world.today.filter((x: any) => x.id !== id)
+        world.logs = world.logs.filter((x: any) => x.item_id !== id)
+        return jsonRes({ ok: true })
       }
       if (url.startsWith('/api/items')) return jsonRes({ items: world.items })
       if (url.startsWith('/api/categories')) return jsonRes({ categories: world.cats })
@@ -976,6 +991,165 @@ describe('Today page', () => {
     const checkinBody = JSON.parse(checkinPost![1].body)
     expect(checkinBody.mode).toBe('delta')
     expect(checkinBody.value).toBe(1)
+  })
+
+  it('selects a category in quick add for ad-hoc log and avoids duplicate cards for undated logged events', async () => {
+    world.cats = [
+      { id: 1, name: 'Life', color: '#10b981', icon: '', is_sensitive: false, sort_order: 1 },
+    ]
+    world.today = [
+      tItem(23, 'Buy dog food', { kind: 'event', due: true, done: true, log_ids: [25] }),
+    ]
+    world.items = [
+      detail({
+        id: 23,
+        name: 'Buy dog food',
+        kind: 'event',
+        category_id: null,
+        current_rule: rule({ schedule_type: 'none' }),
+        stats: { counts: { last_30_days: 1, this_year: 1, total: 1 } },
+      }),
+    ]
+    world.logs = [
+      {
+        id: 25,
+        item_id: 23,
+        option_id: null,
+        date: '2026-11-07',
+        time: '12:00:00',
+        value: 0,
+        note: '',
+        source: 'web',
+        is_supplement: false,
+      },
+    ]
+
+    const w = await mountApp()
+
+    // Logged undated event renders only once (in unscheduled-todos-list, not duplicated in todo-list)
+    expect(w.find('[data-testid="section-todo"]').exists()).toBe(false)
+    expect(w.findAll('[data-testid="card-23"]')).toHaveLength(1)
+    expect(w.find('[data-testid="unscheduled-todos-list"] [data-testid="card-23"]').exists()).toBe(
+      true,
+    )
+
+    // Pick Category 1 ("Life") in quick add and quick-log an ad-hoc event
+    await w.get('[data-testid="quick-category-chip"]').trigger('click')
+    expect(w.get('[data-testid="quick-category-dropdown"]').isVisible()).toBe(true)
+    await w.get('[data-testid="quick-category-option-1"]').trigger('click')
+    expect(w.get('[data-testid="quick-category-chip"]').text()).toContain('Life')
+
+    await w.get('[data-testid="quick-log-input"]').setValue('Vet visit')
+    await w.get('[data-testid="quick-log-submit"]').trigger('click')
+    await flushPromises()
+
+    const itemPosts = fetchMock.mock.calls.filter(
+      (c) => c[1]?.method === 'POST' && String(c[0]) === '/api/items',
+    )
+    expect(itemPosts.length).toBeGreaterThan(0)
+    const body = JSON.parse(itemPosts.at(-1)![1].body)
+    expect(body.name).toBe('Vet visit')
+    expect(body.kind).toBe('event')
+    expect(body.category_id).toBe(1)
+
+    // Category chip resets after submit
+    expect(w.get('[data-testid="quick-category-chip"]').text()).toContain('No Category')
+  })
+
+  it('changes category, converts event to ongoing quick-log, and deletes event from OccurrenceDetailModal', async () => {
+    world.cats = [
+      { id: 1, name: 'Life', color: '#10b981', icon: '', is_sensitive: false, sort_order: 1 },
+    ]
+    world.items = [
+      detail({
+        id: 23,
+        name: 'Buy dog food',
+        kind: 'event',
+        category_id: null,
+        current_rule: rule({ schedule_type: 'none' }),
+        stats: { counts: { last_30_days: 1, this_year: 1, total: 1 } },
+      }),
+    ]
+    world.logs = [
+      {
+        id: 25,
+        item_id: 23,
+        option_id: null,
+        date: '2026-11-07',
+        time: '12:00:00',
+        value: 0,
+        note: '',
+        source: 'web',
+        is_supplement: false,
+      },
+    ]
+
+    const w = await mountApp()
+
+    // Open modal for item 23
+    await w.get('[data-testid="card-23"] [data-testid="open-details"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid="occurrence-modal"]').exists()).toBe(true)
+
+    // Change category to Life (id 1)
+    const catSelect = w.get('[data-testid="modal-todo-category-select"]')
+    await catSelect.setValue(1)
+    await catSelect.trigger('change')
+    await flushPromises()
+
+    const patchCatCall = fetchMock.mock.calls.find(
+      (c) => c[1]?.method === 'PATCH' && String(c[0]) === '/api/items/23',
+    )
+    expect(patchCatCall).toBeTruthy()
+    expect(JSON.parse(patchCatCall![1].body)).toEqual({ category_id: 1 })
+
+    // Convert event to ongoing quick-log under the selected category
+    await w.get('[data-testid="modal-convert-ongoing"]').trigger('click')
+    await flushPromises()
+
+    const convertCall = fetchMock.mock.calls
+      .filter((c) => c[1]?.method === 'PATCH' && String(c[0]) === '/api/items/23')
+      .pop()
+    expect(convertCall).toBeTruthy()
+    expect(JSON.parse(convertCall![1].body)).toEqual({
+      kind: 'ongoing',
+      category_id: 1,
+      rule: { schedule_type: 'none', holiday_mode: 'none' },
+    })
+
+    // Item becomes ongoing (not event) so event-only sections hide while modal stays valid
+    expect(w.find('[data-testid="modal-todo-category-section"]').exists()).toBe(false)
+    await w.get('[data-testid="modal-close"]').trigger('click')
+    await flushPromises()
+
+    // Now test deleting an event item via inline confirmation
+    world.items.push(
+      detail({
+        id: 24,
+        name: 'Temp note',
+        kind: 'event',
+        category_id: null,
+        current_rule: rule({ schedule_type: 'none' }),
+        stats: { counts: { last_30_days: 0, this_year: 0, total: 0 } },
+      }),
+    )
+    await w.get('[data-testid="next-day"]').trigger('click')
+    await w.get('[data-testid="prev-day"]').trigger('click')
+    await flushPromises()
+
+    await w.get('[data-testid="card-24"] [data-testid="open-details"]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid="modal-delete-item"]').trigger('click')
+    expect(w.find('[data-testid="modal-delete-confirm-box"]').exists()).toBe(true)
+    await w.get('[data-testid="modal-delete-confirm"]').trigger('click')
+    await flushPromises()
+
+    const deleteCall = fetchMock.mock.calls.find(
+      (c) => c[1]?.method === 'DELETE' && String(c[0]) === '/api/items/24',
+    )
+    expect(deleteCall).toBeTruthy()
+    expect(w.find('[data-testid="occurrence-modal"]').exists()).toBe(false)
+    expect(w.find('[data-testid="card-24"]').exists()).toBe(false)
   })
 })
 

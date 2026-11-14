@@ -156,7 +156,7 @@ export const useTodayStore = defineStore('today', () => {
   const dueCards = computed<CardVM[]>(() =>
     (view.value?.items ?? []).flatMap((t) => {
       const d = detailById.value.get(t.id)
-      return t.due && d ? [vm(d)] : []
+      return t.due && d && d.current_rule.schedule_type !== 'none' ? [vm(d)] : []
     }),
   )
   const scoped = (cards: CardVM[]) =>
@@ -265,19 +265,24 @@ export const useTodayStore = defineStore('today', () => {
           )
           .map(vm)
           .filter((c) => c.logs.length === 0)
-    const all = [
+    const byId = new Map<number, CardVM>()
+    for (const c of [
       ...dueCards.value,
       ...rawUnscheduledTodos,
+      ...rollingDone.value,
+      ...unscheduledDone.value,
       ...items.value
         .filter((d) => needsAttention(d) || d.current_rule.schedule_type === 'quota')
         .map(vm),
-    ]
+    ]) {
+      byId.set(c.detail.id, c)
+    }
     const counts = new Map<number | 'none', number>()
-    for (const c of all) {
+    for (const c of byId.values()) {
       const k = c.detail.category_id ?? 'none'
       counts.set(k, (counts.get(k) ?? 0) + 1)
     }
-    return { total: all.length, counts }
+    return { total: byId.size, counts }
   })
 
   async function guarded(id: number, fn: () => Promise<unknown>) {
@@ -340,6 +345,18 @@ export const useTodayStore = defineStore('today', () => {
     return guarded(itemId, () => api.setTodoDueDate(itemId, dueDate))
   }
 
+  function setCategory(itemId: number, categoryId: number | null) {
+    return guarded(itemId, () => api.patchItem(itemId, { category_id: categoryId }))
+  }
+
+  function convertToOngoing(itemId: number, categoryId: number | null) {
+    return guarded(itemId, () => api.convertEventToOngoing(itemId, categoryId))
+  }
+
+  function deleteItem(itemId: number) {
+    return guarded(itemId, () => api.deleteItem(itemId))
+  }
+
   return {
     view,
     items,
@@ -377,5 +394,8 @@ export const useTodayStore = defineStore('today', () => {
     remove,
     updateNote,
     setDueDate,
+    setCategory,
+    convertToOngoing,
+    deleteItem,
   }
 })

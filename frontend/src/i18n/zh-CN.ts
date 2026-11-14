@@ -206,6 +206,8 @@ const zhCN: Record<MessageKey, string> = {
   'today.modal.editItem': '事项设置',
   'today.modal.dueDateSection': '截止日期 / 排期',
   'today.modal.makeUndated': '清除日期（转为待办）',
+  'today.modal.convertOngoing': '转为随手记事项',
+  'today.modal.convertOngoingHint': '转为持续记录事项，归入所选分类并可在随手记中反复打卡。',
   'today.modal.noteLabel': '本次打卡备注',
   'today.modal.notePlaceholder': '添加本次打卡备注...',
   'today.modal.saveNote': '保存备注',

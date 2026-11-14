@@ -4,6 +4,7 @@ import * as api from '../api'
 import type {
   CalendarDay,
   CalendarViewData,
+  Category,
   CheckinInput,
   CheckinLog,
   ExternalEvent,
@@ -60,6 +61,7 @@ export const useCalendarStore = defineStore('calendar', () => {
 
   const selected = ref<string | null>(null)
   const items = ref<ItemDetail[]>([])
+  const categories = ref<Category[]>([])
   const dayLogs = ref<CheckinLog[]>([])
   const panelError = ref('')
   const busy = ref<number[]>([])
@@ -74,6 +76,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     panelSeq++
     view.value = null
     items.value = []
+    categories.value = []
     dayLogs.value = []
     external.value = external.value.map((l) => ({
       ...l,
@@ -206,9 +209,16 @@ export const useCalendarStore = defineStore('calendar', () => {
     const my = ++panelSeq
     const redact = privacy.redact
     try {
-      const [it, ls] = await Promise.all([api.getItems(redact), api.getCheckinsOn(date, redact)])
+      const [it, cats, ls] = await Promise.all([
+        api.getItems(redact),
+        api.getCategories(),
+        api.getCheckinsOn(date, redact),
+      ])
       if (my !== panelSeq) return
       items.value = it.items ?? []
+      categories.value = (cats.categories ?? []).map((c) =>
+        redact && c.is_sensitive ? { ...c, name: t('common.privateCategory'), icon: '' } : c,
+      )
       dayLogs.value = ls
       panelError.value = ''
     } catch (e) {
@@ -282,6 +292,18 @@ export const useCalendarStore = defineStore('calendar', () => {
     return guarded(itemId, () => api.setTodoDueDate(itemId, dueDate))
   }
 
+  function setCategory(itemId: number, categoryId: number | null) {
+    return guarded(itemId, () => api.patchItem(itemId, { category_id: categoryId }))
+  }
+
+  function convertToOngoing(itemId: number, categoryId: number | null) {
+    return guarded(itemId, () => api.convertEventToOngoing(itemId, categoryId))
+  }
+
+  function deleteItem(itemId: number) {
+    return guarded(itemId, () => api.deleteItem(itemId))
+  }
+
   return {
     mode,
     anchor,
@@ -294,6 +316,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     selected,
     selectedDay,
     items,
+    categories,
     dayLogs,
     panelError,
     busy,
@@ -311,6 +334,9 @@ export const useCalendarStore = defineStore('calendar', () => {
     removeLog,
     updateNote,
     setDueDate,
+    setCategory,
+    convertToOngoing,
+    deleteItem,
     clearPlaintext,
   }
 })

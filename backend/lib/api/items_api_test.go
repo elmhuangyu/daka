@@ -670,3 +670,65 @@ func TestProjectCategoryInheritance(t *testing.T) {
 	require.NotNil(t, moved.CategoryID)
 	require.Equal(t, cat, *moved.CategoryID)
 }
+
+func TestPatchKindConversion(t *testing.T) {
+	e := newEnv(t)
+	cat := e.category("u1", false)
+	ev := e.mustCreate("u1", m{"name": "Buy dog food", "tracker_type": "boolean", "kind": "event", "rule": m{"schedule_type": "none"}})
+	require.Equal(t, 200, e.do("POST", "/api/checkins", "u1", "", m{"item_id": ev.ID, "mode": "set", "value": 1}).Code)
+
+	// Invalid kind is rejected.
+	w := e.do("PATCH", itemPath(ev.ID), "u1", "", m{"kind": "bogus"})
+	require.Equal(t, 400, w.Code, w.Body.String())
+	w = e.do("PATCH", itemPath(ev.ID), "u1", "", m{"kind": ""})
+	require.Equal(t, 400, w.Code, w.Body.String())
+
+	// Convert event to categorized unscheduled ongoing item while preserving history.
+	w = e.do("PATCH", itemPath(ev.ID), "u1", "", m{
+		"kind":        "ongoing",
+		"category_id": cat,
+		"rule":        m{"schedule_type": "none", "holiday_mode": "none"},
+	})
+	require.Equal(t, 200, w.Code, w.Body.String())
+	got := decode[itemResponse](t, w)
+	require.Equal(t, "ongoing", got.Kind)
+	require.NotNil(t, got.CategoryID)
+	require.Equal(t, cat, *got.CategoryID)
+	require.Equal(t, "none", got.CurrentRule.ScheduleType)
+
+	// Check-in history is preserved.
+	hist := e.do("GET", fmt.Sprintf("/api/checkins?item_id=%d", ev.ID), "u1", "", nil)
+	require.Equal(t, 200, hist.Code)
+	logs := decode[struct {
+		Checkins []m `json:"checkins"`
+	}](t, hist).Checkins
+	require.Len(t, logs, 1)
+
+	// Ongoing -> event conversion is rejected so rule history cannot be collapsed.
+	w = e.do("PATCH", itemPath(ev.ID), "u1", "", m{"kind": "event"})
+	require.Equal(t, 400, w.Code, w.Body.String())
+
+	// Dated (fixed_rrule) event can also be converted to an unscheduled categorized ongoing item.
+	dated := e.mustCreate("u1", m{
+		"name":         "Pay bill",
+		"tracker_type": "boolean",
+		"kind":         "event",
+		"rule": m{
+			"schedule_type": "fixed_rrule",
+			"rrule_string":  "FREQ=DAILY;COUNT=1",
+			"dtstart":       "2026-11-06",
+			"until":         "2026-11-06",
+		},
+	})
+	w = e.do("PATCH", itemPath(dated.ID), "u1", "", m{
+		"kind":        "ongoing",
+		"category_id": cat,
+		"rule":        m{"schedule_type": "none", "holiday_mode": "none"},
+	})
+	require.Equal(t, 200, w.Code, w.Body.String())
+	gotDated := decode[itemResponse](t, w)
+	require.Equal(t, "ongoing", gotDated.Kind)
+	require.NotNil(t, gotDated.CategoryID)
+	require.Equal(t, cat, *gotDated.CategoryID)
+	require.Equal(t, "none", gotDated.CurrentRule.ScheduleType)
+}

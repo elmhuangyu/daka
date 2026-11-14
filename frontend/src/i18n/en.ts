@@ -213,6 +213,9 @@ export const en = {
   'today.modal.editItem': 'Item settings',
   'today.modal.dueDateSection': 'Due Date / Schedule',
   'today.modal.makeUndated': 'Clear (Make Undated)',
+  'today.modal.convertOngoing': 'Convert to ongoing quick-log',
+  'today.modal.convertOngoingHint':
+    'Move to Items under this category so you can log it anytime and track history.',
   'today.modal.noteLabel': 'Note for this occurrence',
   'today.modal.notePlaceholder': 'Add a note for this occurrence...',
   'today.modal.saveNote': 'Save note',

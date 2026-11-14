@@ -604,11 +604,20 @@ function onPanelKey(e: KeyboardEvent) {
       :date="date"
       :busy="modalDetail ? store.busy.includes(modalDetail.id) : false"
       :redact="privacy.redact"
+      :categories="store.categories"
       @close="modalItemId = null"
       @log="makeUp"
       @remove="modalDetail && store.removeLog(modalDetail.id, $event)"
       @patch-note="(id, note) => store.updateNote(id, note)"
       @set-due-date="(itemId, date) => store.setDueDate(itemId, date)"
+      @set-category="(itemId, categoryId) => store.setCategory(itemId, categoryId)"
+      @convert-ongoing="(itemId, categoryId) => store.convertToOngoing(itemId, categoryId)"
+      @delete-item="
+        async (itemId) => {
+          modalItemId = null
+          await store.deleteItem(itemId)
+        }
+      "
     />
   </aside>
 </template>

@@ -42,6 +42,7 @@ const filteredUpcoming = computed(() =>
 const quickLogQuery = ref('')
 const quickTodoDate = ref('')
 const quickTodoProjectId = ref<number | null>(null)
+const quickTodoCategoryId = ref<number | null>(null)
 const quickLogOpen = ref(false)
 const quickLogIndex = ref(-1)
 const quickLogBusy = ref(false)
@@ -49,6 +50,8 @@ const dateDropdownOpen = ref(false)
 const dateChipRef = ref<HTMLElement | null>(null)
 const projectDropdownOpen = ref(false)
 const projectChipRef = ref<HTMLElement | null>(null)
+const categoryDropdownOpen = ref(false)
+const categoryChipRef = ref<HTMLElement | null>(null)
 
 const selectedProject = computed(() =>
   quickTodoProjectId.value !== null
@@ -56,9 +59,20 @@ const selectedProject = computed(() =>
     : null,
 )
 
+const selectedCategory = computed(() =>
+  quickTodoCategoryId.value !== null
+    ? (store.categories.find((c) => c.id === quickTodoCategoryId.value) ?? null)
+    : null,
+)
+
 function setProjectOption(id: number | null) {
   quickTodoProjectId.value = id
   projectDropdownOpen.value = false
+}
+
+function setCategoryOption(id: number | null) {
+  quickTodoCategoryId.value = id
+  categoryDropdownOpen.value = false
 }
 
 function resetQuickTodoDate() {
@@ -121,11 +135,19 @@ function onDocClick(e: MouseEvent) {
   ) {
     projectDropdownOpen.value = false
   }
+  if (
+    categoryDropdownOpen.value &&
+    categoryChipRef.value &&
+    !categoryChipRef.value.contains(e.target as Node)
+  ) {
+    categoryDropdownOpen.value = false
+  }
 }
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     if (dateDropdownOpen.value) dateDropdownOpen.value = false
     if (projectDropdownOpen.value) projectDropdownOpen.value = false
+    if (categoryDropdownOpen.value) categoryDropdownOpen.value = false
   }
 }
 
@@ -235,10 +257,11 @@ async function submitQuickTodo(target: { name: string; dueDate?: string | null }
   quickLogBusy.value = true
   try {
     const due = target.dueDate?.trim() || null
-    await createTodoItem(name, due, quickTodoProjectId.value)
+    await createTodoItem(name, due, quickTodoProjectId.value, null, quickTodoCategoryId.value)
     quickLogQuery.value = ''
     resetQuickTodoDate()
     quickTodoProjectId.value = null
+    quickTodoCategoryId.value = null
     quickLogOpen.value = false
     await store.refresh(store.view?.date)
   } catch (e) {
@@ -257,7 +280,13 @@ async function submitQuickLog(target: { id?: number; name: string }) {
   quickLogBusy.value = true
   try {
     if (store.isFuture) {
-      await createScheduledEvent(name, targetDate)
+      await createScheduledEvent(
+        name,
+        targetDate,
+        quickTodoProjectId.value,
+        null,
+        quickTodoCategoryId.value,
+      )
     } else {
       let itemId = target.id
       let existingItem = target.id ? store.items.find((it) => it.id === target.id) : undefined
@@ -281,12 +310,19 @@ async function submitQuickLog(target: { id?: number; name: string }) {
           await store.submit({ item_id: itemId, mode: 'set', value: 1 })
         }
       } else {
-        const created = await createAdHocEvent(name)
+        const created = await createAdHocEvent(
+          name,
+          quickTodoProjectId.value,
+          null,
+          quickTodoCategoryId.value,
+        )
         await store.submit({ item_id: created.id, mode: 'set', value: 1 })
       }
     }
     quickLogQuery.value = ''
     resetQuickTodoDate()
+    quickTodoProjectId.value = null
+    quickTodoCategoryId.value = null
     quickLogOpen.value = false
     await store.refresh(targetDate)
   } catch (e) {
@@ -584,8 +620,10 @@ watch(
   (on) => {
     if (on) {
       projectDropdownOpen.value = false
+      categoryDropdownOpen.value = false
       dateDropdownOpen.value = false
       quickTodoProjectId.value = null
+      quickTodoCategoryId.value = null
     }
     void store.refresh()
     void projectsStore.fetchProjects()
@@ -741,8 +779,8 @@ watch(
               </button>
             </div>
 
-            <!-- Toolbar actions: Date Chip, Add Todo button, Quick Log Done button -->
-            <div class="flex items-center gap-1.5 justify-end shrink-0">
+            <!-- Toolbar actions: Date Chip, Project Chip, Category Chip, Add Todo button, Quick Log Done button -->
+            <div class="flex flex-wrap items-center gap-1.5 justify-end shrink-0">
               <!-- Date Chip with Dropdown -->
               <div ref="dateChipRef" class="relative">
                 <button
@@ -913,6 +951,97 @@ watch(
                     </span>
                     <Icon
                       v-if="quickTodoProjectId === p.id"
+                      icon="lucide:check"
+                      class="size-3 text-primary shrink-0"
+                    />
+                  </button>
+                </div>
+              </div>
+
+              <!-- Category Chip with Dropdown -->
+              <div
+                v-if="store.categories.length > 0 && !privacy.redact"
+                ref="categoryChipRef"
+                class="relative"
+              >
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline h-8 min-h-8 px-2.5 text-xs font-normal gap-1.5 cursor-pointer"
+                  :class="{
+                    'btn-primary bg-primary/10 text-primary border-primary/30':
+                      quickTodoCategoryId !== null,
+                  }"
+                  data-testid="quick-category-chip"
+                  :title="t('projects.category')"
+                  @click.stop="categoryDropdownOpen = !categoryDropdownOpen"
+                >
+                  <Icon icon="lucide:tags" class="size-3.5" />
+                  <template v-if="selectedCategory">
+                    <span
+                      v-if="selectedCategory.color"
+                      class="size-2 rounded-full shrink-0"
+                      :style="{ backgroundColor: selectedCategory.color }"
+                    />
+                    <span class="font-medium max-w-24 truncate">
+                      {{ selectedCategory.name }}
+                    </span>
+                    <button
+                      type="button"
+                      class="hover:text-error ml-0.5 p-0.5 rounded-full inline-flex items-center justify-center cursor-pointer"
+                      data-testid="quick-category-clear"
+                      :aria-label="t('common.clear')"
+                      @click.stop="quickTodoCategoryId = null"
+                    >
+                      <Icon icon="lucide:x" class="size-3" />
+                    </button>
+                  </template>
+                  <span v-else class="text-base-content/60">
+                    {{ t('projects.noCategory') }}
+                  </span>
+                </button>
+
+                <!-- Category options dropdown -->
+                <div
+                  v-show="categoryDropdownOpen"
+                  class="absolute right-0 sm:left-0 z-30 mt-1 w-56 max-h-60 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-2 shadow-lg space-y-1 text-sm"
+                  data-testid="quick-category-dropdown"
+                >
+                  <button
+                    type="button"
+                    class="w-full text-left px-2.5 py-1.5 text-xs rounded-md hover:bg-base-200 flex items-center justify-between cursor-pointer"
+                    data-testid="quick-category-nocategory"
+                    @click="setCategoryOption(null)"
+                  >
+                    <span class="flex items-center gap-2">
+                      <Icon icon="lucide:tags" class="size-3.5 text-base-content/60" />
+                      <span>{{ t('projects.noCategory') }}</span>
+                    </span>
+                    <Icon
+                      v-if="quickTodoCategoryId === null"
+                      icon="lucide:check"
+                      class="size-3 text-primary shrink-0"
+                    />
+                  </button>
+                  <div class="divider my-1"></div>
+                  <button
+                    v-for="c in store.categories"
+                    :key="c.id"
+                    type="button"
+                    class="w-full text-left px-2.5 py-1.5 text-xs rounded-md hover:bg-base-200 flex items-center justify-between cursor-pointer"
+                    :data-testid="`quick-category-option-${c.id}`"
+                    @click="setCategoryOption(c.id)"
+                  >
+                    <span class="flex items-center gap-2 truncate">
+                      <span
+                        v-if="c.color"
+                        class="size-2 rounded-full shrink-0"
+                        :style="{ backgroundColor: c.color }"
+                      />
+                      <Icon v-else icon="lucide:tags" class="size-3.5 text-primary shrink-0" />
+                      <span class="truncate">{{ c.name }}</span>
+                    </span>
+                    <Icon
+                      v-if="quickTodoCategoryId === c.id"
                       icon="lucide:check"
                       class="size-3 text-primary shrink-0"
                     />
@@ -1372,11 +1501,20 @@ watch(
         :date="store.view?.date ?? ''"
         :busy="detailCard ? store.busy.includes(detailCard.detail.id) : false"
         :redact="privacy.redact"
+        :categories="store.categories"
         @close="detailItemId = null"
         @log="log"
         @remove="detailCard && store.remove(detailCard.detail.id, $event)"
         @patch-note="(id, note) => store.updateNote(id, note)"
         @set-due-date="(itemId, date) => store.setDueDate(itemId, date)"
+        @set-category="(itemId, categoryId) => store.setCategory(itemId, categoryId)"
+        @convert-ongoing="(itemId, categoryId) => store.convertToOngoing(itemId, categoryId)"
+        @delete-item="
+          async (itemId) => {
+            detailItemId = null
+            await store.deleteItem(itemId)
+          }
+        "
       />
     </template>
   </section>

@@ -73,10 +73,10 @@ type patchRule struct {
 type patchItemRequest struct {
 	// Immutable: sending a different value is a 400.
 	TrackerType *string `json:"tracker_type"`
-	Kind        *string `json:"kind"`
 	Polarity    *string `json:"polarity"`
 
-	// Display fields, edited in place.
+	// Display and classification fields, edited in place.
+	Kind        *string          `json:"kind"`
 	Name        *string          `json:"name"`
 	Description *string          `json:"description"`
 	Color       *string          `json:"color"`
@@ -318,9 +318,19 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 		return errResult(http.StatusNotFound, "item not found"), nil
 	}
 	if (req.TrackerType != nil && *req.TrackerType != string(item.TrackerType)) ||
-		(req.Kind != nil && *req.Kind != string(item.Kind)) ||
 		(req.Polarity != nil && *req.Polarity != string(item.Polarity)) {
 		return errResult(http.StatusBadRequest, "tracker_type, kind and polarity cannot be changed"), nil
+	}
+	kindChanged := false
+	if req.Kind != nil && *req.Kind != string(item.Kind) {
+		if *req.Kind != string(dbmodels.KindOngoing) && *req.Kind != string(dbmodels.KindEvent) {
+			return invalidCombination(schedule.ReasonUnknownKind), nil
+		}
+		if item.Kind != dbmodels.KindEvent || *req.Kind != string(dbmodels.KindOngoing) {
+			return errResult(http.StatusBadRequest, "tracker_type, kind and polarity cannot be changed"), nil
+		}
+		item.Kind = dbmodels.KindOngoing
+		kindChanged = true
 	}
 	today, err := s.userToday(tx, userID)
 	if err != nil {
@@ -484,7 +494,7 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 		}
 	}
 
-	defChanged := req.Unit != nil || req.Step != nil || req.MinVal.Set || req.MaxVal.Set ||
+	defChanged := kindChanged || req.Unit != nil || req.Step != nil || req.MinVal.Set || req.MaxVal.Set ||
 		req.Aggregate != nil || req.WarningDays != nil
 	if req.Unit != nil {
 		item.Unit = *req.Unit
@@ -560,7 +570,7 @@ func (s *server) applyPatch(tx *gorm.DB, userID string, id uint, req patchItemRe
 		}
 	}
 	if err := tx.Model(&dbmodels.Item{}).Where("id = ?", item.ID).Select(
-		"Name", "Description", "Color", "Emoji", "CategoryID", "ProjectID", "ParentID", "IsSensitive", "Pinned", "SortOrder", "Archived", "RemindTime",
+		"Name", "Description", "Color", "Emoji", "Kind", "CategoryID", "ProjectID", "ParentID", "IsSensitive", "Pinned", "SortOrder", "Archived", "RemindTime",
 		"Unit", "Step", "MinVal", "MaxVal", "Aggregate", "WarningDays").Updates(&item).Error; err != nil {
 		return result{}, err
 	}

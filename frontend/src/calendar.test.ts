@@ -98,6 +98,7 @@ let extResponses: Record<string, () => Response | Promise<Response>>
 let viewDays: Record<string, object>
 let viewStatus: number
 let extraDetails: object[]
+let deletedItemIds: Set<number>
 let checkinLogs: Array<{
   id: number
   item_id: number
@@ -117,6 +118,7 @@ beforeEach(() => {
   checkinLogs = []
   viewStatus = 200
   extraDetails = []
+  deletedItemIds = new Set()
   viewDays = {
     '2026-11-06': day('2026-11-06', {
       status: 'incomplete',
@@ -190,8 +192,24 @@ beforeEach(() => {
       const id = new URL(url, 'http://x').searchParams.get('source_id')!
       return extResponses[id]?.() ?? jsonRes({ sources: [{ id, name: id, ok: true, events: [] }] })
     }
-    if (url.startsWith('/api/items'))
-      return jsonRes({ items: [detail(1, 'Water'), detail(3, 'Read'), ...extraDetails] })
+    if (url.startsWith('/api/items/') && method === 'DELETE') {
+      const id = Number(url.split('/').pop())
+      deletedItemIds.add(id)
+      checkinLogs = checkinLogs.filter((l) => l.item_id !== id)
+      return jsonRes({ ok: true })
+    }
+    if (url.startsWith('/api/items')) {
+      const list = [detail(1, 'Water'), detail(3, 'Read'), ...extraDetails].filter(
+        (d: any) => !deletedItemIds.has(d.id),
+      )
+      return jsonRes({ items: list })
+    }
+    if (url.startsWith('/api/categories'))
+      return jsonRes({
+        categories: [
+          { id: 1, name: 'Life', color: '', icon: '', is_sensitive: false, sort_order: 1 },
+        ],
+      })
     if (url.startsWith('/api/checkins') && method === 'GET')
       return jsonRes({ checkins: checkinLogs, next_cursor: null })
     if (url.startsWith('/api/checkins/') && method === 'PATCH') {
@@ -518,6 +536,56 @@ describe('CalendarView', () => {
     const patch = calls.find((c) => c.method === 'PATCH' && c.url === '/api/checkins/42')
     expect(patch).toBeTruthy()
     expect(patch!.body).toEqual({ note: 'Drank 2 glasses' })
+    w.unmount()
+  })
+
+  it('wires delete-item on OccurrenceDetailModal from DayPanel to DELETE /api/items/:id', async () => {
+    extraDetails = [
+      {
+        id: 23,
+        name: 'Buy dog food',
+        tracker_type: 'boolean',
+        kind: 'event',
+        polarity: 'positive',
+        category_id: null,
+        effective_sensitive: false,
+        options: [],
+        current_rule: { schedule_type: 'none', option_targets: {} },
+      },
+    ]
+    checkinLogs = [
+      {
+        id: 55,
+        item_id: 23,
+        option_id: null,
+        date: '2026-11-06',
+        time: '12:00:00',
+        value: 0,
+        note: '',
+        source: 'web',
+        is_supplement: false,
+      },
+    ]
+    viewDays['2026-11-06'] = day('2026-11-06', {
+      status: 'complete',
+      done_count: 1,
+      items: [item(23, 'Buy dog food', { kind: 'event', due: false, done: true, log_count: 1 })],
+    })
+    const { w } = await mountView()
+    await w.get('[data-testid=day-2026-11-06]').trigger('click')
+    await flushPromises()
+
+    await w.get('[data-testid=panel-item-details-23]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid=occurrence-modal]').exists()).toBe(true)
+
+    await w.get('[data-testid=modal-delete-item]').trigger('click')
+    await w.get('[data-testid=modal-delete-confirm]').trigger('click')
+    await flushPromises()
+
+    const del = calls.find((c) => c.method === 'DELETE' && c.url === '/api/items/23')
+    expect(del).toBeTruthy()
+    expect(w.find('[data-testid=occurrence-modal]').exists()).toBe(false)
     w.unmount()
   })
 })

@@ -2,7 +2,7 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Icon } from '@iconify/vue'
-import type { CheckinInput, CheckinLog, ItemDetail } from '../../api'
+import type { Category, CheckinInput, CheckinLog, ItemDetail } from '../../api'
 import { formatCustomDate } from '../../i18n/format'
 import { useI18n } from '../../i18n'
 import { adhocLogs, fmt, valueRows, type ValueRow } from '../../today/logic'
@@ -16,6 +16,7 @@ const props = defineProps<{
   date: string
   busy: boolean
   redact: boolean
+  categories?: Category[]
 }>()
 
 const emit = defineEmits<{
@@ -24,6 +25,9 @@ const emit = defineEmits<{
   remove: [number]
   patchNote: [id: number, note: string]
   setDueDate: [itemId: number, dueDate: string | null]
+  setCategory: [itemId: number, categoryId: number | null]
+  convertOngoing: [itemId: number, categoryId: number | null]
+  deleteItem: [itemId: number]
 }>()
 
 const isToggle = computed(() => {
@@ -40,6 +44,8 @@ const hasOptions = computed(() => (props.detail ? props.detail.options.length > 
 
 const toggleNote = ref('')
 const todoDate = ref('')
+const todoCategoryId = ref<number | null>(null)
+const confirmDelete = ref(false)
 const logNotes = reactive<Record<number, string>>({})
 const inputs = reactive<Record<string, string>>({})
 const adhocName = ref('')
@@ -51,11 +57,14 @@ function syncState() {
   toggleNote.value = ''
   for (const k of Object.keys(logNotes)) delete logNotes[Number(k)]
   todoDate.value = ''
+  todoCategoryId.value = null
+  confirmDelete.value = false
   if (!props.open || !props.detail) return
   todoDate.value =
     (props.detail.current_rule.schedule_type === 'fixed_rrule'
       ? props.detail.current_rule.dtstart
       : '') || ''
+  todoCategoryId.value = props.detail.category_id ?? null
   toggleNote.value =
     [...props.logs]
       .reverse()
@@ -97,6 +106,13 @@ watch(
   { immediate: true, deep: true },
 )
 
+watch(
+  () => props.detail?.category_id,
+  (val) => {
+    todoCategoryId.value = val ?? null
+  },
+)
+
 function parse(s: unknown): number | null {
   if (s == null || String(s).trim() === '') return null
   const n = Number(s)
@@ -135,6 +151,22 @@ function clearDueDate() {
   if (props.detail) {
     emit('setDueDate', props.detail.id, null)
   }
+}
+
+function saveCategory() {
+  if (!props.detail) return
+  emit('setCategory', props.detail.id, todoCategoryId.value)
+}
+
+function convertOngoing() {
+  if (!props.detail) return
+  emit('convertOngoing', props.detail.id, todoCategoryId.value)
+}
+
+function confirmDeleteItem() {
+  if (!props.detail) return
+  confirmDelete.value = false
+  emit('deleteItem', props.detail.id)
 }
 
 function setValue(r: ValueRow) {
@@ -384,6 +416,48 @@ function logUnit(l: CheckinLog): string {
         </div>
       </section>
 
+      <!-- Category & Convert to Ongoing Quick-Log section for Todos (KindEvent) -->
+      <section
+        v-if="detail.kind === 'event'"
+        class="border-t border-base-200 pt-3 space-y-2"
+        data-testid="modal-todo-category-section"
+      >
+        <h4
+          class="text-xs font-semibold uppercase tracking-wider text-base-content/60 flex items-center gap-1.5"
+        >
+          <Icon icon="lucide:tags" class="size-3.5" />
+          {{ t('projects.category') }}
+        </h4>
+        <div class="flex flex-wrap items-center gap-2">
+          <select
+            v-model="todoCategoryId"
+            class="select select-sm select-bordered"
+            :aria-label="t('projects.category')"
+            :disabled="busy || redact"
+            data-testid="modal-todo-category-select"
+            @change="saveCategory"
+          >
+            <option :value="null">{{ t('projects.noCategory') }}</option>
+            <option v-for="c in categories ?? []" :key="c.id" :value="c.id">
+              {{ c.name }}
+            </option>
+          </select>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline gap-1.5"
+            :disabled="busy || redact"
+            data-testid="modal-convert-ongoing"
+            @click="convertOngoing"
+          >
+            <Icon icon="lucide:repeat" class="size-3.5" />
+            {{ t('today.modal.convertOngoing') }}
+          </button>
+        </div>
+        <p class="text-xs text-base-content/60">
+          {{ t('today.modal.convertOngoingHint') }}
+        </p>
+      </section>
+
       <!-- Secondary Controls moved from ItemCard.vue -->
       <section
         v-if="
@@ -477,6 +551,52 @@ function logUnit(l: CheckinLog): string {
               {{ l.note || t('today.card.adhocTitle') }}: {{ fmt(l.value) }}
             </li>
           </ul>
+        </div>
+      </section>
+
+      <!-- Delete Item section for KindEvent items (not shown in /items) -->
+      <section
+        v-if="detail.kind === 'event'"
+        class="border-t border-base-200 pt-3 flex flex-wrap items-center justify-between gap-2"
+        data-testid="modal-delete-section"
+      >
+        <button
+          v-if="!confirmDelete"
+          type="button"
+          class="btn btn-sm btn-ghost text-error gap-1.5"
+          :disabled="busy || redact"
+          data-testid="modal-delete-item"
+          @click="confirmDelete = true"
+        >
+          <Icon icon="lucide:trash-2" class="size-3.5" />
+          {{ t('items.detail.deleteItem') }}
+        </button>
+        <div
+          v-else
+          class="w-full flex flex-wrap items-center justify-between gap-2 rounded-lg border border-error/30 bg-error/5 p-2.5"
+          data-testid="modal-delete-confirm-box"
+        >
+          <span class="text-sm text-error font-medium">{{ t('items.detail.deleteAsk') }}</span>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              class="btn btn-sm btn-ghost"
+              :disabled="busy || redact"
+              data-testid="modal-delete-cancel"
+              @click="confirmDelete = false"
+            >
+              {{ t('common.cancel') }}
+            </button>
+            <button
+              type="button"
+              class="btn btn-sm btn-error"
+              :disabled="busy || redact"
+              data-testid="modal-delete-confirm"
+              @click="confirmDeleteItem"
+            >
+              {{ t('items.detail.deleteConfirm') }}
+            </button>
+          </div>
         </div>
       </section>
 

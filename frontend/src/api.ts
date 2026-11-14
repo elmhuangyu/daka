@@ -719,10 +719,18 @@ export function moveItem(
   return request<ItemDto>(`/api/items/${id}/move${q}`, jsonInit('POST', body))
 }
 
-export function createAdHocEvent(
+function createEventItem(
   name: string,
+  rule: {
+    schedule_type: string
+    holiday_mode: string
+    rrule_string?: string
+    dtstart?: string
+    until?: string
+  },
   projectId?: number | null,
   parentId?: number | null,
+  categoryId?: number | null,
 ): Promise<{ id: number }> {
   return request<{ id: number }>(
     '/api/items',
@@ -733,8 +741,24 @@ export function createAdHocEvent(
       polarity: 'positive',
       ...(projectId !== undefined && projectId !== null ? { project_id: projectId } : {}),
       ...(parentId !== undefined && parentId !== null ? { parent_id: parentId } : {}),
-      rule: { schedule_type: 'none', holiday_mode: 'none' },
+      ...(categoryId !== undefined && categoryId !== null ? { category_id: categoryId } : {}),
+      rule,
     }),
+  )
+}
+
+export function createAdHocEvent(
+  name: string,
+  projectId?: number | null,
+  parentId?: number | null,
+  categoryId?: number | null,
+): Promise<{ id: number }> {
+  return createEventItem(
+    name,
+    { schedule_type: 'none', holiday_mode: 'none' },
+    projectId,
+    parentId,
+    categoryId,
   )
 }
 
@@ -743,24 +767,20 @@ export function createScheduledEvent(
   date: string,
   projectId?: number | null,
   parentId?: number | null,
+  categoryId?: number | null,
 ): Promise<{ id: number }> {
-  return request<{ id: number }>(
-    '/api/items',
-    jsonInit('POST', {
-      name: name.trim(),
-      tracker_type: 'boolean',
-      kind: 'event',
-      polarity: 'positive',
-      ...(projectId !== undefined && projectId !== null ? { project_id: projectId } : {}),
-      ...(parentId !== undefined && parentId !== null ? { parent_id: parentId } : {}),
-      rule: {
-        schedule_type: 'fixed_rrule',
-        rrule_string: 'FREQ=DAILY;COUNT=1',
-        dtstart: date,
-        until: date,
-        holiday_mode: 'none',
-      },
-    }),
+  return createEventItem(
+    name,
+    {
+      schedule_type: 'fixed_rrule',
+      rrule_string: 'FREQ=DAILY;COUNT=1',
+      dtstart: date,
+      until: date,
+      holiday_mode: 'none',
+    },
+    projectId,
+    parentId,
+    categoryId,
   )
 }
 
@@ -769,11 +789,12 @@ export function createTodoItem(
   dueDate?: string | null,
   projectId?: number | null,
   parentId?: number | null,
+  categoryId?: number | null,
 ): Promise<{ id: number }> {
   if (dueDate && dueDate.trim()) {
-    return createScheduledEvent(name, dueDate.trim(), projectId, parentId)
+    return createScheduledEvent(name, dueDate.trim(), projectId, parentId, categoryId)
   }
-  return createAdHocEvent(name, projectId, parentId)
+  return createAdHocEvent(name, projectId, parentId, categoryId)
 }
 
 export function setTodoDueDate(itemId: number, dueDate: string | null): Promise<ItemDto> {
@@ -789,6 +810,20 @@ export function setTodoDueDate(itemId: number, dueDate: string | null): Promise<
     })
   }
   return patchItem(itemId, {
+    rule: {
+      schedule_type: 'none',
+      holiday_mode: 'none',
+    },
+  })
+}
+
+export function convertEventToOngoing(
+  itemId: number,
+  categoryId?: number | null,
+): Promise<ItemDto> {
+  return patchItem(itemId, {
+    kind: 'ongoing',
+    ...(categoryId !== undefined ? { category_id: categoryId } : {}),
     rule: {
       schedule_type: 'none',
       holiday_mode: 'none',
