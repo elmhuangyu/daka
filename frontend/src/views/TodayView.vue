@@ -14,7 +14,6 @@ import ItemCard from '../components/today/ItemCard.vue'
 import OccurrenceDetailModal from '../components/today/OccurrenceDetailModal.vue'
 import {
   createAdHocEvent,
-  createScheduledEvent,
   createTodoItem,
   moveItem,
   describeError,
@@ -285,45 +284,35 @@ async function submitQuickLog(target: { id?: number; name: string }) {
   if (!name && !target.id) return
   quickLogBusy.value = true
   try {
-    if (store.isFuture) {
-      await createScheduledEvent(
+    let itemId = target.id
+    let existingItem = target.id ? store.items.find((it) => it.id === target.id) : undefined
+    if (!itemId) {
+      const exact = matchingUnscheduled.value.find(
+        (it) => it.name.toLowerCase() === name.toLowerCase(),
+      )
+      if (exact) {
+        itemId = exact.id
+        existingItem = exact
+      }
+    }
+    if (itemId) {
+      if (existingItem?.tracker_type === 'counter') {
+        const step = existingItem.step && existingItem.step > 0 ? existingItem.step : 1
+        await store.submit({ item_id: itemId, mode: 'delta', value: step })
+      } else if (existingItem?.tracker_type === 'metric') {
+        const step = existingItem.step && existingItem.step > 0 ? existingItem.step : 1
+        await store.submit({ item_id: itemId, mode: 'append', value: step })
+      } else {
+        await store.submit({ item_id: itemId, mode: 'set', value: 1 })
+      }
+    } else {
+      const created = await createAdHocEvent(
         name,
-        targetDate,
         quickTodoProjectId.value,
         null,
         quickTodoCategoryId.value,
       )
-    } else {
-      let itemId = target.id
-      let existingItem = target.id ? store.items.find((it) => it.id === target.id) : undefined
-      if (!itemId) {
-        const exact = matchingUnscheduled.value.find(
-          (it) => it.name.toLowerCase() === name.toLowerCase(),
-        )
-        if (exact) {
-          itemId = exact.id
-          existingItem = exact
-        }
-      }
-      if (itemId) {
-        if (existingItem?.tracker_type === 'counter') {
-          const step = existingItem.step && existingItem.step > 0 ? existingItem.step : 1
-          await store.submit({ item_id: itemId, mode: 'delta', value: step })
-        } else if (existingItem?.tracker_type === 'metric') {
-          const step = existingItem.step && existingItem.step > 0 ? existingItem.step : 1
-          await store.submit({ item_id: itemId, mode: 'append', value: step })
-        } else {
-          await store.submit({ item_id: itemId, mode: 'set', value: 1 })
-        }
-      } else {
-        const created = await createAdHocEvent(
-          name,
-          quickTodoProjectId.value,
-          null,
-          quickTodoCategoryId.value,
-        )
-        await store.submit({ item_id: created.id, mode: 'set', value: 1 })
-      }
+      await store.submit({ item_id: created.id, mode: 'set', value: 1 })
     }
     quickLogQuery.value = ''
     resetQuickTodoDate()
