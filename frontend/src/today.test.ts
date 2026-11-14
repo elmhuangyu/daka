@@ -1134,6 +1134,7 @@ describe('Today page', () => {
       }),
     )
     await w.get('[data-testid="next-day"]').trigger('click')
+    await flushPromises()
     await w.get('[data-testid="prev-day"]').trigger('click')
     await flushPromises()
 
@@ -1391,6 +1392,39 @@ describe('Today keyboard shortcuts', () => {
       expect(c.getAttribute('tabindex')).toBe('-1')
       expect(c.querySelector('[tabindex]:not([tabindex="-1"]):not([tabindex="0"])')).toBeNull()
     }
+    w.unmount()
+  })
+
+  it('hides unscheduled todos on past and future dates', async () => {
+    world.items = [
+      detail({
+        id: 88,
+        name: 'Someday task',
+        kind: 'event',
+        current_rule: {
+          id: 88,
+          effective_from: '2026-04-01',
+          schedule_type: 'none',
+          target_value: 1,
+          holiday_mode: 'normal',
+          option_targets: {},
+        },
+      }),
+    ]
+    const w = await mountApp()
+    expect(w.find('[data-testid="section-unscheduled-todos"]').exists()).toBe(true)
+
+    await w.get('[data-testid="prev-day"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid="section-unscheduled-todos"]').exists()).toBe(false)
+
+    await w.get('[data-testid="next-day"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid="section-unscheduled-todos"]').exists()).toBe(true)
+
+    await w.get('[data-testid="next-day"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid="section-unscheduled-todos"]').exists()).toBe(false)
     w.unmount()
   })
 })

@@ -171,7 +171,7 @@ export const useTodayStore = defineStore('today', () => {
     return [...cards.filter((c) => !c.today?.done), ...cards.filter((c) => c.today?.done)]
   })
   const unscheduledTodoCards = computed(() => {
-    if (isFuture.value) return []
+    if (!isToday.value) return []
     return scoped(
       items.value
         .filter(
@@ -254,7 +254,7 @@ export const useTodayStore = defineStore('today', () => {
 
   /** Filter chips: counts cover every visible card of a category. */
   const categoryCounts = computed(() => {
-    const rawUnscheduledTodos = isFuture.value
+    const rawUnscheduledTodos = !isToday.value
       ? []
       : items.value
           .filter(
