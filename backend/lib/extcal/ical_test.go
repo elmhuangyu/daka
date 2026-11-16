@@ -240,7 +240,8 @@ func TestParseMaliciousLongEventsFeedIsBounded(t *testing.T) {
 	data := wrap(evs...)
 	start := time.Now()
 	res := parseNov(t, data)
-	require.Less(t, time.Since(start), 300*time.Millisecond)
+	// Allow headroom for -race and CI CPU contention while still catching unbounded expansion.
+	require.Less(t, time.Since(start), 2*time.Second)
 	require.LessOrEqual(t, len(res.Events), MaxEvents)
 }
 

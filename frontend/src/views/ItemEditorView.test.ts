@@ -153,6 +153,7 @@ describe('ItemEditorView', () => {
   })
 
   it('renders start and end dates according to the date format setting and parses input', async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date(2026, 10, 15, 12, 0, 0) })
     setDateFormat('YYYY/MM/DD')
     try {
       const { w } = await mountAt('/items/new')
@@ -191,6 +192,7 @@ describe('ItemEditorView', () => {
       })
     } finally {
       setDateFormat('YYYY-MM-DD')
+      vi.useRealTimers()
     }
   })
 
