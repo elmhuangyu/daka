@@ -2,7 +2,7 @@
 
 # Stage 1: build the frontend.
 # The pnpm image ships only pnpm; pnpm installs the Node.js runtime itself.
-FROM ghcr.io/pnpm/pnpm:12.17.0 AS web
+FROM ghcr.io/pnpm/pnpm:12.21.0 AS web
 WORKDIR /src/frontend
 RUN pnpm add -g node@runtime:26
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
@@ -19,7 +19,7 @@ COPY backend/ ./
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/daka ./cmd/daka
 
 # Stage 3: minimal runtime image, non-root.
-FROM alpine:3.22
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates \
  && adduser -D -u 10001 daka \
  && mkdir /data && chown daka /data
